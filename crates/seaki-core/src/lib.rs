@@ -7,6 +7,7 @@ pub const CORE_AUTHORITY: &str = "policy-approved-core";
 pub const CURRENT_EVENT_SCHEMA_VERSION: u32 = 1;
 pub const GENESIS_AUDIT_HASH: &str = "GENESIS";
 pub const INDEX_STATUS_STALE: &str = "stale";
+pub const WIKI_PATCH_COMMIT_EVENT_TYPE: &str = "wiki.patch.commit";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreRecordKind {
@@ -80,6 +81,91 @@ pub struct WorkspaceInitResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WikiPatchCommitRequest {
+    pub event_id: String,
+    pub schema_version: u32,
+    pub payload_schema_hash: String,
+    pub actor_id: String,
+    pub workspace_id: String,
+    pub scope: String,
+    pub idempotency_key: String,
+    pub transaction_id: String,
+    pub patch_id: String,
+    pub committed_revision: u64,
+    pub rollback_marker_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WikiPatchCommitRecord {
+    pub transaction_id: String,
+    pub patch_id: String,
+    pub committed_revision: u64,
+    pub rollback_marker_id: String,
+}
+
+impl WikiPatchCommitRecord {
+    pub fn new(
+        transaction_id: impl Into<String>,
+        patch_id: impl Into<String>,
+        committed_revision: u64,
+        rollback_marker_id: impl Into<String>,
+    ) -> Self {
+        Self {
+            transaction_id: transaction_id.into(),
+            patch_id: patch_id.into(),
+            committed_revision,
+            rollback_marker_id: rollback_marker_id.into(),
+        }
+    }
+}
+
+impl WikiPatchCommitRequest {
+    pub fn new(
+        event_id: impl Into<String>,
+        actor_id: impl Into<String>,
+        workspace_id: impl Into<String>,
+        idempotency_key: impl Into<String>,
+        commit: WikiPatchCommitRecord,
+    ) -> Self {
+        let workspace_id = workspace_id.into();
+
+        Self {
+            event_id: event_id.into(),
+            schema_version: CURRENT_EVENT_SCHEMA_VERSION,
+            payload_schema_hash: expected_payload_schema_hash(WIKI_PATCH_COMMIT_EVENT_TYPE),
+            actor_id: actor_id.into(),
+            scope: workspace_scope(&workspace_id),
+            workspace_id,
+            idempotency_key: idempotency_key.into(),
+            transaction_id: commit.transaction_id,
+            patch_id: commit.patch_id,
+            committed_revision: commit.committed_revision,
+            rollback_marker_id: commit.rollback_marker_id,
+        }
+    }
+
+    fn into_event(self) -> InertEvent {
+        InertEvent {
+            event_id: self.event_id,
+            schema_version: self.schema_version,
+            payload_schema_hash: self.payload_schema_hash,
+            actor_id: self.actor_id,
+            scope: self.scope,
+            workspace_id: self.workspace_id,
+            idempotency_key: self.idempotency_key,
+            event_type: WIKI_PATCH_COMMIT_EVENT_TYPE.to_string(),
+            payload_summary: format!(
+                "transaction_id={} patch_id={} committed_revision={} rollback_marker_id={}",
+                self.transaction_id,
+                self.patch_id,
+                self.committed_revision,
+                self.rollback_marker_id
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InertEvent {
     pub event_id: String,
     pub schema_version: u32,
@@ -143,6 +229,7 @@ pub enum CoreError {
     DuplicateEventId(String),
     WorkspaceAlreadyExists(String),
     WorkspaceMissing(String),
+    WorkspaceRevisionMismatch { expected: u64, found: u64 },
     AuditMissingForEvent(u64),
     SequenceOutOfRange(i64),
 }
@@ -172,6 +259,12 @@ impl fmt::Display for CoreError {
                 write!(f, "workspace already exists: {workspace_id}")
             }
             Self::WorkspaceMissing(workspace_id) => write!(f, "workspace missing: {workspace_id}"),
+            Self::WorkspaceRevisionMismatch { expected, found } => {
+                write!(
+                    f,
+                    "workspace revision mismatch: expected {expected}, found {found}"
+                )
+            }
             Self::AuditMissingForEvent(seq) => write!(f, "audit missing for event seq {seq}"),
             Self::SequenceOutOfRange(seq) => write!(f, "sequence out of range: {seq}"),
         }
@@ -296,6 +389,35 @@ impl CoreLedger {
         Ok(envelope)
     }
 
+    pub fn append_wiki_patch_commit(
+        &mut self,
+        request: WikiPatchCommitRequest,
+    ) -> CoreResult<EventEnvelope> {
+        let committed_revision = request.committed_revision;
+        let event = request.into_event();
+        validate_event(&event)?;
+
+        let tx = self.conn.transaction()?;
+        ensure_unique_idempotency_key_in_tx(&tx, &event.idempotency_key)?;
+        ensure_unique_event_id_in_tx(&tx, &event.event_id)?;
+        let expected_revision = workspace_revision_in_tx(&tx, &event.workspace_id)?
+            .ok_or_else(|| CoreError::WorkspaceMissing(event.workspace_id.clone()))?
+            + 1;
+        if committed_revision != expected_revision {
+            return Err(CoreError::WorkspaceRevisionMismatch {
+                expected: expected_revision,
+                found: committed_revision,
+            });
+        }
+
+        let envelope = insert_event(&tx, sanitized_event(event))?;
+        let audit_head = append_audit_entry(&tx, &envelope)?;
+        update_workspace_after_event(&tx, &envelope.workspace_id, expected_revision, &audit_head)?;
+        tx.commit()?;
+
+        Ok(envelope)
+    }
+
     pub fn replay_events_after(&self, seq: u64) -> CoreResult<Vec<EventEnvelope>> {
         let seq = checked_i64(seq)?;
         let mut stmt = self.conn.prepare(
@@ -406,6 +528,17 @@ impl CoreLedger {
             .conn
             .query_row(
                 "SELECT audit_head FROM workspaces WHERE workspace_id = ?1",
+                params![workspace_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?)
+    }
+
+    pub fn index_status(&self, workspace_id: &str) -> CoreResult<Option<String>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT index_status FROM workspaces WHERE workspace_id = ?1",
                 params![workspace_id],
                 |row| row.get::<_, String>(0),
             )
@@ -549,6 +682,58 @@ fn insert_workspace(tx: &Transaction<'_>, workspace_id: &str, audit_head: &str) 
         ",
         params![workspace_id, audit_head, INDEX_STATUS_STALE],
     )?;
+    Ok(())
+}
+
+fn workspace_revision_in_tx(tx: &Transaction<'_>, workspace_id: &str) -> CoreResult<Option<u64>> {
+    let revision = tx
+        .query_row(
+            "SELECT revision FROM workspaces WHERE workspace_id = ?1",
+            params![workspace_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()?;
+
+    revision
+        .map(checked_u64)
+        .transpose()
+        .map_err(CoreError::from)
+}
+
+fn ensure_unique_idempotency_key_in_tx(
+    tx: &Transaction<'_>,
+    idempotency_key: &str,
+) -> CoreResult<()> {
+    let exists: Option<i64> = tx
+        .query_row(
+            "SELECT 1 FROM events WHERE idempotency_key = ?1",
+            params![idempotency_key],
+            |row| row.get(0),
+        )
+        .optional()?;
+
+    if exists.is_some() {
+        return Err(CoreError::DuplicateIdempotencyKey(
+            idempotency_key.to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn ensure_unique_event_id_in_tx(tx: &Transaction<'_>, event_id: &str) -> CoreResult<()> {
+    let exists: Option<i64> = tx
+        .query_row(
+            "SELECT 1 FROM events WHERE event_id = ?1",
+            params![event_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+
+    if exists.is_some() {
+        return Err(CoreError::DuplicateEventId(event_id.to_string()));
+    }
+
     Ok(())
 }
 
@@ -826,6 +1011,69 @@ mod tests {
     }
 
     #[test]
+    fn wiki_patch_commit_appends_wal_audit_and_marks_index_stale() {
+        let mut ledger = initialized_ledger();
+        let envelope = ledger
+            .append_wiki_patch_commit(wiki_patch_commit_request(
+                "event-2",
+                "idem-2",
+                2,
+                "txn-1",
+                "patch-1",
+                "rollback-1",
+            ))
+            .expect("wiki patch commit appends");
+
+        assert_eq!(envelope.event_type, WIKI_PATCH_COMMIT_EVENT_TYPE);
+        assert_eq!(
+            envelope.payload_schema_hash,
+            expected_payload_schema_hash(WIKI_PATCH_COMMIT_EVENT_TYPE)
+        );
+        assert_eq!(
+            ledger
+                .workspace_revision("workspace-1")
+                .expect("revision loads"),
+            Some(2)
+        );
+        assert_eq!(
+            ledger.index_status("workspace-1").expect("index status"),
+            Some(INDEX_STATUS_STALE.to_string())
+        );
+        assert_eq!(ledger.audit_count().expect("audit count"), 2);
+        assert!(ledger.verify_audit_chain().expect("audit chain verifies"));
+    }
+
+    #[test]
+    fn wiki_patch_commit_rejects_revision_mismatch_before_wal_write() {
+        let mut ledger = initialized_ledger();
+        let initial_events = ledger.event_count().expect("event count");
+        let initial_audit = ledger.audit_count().expect("audit count");
+
+        assert!(matches!(
+            ledger.append_wiki_patch_commit(wiki_patch_commit_request(
+                "event-2",
+                "idem-2",
+                99,
+                "txn-1",
+                "patch-1",
+                "rollback-1",
+            )),
+            Err(CoreError::WorkspaceRevisionMismatch {
+                expected: 2,
+                found: 99
+            })
+        ));
+        assert_eq!(ledger.event_count().expect("event count"), initial_events);
+        assert_eq!(ledger.audit_count().expect("audit count"), initial_audit);
+        assert_eq!(
+            ledger
+                .workspace_revision("workspace-1")
+                .expect("revision loads"),
+            Some(1)
+        );
+    }
+
+    #[test]
     fn audit_hash_chain_detects_event_tampering() {
         let mut ledger = initialized_ledger();
         ledger
@@ -887,6 +1135,28 @@ mod tests {
             "workspace-1",
             idempotency_key,
             "create workspace",
+        )
+    }
+
+    fn wiki_patch_commit_request(
+        event_id: &str,
+        idempotency_key: &str,
+        committed_revision: u64,
+        transaction_id: &str,
+        patch_id: &str,
+        rollback_marker_id: &str,
+    ) -> WikiPatchCommitRequest {
+        WikiPatchCommitRequest::new(
+            event_id,
+            "actor-1",
+            "workspace-1",
+            idempotency_key,
+            WikiPatchCommitRecord::new(
+                transaction_id,
+                patch_id,
+                committed_revision,
+                rollback_marker_id,
+            ),
         )
     }
 

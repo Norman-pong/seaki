@@ -10,6 +10,14 @@ use seaki_sandbox::{
 };
 use sha2::{Digest, Sha256};
 
+mod patch;
+
+pub use patch::{
+    ApprovalRequest, ApprovalStatus, AuditRecord, Citation, CitationRegistryEntry, Claim,
+    ClaimConfidence, ClaimStatus, ConceptPage, RollbackMarker, TypedPage, WikiIndexStatus,
+    WikiPatchError, WikiPatchProposal, WikiPatchStore, WikiPatchTransaction, WikiPatchWalRecord,
+};
+
 pub const RAW_SOURCE_STORAGE: &str = "append-only-content-addressed";
 pub const SOURCE_MANIFEST_SCHEMA_HASH: &str = "source-manifest.v1";
 pub const PARSED_FRAME_SCHEMA_HASH: &str = "parsed-frame.v1";
