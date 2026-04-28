@@ -82,7 +82,6 @@ daemon ingress
 3. 读 [边界与权威链路](architecture/boundaries.md)，理解“谁能决定什么”。
 4. 读 [Wiki / Source / Citation 知识层](architecture/wiki-source-citation.md)，理解 seaki 的知识资产如何成为权威事实。
 5. 读 [MVP 顺序与主要风险](architecture/roadmap-risks.md)，确认首版边界。
-6. 读 [第一阶段任务计划：M0 本机纵切](architecture/phase-1-task-plan.md)，把首版边界转成可执行任务。
 
 架构深入：
 
@@ -104,7 +103,6 @@ daemon ingress
 | 设计 Electron/Web/RN 领域 SDK 和 DTO | [前端抽象](architecture/frontend.md) |
 | 设计飞书/Slack/企业微信等 IM 入口 | [Channel Bridge 插件化](architecture/channel-bridge.md) |
 | 设计 memory、session search、review learning | [记忆系统](architecture/memory.md) |
-| 规划第一阶段 M0 工程任务 | [第一阶段任务计划：M0 本机纵切](architecture/phase-1-task-plan.md) |
 | 查外部依据和借鉴来源 | [参考与溯源](#参考与溯源) |
 
 ## 主题页
@@ -120,7 +118,6 @@ daemon ingress
 | [Channel Bridge 插件化](architecture/channel-bridge.md) | IM 插件生命周期、身份映射、附件授权、出站 outbox 和 provider 幂等 |
 | [记忆系统](architecture/memory.md) | bounded memory、session search、遗忘曲线、复习学习技能、演化门禁 |
 | [MVP 顺序与主要风险](architecture/roadmap-risks.md) | M0/M1/M2 交付顺序、关键风险 |
-| [第一阶段任务计划：M0 本机纵切](architecture/phase-1-task-plan.md) | M0 工程任务拆解、验收标准、质量门禁和风险缓解 |
 | [虚拟需求推演收敛](architecture/scenario-validation.md) | 虚拟需求闭环、P1/P2 规格、Dogfood 验收指标 |
 | [架构维护记录](architecture/maintenance-log.md) | 结构调整、索引维护和后续整理风险 |
 

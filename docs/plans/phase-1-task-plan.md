@@ -31,12 +31,12 @@
 
 | 依据 | 对任务计划的约束 |
 | --- | --- |
-| [MVP 顺序与主要风险](roadmap-risks.md) | 第一阶段按 M0 顺序收窄为本机纵切，真实 IM、自动 memory、Pipeline Designer 和跨平台 sandbox 后置。 |
-| [总览与核心分层](overview.md) | 工程拆分围绕 `seaki-core`、`seaki-wiki`、`seaki-policy`、`seaki-sandbox`、`seaki-index`、`seaki-daemon` 和前端包展开。 |
-| [边界与权威链路](boundaries.md) | 所有入口必须走 `daemon ingress -> inert event -> proposal/plan -> deterministic validation -> policy -> sandbox/broker -> audit/WAL/outbox`。 |
-| [Wiki / Source / Citation 知识层](wiki-source-citation.md) | raw source、parsed frame、wiki page、claim、citation、index freshness 必须分层建模，index 不能成为事实源。 |
-| [前端抽象](frontend.md) | 第一阶段冻结 Electron + TypeScript 领域契约、DTO、事件 envelope、状态机和 MVP screen contract。 |
-| [Rust Sandbox Runtime](sandbox-runtime.md) | 文件读取、source ingest、parser 执行和写入必须通过 capability、policy profile、sandbox enforcement 和 audit。 |
+| [MVP 顺序与主要风险](../architecture/roadmap-risks.md) | 第一阶段按 M0 顺序收窄为本机纵切，真实 IM、自动 memory、Pipeline Designer 和跨平台 sandbox 后置。 |
+| [总览与核心分层](../architecture/overview.md) | 工程拆分围绕 `seaki-core`、`seaki-wiki`、`seaki-policy`、`seaki-sandbox`、`seaki-index`、`seaki-daemon` 和前端包展开。 |
+| [边界与权威链路](../architecture/boundaries.md) | 所有入口必须走 `daemon ingress -> inert event -> proposal/plan -> deterministic validation -> policy -> sandbox/broker -> audit/WAL/outbox`。 |
+| [Wiki / Source / Citation 知识层](../architecture/wiki-source-citation.md) | raw source、parsed frame、wiki page、claim、citation、index freshness 必须分层建模，index 不能成为事实源。 |
+| [前端抽象](../architecture/frontend.md) | 第一阶段冻结 Electron + TypeScript 领域契约、DTO、事件 envelope、状态机和 MVP screen contract。 |
+| [Rust Sandbox Runtime](../architecture/sandbox-runtime.md) | 文件读取、source ingest、parser 执行和写入必须通过 capability、policy profile、sandbox enforcement 和 audit。 |
 
 ## 非目标
 

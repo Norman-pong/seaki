@@ -28,5 +28,6 @@
 
 ## 2026-04-28 第一阶段任务计划
 
-- 新增 `docs/architecture/phase-1-task-plan.md`，把 M0 本机纵切拆解为可执行任务、验收标准、质量门禁和风险缓解。
-- 更新 `docs/architecture.md` 的首次阅读路线、按任务查找表和主题页索引，补充第一阶段任务计划入口。
+- 新增 `docs/plans/phase-1-task-plan.md`，把 M0 本机纵切拆解为可执行任务、验收标准、质量门禁和风险缓解。
+- 新增 `docs/plans/README.md` 作为任务计划索引，避免计划文档混入架构主题页目录。
+- 保持 `docs/architecture.md` 只索引架构权威页，不把执行计划列为架构主题页。
