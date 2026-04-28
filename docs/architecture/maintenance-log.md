@@ -25,3 +25,8 @@
 
 - 将 `docs/architecture/references.md` 的参考表移动到 `docs/architecture.md`，作为索引页附录。
 - 删除独立参考主题页入口，减少架构入口中的一次跳转。
+
+## 2026-04-28 第一阶段任务计划
+
+- 新增 `docs/architecture/phase-1-task-plan.md`，把 M0 本机纵切拆解为可执行任务、验收标准、质量门禁和风险缓解。
+- 更新 `docs/architecture.md` 的首次阅读路线、按任务查找表和主题页索引，补充第一阶段任务计划入口。
