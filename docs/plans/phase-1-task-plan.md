@@ -51,18 +51,18 @@
 
 | ID | 任务 | 主要产出 | 验收标准 | 依赖 |
 | --- | --- | --- | --- | --- |
-| M0-00 | 工程骨架与质量门禁 | Rust workspace、前端 workspace、基础 CI 脚本、格式化/测试命令、开发文档 | 空工程能执行格式化、lint/typecheck 和测试占位；生成物不进入 Git | 无 |
-| M0-01 | Core workspace、ledger 与 daemon event spine | `seaki-core`、`seaki-daemon`、workspace 初始化、SQLite/WAL/audit、统一 event envelope | `workspace.init()` 能返回 workspace revision、audit head、index status；事件可按 `seq` replay；audit 追加写入 | M0-00 |
-| M0-02 | DTO codegen 与前端事件壳 | Rust DTO source of truth、TypeScript DTO 生成、`@seaki/transport` mock/replay、`@seaki/state` task store | schema hash 不一致会失败；mock daemon events 能驱动 AppBoot、Workspace、Import 状态机 | M0-01 |
+| M0-00 | 工程骨架与质量门禁 | Rust workspace、前端 workspace、基础 CI 脚本、格式化/测试命令、开发文档、主平台 sandbox 后端决策记录 | 空工程能执行格式化、lint/typecheck 和测试占位；记录第一阶段主平台后端，默认 macOS Seatbelt，若执行环境变化必须更新决策；生成物不进入 Git | 无 |
+| M0-01 | Core workspace、ledger 与 daemon event spine | `seaki-core`、`seaki-daemon`、workspace 初始化、daemon ingress、inert event、deterministic validation、SQLite/WAL/audit、统一 event envelope | `workspace.init()` 能返回 workspace revision、audit head、index status；事件可按 `seq` replay；非法 schema、非法 scope、重复 idempotency key 不能进入 policy/sandbox；audit hash chain 追加写入且不记录 secret 原文 | M0-00 |
+| M0-02 | DTO codegen 与前端领域事件壳 | Rust DTO source of truth、TypeScript DTO 生成、`@seaki/domain` use cases、`@seaki/transport` mock/replay、`@seaki/state` task store | schema hash 不一致会失败；mock daemon events 能驱动 AppBoot、Workspace、Import 状态机；`workspace.init`、`files.prepareUserSelected`、`source.ingestSelectedFile`、`approval.reviewPatch/decide`、`wiki.readPage`、`search.query`、`citation.resolve` 只能通过 domain use case 暴露 | M0-01 |
 | M0-03 | 最小 policy 与 opaque capability | `seaki-policy`、路径 canonicalize、allowlist/denylist、一次性 `file.read` grant、approval/audit 模型 | workspace 外路径默认拒绝；symlink escape 被拒绝；grant 只能指定 audience 使用一次，过期或并发复用失败 | M0-01 |
 | M0-04 | 主平台 sandbox enforcement | `seaki-sandbox` 主平台后端、`read-only`、`workspace-write`、`source-ingest` profile、parser 运行封装 | `source-ingest` 无网络、只读输入、只写 raw CAS/隔离临时目录；越权写入和网络访问有审计拒绝 | M0-03 |
-| M0-05 | Source ingest 与 parsed frames | `seaki-wiki` raw CAS、`SourceManifest`、Markdown parser、PDF text extractor、`ParsedArtifact`、`ParsedFrame` | Markdown/PDF 可进入 `raw_committed -> parse_running -> parsed|partial|failed`；frame 带 source range、text hash、taint、security flags | M0-03, M0-04 |
-| M0-06 | Wiki patch transaction 与 typed page | `WikiPatchProposal`、`WikiPatchTransaction`、`ConceptPage` 或 `DecisionRecord`、Claim、CitationRegistry、rollback marker | citation 不存在、越权、tombstoned 或 base revision 过旧时不能 commit；成功 commit 产生新 wiki revision 和 index stale 标记 | M0-05 |
-| M0-07 | Approval diff 与 citation evidence picker | `ApprovalRequestDTO`、ApprovalDiff screen、source preview/cited ranges、单条 claim 批准/拒绝、拒绝原因 | 用户能看见 patch diff、claim citation validation、risk summary 和 taint/security flags；审批结果进入 WAL/audit | M0-02, M0-06 |
-| M0-08 | 本地 BM25 candidate search | `seaki-index`、index generation、candidate id 查询、daemon 二次授权、`SearchResultDTO` | index 只存可重建派生物；查询先返回 candidate ids；不可见或 tombstoned citation 不会生成 answer context | M0-06 |
+| M0-05 | Source ingest 与 parsed frames | `seaki-wiki` raw CAS、`SourceManifest`、Markdown parser、PDF text extractor、`ParsedArtifact`、`ParsedFrame` | Markdown/PDF 可进入 `raw_committed -> parse_running -> parsed|partial|failed`；raw key 使用 per-workspace keyed digest，manifest 不把完整原始路径写普通日志；frame 带 `source_id`、parser version、page/line/byte range、mime sniff、text hash、trust level、taint、schema hash、security flags；PDF 超限、active content 或需 OCR 页面可审计降级 | M0-03, M0-04 |
+| M0-06 | Wiki patch transaction 与 typed page | `WikiPatchProposal`、`ApprovalRequest` 事务模型、`WikiPatchTransaction`、`ConceptPage` 或 `DecisionRecord`、Claim、CitationRegistry、rollback marker | citation 不存在、越权、tombstoned、base revision 过旧或缺少 approval decision 时不能 commit；本任务只允许 headless/test approval 决策验证事务内核；成功 commit 产生新 wiki revision、audit/WAL 记录和 index stale 标记 | M0-05 |
+| M0-07 | Approval diff 与 citation evidence picker | `ApprovalRequestDTO`、ApprovalDiff screen、source preview/cited ranges、真实用户批准/拒绝流、单条 claim 批准/拒绝、拒绝原因 | 用户能看见 patch diff、claim citation validation、risk summary 和 taint/security flags；真实用户审批结果进入 WAL/audit，并驱动 M0-06 的 transaction commit 或 denied 状态 | M0-02, M0-06 |
+| M0-08 | 本地 BM25 candidate search | `seaki-index`、index generation、candidate id 查询、workspace/account scope 隔离、daemon 二次授权、`SearchResultDTO` | index 只存可重建派生物并绑定 workspace/account 隔离与本地加密边界；查询先返回 candidate ids；不可见或 tombstoned citation 不会生成 snippet 或 answer context；撤销 visibility 或 tombstone 后标记 index stale/cleanup required | M0-06 |
 | M0-09 | Electron MVP screens | DaemonStatus、WorkspaceShell、ImportQueue、WikiReader、SearchResults、CitationPreview、错误恢复模型 | UI 不把 draft 显示成 committed；断线/刷新可 replay；degraded、stale、no_access、failed 状态可见且可恢复 | M0-02, M0-07, M0-08 |
 | M0-10 | Citation-backed answer 与回跳 | answer composer、claim/citation 可见性回查、`citation.resolve()`、source range/wiki anchor preview | answer 必须包含 citation refs；citation 回跳能打开 source range 或 wiki anchor；degraded/no_access 场景不生成虚假引用 | M0-08, M0-09 |
-| M0-11 | 端到端验收与发布门禁 | demo fixture、端到端 smoke test、风险回归测试、M0 操作手册 | 本机 source 导入到 citation-backed answer 的 happy path 和关键拒绝路径均可重复执行；所有质量门禁通过 | M0-10 |
+| M0-11 | 端到端验收与发布门禁 | demo fixture、端到端 smoke test、风险回归测试、M0 操作手册 | 本机 source 导入到 citation-backed answer 的 happy path 可重复执行；workspace 外路径、symlink escape、grant 并发复用、PDF 超限、invalid citation、base revision conflict、tombstoned citation、index stale、no_access citation resolve 等拒绝路径均有自动或可重复手动验收；所有质量门禁通过 | M0-10 |
 
 ## 推荐执行顺序
 
@@ -71,7 +71,7 @@
 3. 然后完成 M0-07 到 M0-09，让审批、搜索、reader、citation preview 和错误恢复在 Electron 中可操作。
 4. 最后完成 M0-10 到 M0-11，把 citation-backed answer、回跳和端到端验收固化成可重复 demo。
 
-每个任务都按“编码 -> 测试 -> 审阅 -> 修复 -> 提交”闭环推进；如果实现过程中发现架构事实需要调整，先更新对应主题页，再更新本计划和维护记录。
+每个任务都按“编码 -> 测试 -> 审阅 -> 修复 -> 提交”闭环推进，并在任务开始时声明至少一种验证类型：unit、integration、UI replay 或 e2e smoke。如果实现过程中发现架构事实需要调整，先更新对应主题页，再更新本计划和维护记录。
 
 ## 质量门禁
 
@@ -85,10 +85,11 @@
 关键回归测试：
 
 - policy 拒绝 workspace 外路径、未授权 symlink、过期 grant、重复使用 grant。
+- daemon ingress 拒绝非法 schema、非法 scope 和重复 idempotency key，且这些请求不能进入 policy/sandbox。
 - source ingest 失败不能回滚 raw CAS，但必须保留错误摘要和可恢复状态。
-- parser 输出全部带 `taint=untrusted_content`，不能升级成 policy、tool instruction 或 system prompt。
+- raw source 使用 workspace keyed digest；parser 输出包含 parser version、mime sniff、trust level、schema hash，并全部带 `taint=untrusted_content`，不能升级成 policy、tool instruction 或 system prompt。
 - `WikiPatchTransaction` 阻止无效 citation、base revision 冲突和 tombstoned source 新引用。
-- index stale 不阻塞已提交 wiki revision，但搜索结果必须显示 stale 状态。
+- index stale 不阻塞已提交 wiki revision，但搜索结果必须显示 stale 状态；source tombstone 或 visibility 撤销后不得生成 snippet 或 answer context。
 - citation-backed answer 只能使用当前 actor 二次授权后的 claim/citation。
 
 ## 风险与缓解
