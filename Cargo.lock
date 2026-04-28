@@ -402,6 +402,9 @@ dependencies = [
 [[package]]
 name = "seaki-sandbox"
 version = "0.1.0"
+dependencies = [
+ "tempfile",
+]
 
 [[package]]
 name = "seaki-wiki"
