@@ -1,5 +1,8 @@
 pub const DAEMON_ENTRYPOINT: &str = "local-daemon-ingress";
 
+pub type SearchQueryInput = seaki_core::SearchQueryRequest;
+pub type SearchResultDTO = seaki_core::SearchResultDTO;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DaemonIngressContract {
     pub accepts_inert_events: bool,
@@ -71,6 +74,10 @@ where
     pub fn replay(&self, from_seq: EventSeq) -> Result<Vec<LedgerEvent>, L::Error> {
         self.ledger.replay(from_seq)
     }
+
+    pub fn search_query(&self, input: SearchQueryInput) -> Result<Vec<SearchResultDTO>, L::Error> {
+        self.ledger.search_query(input)
+    }
 }
 
 pub trait CoreLedgerApi {
@@ -84,6 +91,8 @@ pub trait CoreLedgerApi {
     fn append_inert_event(&mut self, event: InertEvent) -> Result<AppendedEvent, Self::Error>;
 
     fn replay(&self, from_seq: EventSeq) -> Result<Vec<LedgerEvent>, Self::Error>;
+
+    fn search_query(&self, input: SearchQueryInput) -> Result<Vec<SearchResultDTO>, Self::Error>;
 }
 
 impl CoreLedgerApi for seaki_core::CoreLedger {
@@ -140,6 +149,10 @@ impl CoreLedgerApi for seaki_core::CoreLedger {
             .into_iter()
             .map(LedgerEvent::try_from)
             .collect()
+    }
+
+    fn search_query(&self, input: SearchQueryInput) -> Result<Vec<SearchResultDTO>, Self::Error> {
+        seaki_core::CoreLedger::search_query(self, input)
     }
 }
 
@@ -253,6 +266,10 @@ impl TryFrom<seaki_core::EventEnvelope> for LedgerEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use seaki_index::{
+        CandidateKind, IndexCandidateId, IndexGeneration, IndexScope, IndexedCitationRef,
+        IndexedDocument, SourceRange, SourceRangeUnit, SourceStatus, Visibility,
+    };
 
     #[test]
     fn daemon_m0_contract_is_inert_ingress() {
@@ -341,12 +358,109 @@ mod tests {
         assert_eq!(ledger.audit_count().expect("audit count reads"), 2);
     }
 
+    #[test]
+    fn search_query_delegates_to_core_authorization_path() {
+        let daemon = search_daemon();
+
+        let results = daemon
+            .search_query(SearchQueryInput::new(
+                "workspace-alpha",
+                "account-alpha",
+                "needle",
+                10,
+            ))
+            .expect("search query delegates to core");
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].result_id, "doc-visible");
+        assert_eq!(results[0].snippet.as_deref(), Some("allowed body"));
+        assert_eq!(
+            results[0].citation_refs[0].citation_id,
+            "citation-doc-visible"
+        );
+        assert_eq!(
+            results[0].index_status.state,
+            seaki_core::INDEX_STATUS_FRESH
+        );
+    }
+
     fn initialized_daemon() -> Daemon<seaki_core::CoreLedger> {
         let mut daemon = Daemon::open_in_memory().expect("core ledger opens");
         daemon
             .workspace_init(workspace_init_input())
             .expect("workspace init should be accepted");
         daemon
+    }
+
+    fn search_daemon() -> Daemon<seaki_core::CoreLedger> {
+        let mut ledger = seaki_core::CoreLedger::open_in_memory().expect("core ledger opens");
+        ledger
+            .workspace_init(seaki_core::WorkspaceInitRequest::new(
+                "event-1",
+                "user:local",
+                "workspace-alpha",
+                "idem-1",
+                "initialize workspace",
+            ))
+            .expect("workspace init should be accepted");
+        let scope = IndexScope::new("workspace-alpha", "account-alpha");
+        ledger
+            .replace_search_scope(
+                IndexGeneration::fresh(1, scope.clone(), 1, 1),
+                [
+                    indexed_document(
+                        "doc-visible",
+                        &scope,
+                        "needle",
+                        "allowed body",
+                        Visibility::Visible,
+                    ),
+                    indexed_document(
+                        "doc-restricted",
+                        &scope,
+                        "needle",
+                        "restricted body",
+                        Visibility::Restricted,
+                    ),
+                ],
+            )
+            .expect("search scope seeds");
+        Daemon::new(ledger)
+    }
+
+    fn indexed_document(
+        id: &str,
+        scope: &IndexScope,
+        title: &str,
+        body: &str,
+        visibility: Visibility,
+    ) -> IndexedDocument {
+        IndexedDocument {
+            candidate_id: IndexCandidateId::new(id),
+            workspace_id: scope.workspace_id.clone(),
+            account_id: scope.account_id.clone(),
+            source_id: "source-1".to_string(),
+            citation_ref: Some(IndexedCitationRef {
+                citation_id: format!("citation-{id}"),
+                source_id: "source-1".to_string(),
+                range: SourceRange {
+                    unit: SourceRangeUnit::Line,
+                    start: 1,
+                    end: 1,
+                    label: Some("source-1:1".to_string()),
+                },
+                wiki_page_id: format!("page-{id}"),
+                claim_id: format!("claim-{id}"),
+                degraded_reason: None,
+            }),
+            kind: CandidateKind::Claim,
+            title: title.to_string(),
+            body: body.to_string(),
+            visibility,
+            source_status: SourceStatus::Active,
+            source_revision: 1,
+            wiki_revision: 1,
+        }
     }
 
     fn workspace_init_input() -> WorkspaceInitInput {

@@ -9,3 +9,6 @@ path = "src/lib.rs"
 
 [dependencies]
 seaki-core = { path = "../seaki-core" }
+
+[dev-dependencies]
+seaki-index = { path = "../seaki-index" }

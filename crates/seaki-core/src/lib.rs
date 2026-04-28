@@ -1,4 +1,8 @@
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
+use seaki_index::{
+    Bm25CandidateIndex, CandidateKind, IndexGeneration, IndexStatus, IndexedCitationRef,
+    IndexedDocument, SourceRangeUnit,
+};
 use sha2::{Digest, Sha256};
 use std::fmt;
 use std::path::Path;
@@ -6,6 +10,8 @@ use std::path::Path;
 pub const CORE_AUTHORITY: &str = "policy-approved-core";
 pub const CURRENT_EVENT_SCHEMA_VERSION: u32 = 1;
 pub const GENESIS_AUDIT_HASH: &str = "GENESIS";
+pub const INDEX_STATUS_ERROR: &str = "error";
+pub const INDEX_STATUS_FRESH: &str = "fresh";
 pub const INDEX_STATUS_STALE: &str = "stale";
 pub const APPROVAL_DECISION_APPROVED: &str = "approved";
 pub const APPROVAL_DECISION_DENIED: &str = "denied";
@@ -85,6 +91,66 @@ pub struct WorkspaceInitResult {
     pub workspace_revision: u64,
     pub audit_head: String,
     pub index_status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchQueryRequest {
+    pub workspace_id: String,
+    pub account_id: String,
+    pub query: String,
+    pub limit: usize,
+}
+
+impl SearchQueryRequest {
+    pub fn new(
+        workspace_id: impl Into<String>,
+        account_id: impl Into<String>,
+        query: impl Into<String>,
+        limit: usize,
+    ) -> Self {
+        Self {
+            workspace_id: workspace_id.into(),
+            account_id: account_id.into(),
+            query: query.into(),
+            limit,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IndexStatusDTO {
+    pub state: String,
+    pub last_good_revision: Option<String>,
+    pub stale_reason: Option<String>,
+    pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceRangeDTO {
+    pub unit: String,
+    pub start: u64,
+    pub end: u64,
+    pub label: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CitationRefDTO {
+    pub citation_id: String,
+    pub source_id: String,
+    pub range: SourceRangeDTO,
+    pub wiki_page_id: String,
+    pub claim_id: String,
+    pub degraded_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchResultDTO {
+    pub result_id: String,
+    pub kind: String,
+    pub title: String,
+    pub snippet: Option<String>,
+    pub citation_refs: Vec<CitationRefDTO>,
+    pub index_status: IndexStatusDTO,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -332,6 +398,7 @@ pub struct AuditEntry {
 #[derive(Debug)]
 pub enum CoreError {
     Database(rusqlite::Error),
+    Index(seaki_index::IndexError),
     InvalidSchemaVersion {
         found: u32,
     },
@@ -381,6 +448,7 @@ impl fmt::Display for CoreError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Database(error) => write!(f, "database error: {error}"),
+            Self::Index(error) => write!(f, "index error: {error}"),
             Self::InvalidSchemaVersion { found } => {
                 write!(f, "invalid schema version: {found}")
             }
@@ -459,10 +527,17 @@ impl From<rusqlite::Error> for CoreError {
     }
 }
 
+impl From<seaki_index::IndexError> for CoreError {
+    fn from(value: seaki_index::IndexError) -> Self {
+        Self::Index(value)
+    }
+}
+
 pub type CoreResult<T> = Result<T, CoreError>;
 
 pub struct CoreLedger {
     conn: Connection,
+    search_index: Bm25CandidateIndex,
 }
 
 impl CoreLedger {
@@ -477,7 +552,10 @@ impl CoreLedger {
     }
 
     pub fn from_connection(conn: Connection) -> CoreResult<Self> {
-        let mut ledger = Self { conn };
+        let mut ledger = Self {
+            conn,
+            search_index: Bm25CandidateIndex::new(),
+        };
         ledger.initialize()?;
         Ok(ledger)
     }
@@ -563,6 +641,52 @@ impl CoreLedger {
             audit_head,
             index_status: INDEX_STATUS_STALE.to_string(),
         })
+    }
+
+    pub fn replace_search_scope(
+        &mut self,
+        generation: IndexGeneration,
+        documents: impl IntoIterator<Item = IndexedDocument>,
+    ) -> CoreResult<()> {
+        let scope = generation.scope();
+        self.workspace_revision(&scope.workspace_id)?
+            .ok_or_else(|| CoreError::WorkspaceMissing(scope.workspace_id.clone()))?;
+        self.search_index.replace_scope(generation, documents)?;
+        Ok(())
+    }
+
+    pub fn search_query(&self, request: SearchQueryRequest) -> CoreResult<Vec<SearchResultDTO>> {
+        self.workspace_revision(&request.workspace_id)?
+            .ok_or_else(|| CoreError::WorkspaceMissing(request.workspace_id.clone()))?;
+
+        let query = seaki_index::SearchQuery::new(
+            request.workspace_id,
+            request.account_id,
+            request.query,
+            request.limit,
+        );
+        let candidate_search = self.search_index.search_candidates(&query);
+        let generation = self.search_index.generation(&query.scope());
+        let index_status = search_index_status(candidate_search.status, generation);
+        let authorized = self
+            .search_index
+            .authorize_candidates(&query, &candidate_search.candidate_ids);
+
+        Ok(authorized
+            .into_iter()
+            .map(|result| SearchResultDTO {
+                result_id: result.candidate_id.to_string(),
+                kind: search_result_kind(&result.kind).to_string(),
+                title: result.title,
+                snippet: result.snippet,
+                citation_refs: result
+                    .citation_refs
+                    .into_iter()
+                    .map(CitationRefDTO::from)
+                    .collect(),
+                index_status: index_status.clone(),
+            })
+            .collect())
     }
 
     pub fn append_inert_event(&mut self, event: InertEvent) -> CoreResult<EventEnvelope> {
@@ -831,6 +955,66 @@ impl CoreLedger {
 
 pub fn workspace_scope(workspace_id: &str) -> String {
     format!("workspace:{workspace_id}")
+}
+
+impl From<IndexedCitationRef> for CitationRefDTO {
+    fn from(value: IndexedCitationRef) -> Self {
+        let range = value.range;
+        Self {
+            citation_id: value.citation_id,
+            source_id: value.source_id,
+            range: SourceRangeDTO {
+                unit: source_range_unit(&range.unit).to_string(),
+                start: range.start,
+                end: range.end,
+                label: range.label,
+            },
+            wiki_page_id: value.wiki_page_id,
+            claim_id: value.claim_id,
+            degraded_reason: value.degraded_reason,
+        }
+    }
+}
+
+fn search_index_status(
+    status: IndexStatus,
+    generation: Option<&IndexGeneration>,
+) -> IndexStatusDTO {
+    let state = match status {
+        IndexStatus::Fresh => INDEX_STATUS_FRESH,
+        IndexStatus::Stale | IndexStatus::CleanupRequired => INDEX_STATUS_STALE,
+        IndexStatus::Failed => INDEX_STATUS_ERROR,
+    };
+    let stale_reason = match status {
+        IndexStatus::Fresh => None,
+        IndexStatus::Stale => Some("index stale".to_string()),
+        IndexStatus::CleanupRequired => Some("index cleanup required".to_string()),
+        IndexStatus::Failed => generation.and_then(|generation| generation.failure_reason.clone()),
+    };
+
+    IndexStatusDTO {
+        state: state.to_string(),
+        last_good_revision: generation.map(|generation| generation.wiki_revision.to_string()),
+        stale_reason,
+        updated_at: None,
+    }
+}
+
+fn search_result_kind(kind: &CandidateKind) -> &'static str {
+    match kind {
+        CandidateKind::WikiPage => "wiki_page",
+        CandidateKind::Claim => "claim",
+        CandidateKind::SourceFrame => "source",
+    }
+}
+
+fn source_range_unit(unit: &SourceRangeUnit) -> &'static str {
+    match unit {
+        SourceRangeUnit::Byte => "byte",
+        SourceRangeUnit::Line => "line",
+        SourceRangeUnit::Page => "page",
+        SourceRangeUnit::Anchor => "anchor",
+    }
 }
 
 fn validate_event(event: &InertEvent) -> CoreResult<()> {
@@ -1330,6 +1514,10 @@ fn checked_i64(value: u64) -> CoreResult<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use seaki_index::{
+        CandidateKind, IndexCandidateId, IndexGeneration, IndexScope, IndexedCitationRef,
+        IndexedDocument, SourceRange, SourceRangeUnit, SourceStatus, Visibility,
+    };
     use tempfile::NamedTempFile;
 
     #[test]
@@ -1367,6 +1555,93 @@ mod tests {
                 .to_lowercase(),
             "wal"
         );
+    }
+
+    #[test]
+    fn search_query_returns_authorized_search_result_dtos_without_wal_write() {
+        let mut ledger = initialized_ledger();
+        seed_search_index(&mut ledger);
+        let initial_events = ledger.event_count().expect("event count");
+        let initial_audit = ledger.audit_count().expect("audit count");
+
+        let results = ledger
+            .search_query(SearchQueryRequest::new(
+                "workspace-1",
+                "account-1",
+                "needle",
+                10,
+            ))
+            .expect("search query succeeds");
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].result_id, "doc-visible");
+        assert_eq!(results[0].kind, "claim");
+        assert_eq!(results[0].title, "needle");
+        assert_eq!(results[0].snippet.as_deref(), Some("allowed cited body"));
+        assert_eq!(results[0].index_status.state, INDEX_STATUS_FRESH);
+        assert_eq!(
+            results[0].index_status.last_good_revision.as_deref(),
+            Some("1")
+        );
+        assert_eq!(
+            results[0].citation_refs[0].citation_id,
+            "citation-doc-visible"
+        );
+        assert_eq!(results[0].citation_refs[0].range.unit, "line");
+        assert_eq!(ledger.event_count().expect("event count"), initial_events);
+        assert_eq!(ledger.audit_count().expect("audit count"), initial_audit);
+    }
+
+    #[test]
+    fn search_query_filters_uncited_candidate_without_wal_write() {
+        let mut ledger = initialized_ledger();
+        seed_search_index(&mut ledger);
+        let scope = IndexScope::new("workspace-1", "account-1");
+        ledger
+            .replace_search_scope(
+                IndexGeneration::fresh(2, scope.clone(), 1, 2),
+                [uncited_document(
+                    "doc-uncited",
+                    &scope,
+                    "needle",
+                    "uncited body",
+                )],
+            )
+            .expect("search scope replaces");
+        let initial_events = ledger.event_count().expect("event count");
+        let initial_audit = ledger.audit_count().expect("audit count");
+
+        let results = ledger
+            .search_query(SearchQueryRequest::new(
+                "workspace-1",
+                "account-1",
+                "needle",
+                10,
+            ))
+            .expect("search query succeeds");
+
+        assert!(results.is_empty());
+        assert_eq!(ledger.event_count().expect("event count"), initial_events);
+        assert_eq!(ledger.audit_count().expect("audit count"), initial_audit);
+    }
+
+    #[test]
+    fn search_query_missing_workspace_does_not_write() {
+        let ledger = initialized_ledger();
+        let initial_events = ledger.event_count().expect("event count");
+        let initial_audit = ledger.audit_count().expect("audit count");
+
+        assert!(matches!(
+            ledger.search_query(SearchQueryRequest::new(
+                "workspace-missing",
+                "account-1",
+                "needle",
+                10,
+            )),
+            Err(CoreError::WorkspaceMissing(_))
+        ));
+        assert_eq!(ledger.event_count().expect("event count"), initial_events);
+        assert_eq!(ledger.audit_count().expect("audit count"), initial_audit);
     }
 
     #[test]
@@ -1826,6 +2101,86 @@ mod tests {
             .workspace_init(workspace_init_request("event-1", "idem-1"))
             .expect("workspace init succeeds");
         ledger
+    }
+
+    fn seed_search_index(ledger: &mut CoreLedger) {
+        let scope = IndexScope::new("workspace-1", "account-1");
+        ledger
+            .replace_search_scope(
+                IndexGeneration::fresh(1, scope.clone(), 1, 1),
+                [
+                    indexed_document(
+                        "doc-visible",
+                        &scope,
+                        "source-1",
+                        "needle",
+                        "allowed cited body",
+                        Visibility::Visible,
+                        SourceStatus::Active,
+                    ),
+                    indexed_document(
+                        "doc-restricted",
+                        &scope,
+                        "source-1",
+                        "needle",
+                        "restricted body",
+                        Visibility::Restricted,
+                        SourceStatus::Active,
+                    ),
+                ],
+            )
+            .expect("search scope seeds");
+    }
+
+    fn indexed_document(
+        id: &str,
+        scope: &IndexScope,
+        source_id: &str,
+        title: &str,
+        body: &str,
+        visibility: Visibility,
+        source_status: SourceStatus,
+    ) -> IndexedDocument {
+        IndexedDocument {
+            candidate_id: IndexCandidateId::new(id),
+            workspace_id: scope.workspace_id.clone(),
+            account_id: scope.account_id.clone(),
+            source_id: source_id.to_string(),
+            citation_ref: Some(IndexedCitationRef {
+                citation_id: format!("citation-{id}"),
+                source_id: source_id.to_string(),
+                range: SourceRange {
+                    unit: SourceRangeUnit::Line,
+                    start: 1,
+                    end: 1,
+                    label: Some(format!("{source_id}:1")),
+                },
+                wiki_page_id: format!("page-{id}"),
+                claim_id: format!("claim-{id}"),
+                degraded_reason: None,
+            }),
+            kind: CandidateKind::Claim,
+            title: title.to_string(),
+            body: body.to_string(),
+            visibility,
+            source_status,
+            source_revision: 1,
+            wiki_revision: 1,
+        }
+    }
+
+    fn uncited_document(id: &str, scope: &IndexScope, title: &str, body: &str) -> IndexedDocument {
+        let mut document = indexed_document(
+            id,
+            scope,
+            "source-1",
+            title,
+            body,
+            Visibility::Visible,
+            SourceStatus::Active,
+        );
+        document.citation_ref = None;
+        document
     }
 
     fn workspace_init_request(event_id: &str, idempotency_key: &str) -> WorkspaceInitRequest {

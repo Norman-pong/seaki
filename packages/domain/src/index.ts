@@ -4,6 +4,7 @@ import type {
   ApprovalReviewDTO,
   FrontendEventEnvelope,
   IndexStatusDTO,
+  SearchResultDTO,
   UserSelectedFileDTO,
   WorkspaceDTO,
 } from "@seaki/dto";
@@ -120,7 +121,7 @@ export interface DomainClient {
     ): Promise<UserSelectedFileDTO>;
   };
   readonly search: {
-    query(input: SearchQueryInput): Promise<unknown>;
+    query(input: SearchQueryInput): Promise<readonly SearchResultDTO[]>;
   };
   readonly source: {
     ingestSelectedFile(input: IngestSelectedFileInput): Promise<unknown>;

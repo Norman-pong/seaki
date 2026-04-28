@@ -9,6 +9,7 @@ path = "src/lib.rs"
 
 [dependencies]
 rusqlite.workspace = true
+seaki-index = { path = "../seaki-index" }
 sha2.workspace = true
 
 [dev-dependencies]

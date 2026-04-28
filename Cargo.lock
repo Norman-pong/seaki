@@ -364,6 +364,7 @@ name = "seaki-core"
 version = "0.1.0"
 dependencies = [
  "rusqlite",
+ "seaki-index",
  "sha2",
  "tempfile",
 ]
@@ -373,6 +374,7 @@ name = "seaki-daemon"
 version = "0.1.0"
 dependencies = [
  "seaki-core",
+ "seaki-index",
 ]
 
 [[package]]

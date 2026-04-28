@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { SCHEMA_HASH, SCHEMA_VERSION } from "@seaki/dto";
+import { M0_DOMAIN_USE_CASE_METHODS, SCHEMA_HASH, SCHEMA_VERSION } from "@seaki/dto";
 import type {
   ApprovalDecisionResultDTO,
   ApprovalReviewDTO,
+  SearchResultDTO,
   WikiPatchProposalDTO,
 } from "@seaki/dto";
 import { createMockTransportClient } from "@seaki/transport";
@@ -150,6 +151,65 @@ function approvalResult(status: ApprovalDecisionResultDTO["status"]): ApprovalDe
     transaction_id: "txn_approval_1",
     wal_entry_id: "wal_approval_1",
   };
+}
+
+function searchResults(): readonly SearchResultDTO[] {
+  return [
+    {
+      citation_refs: [
+        {
+          citation_id: "cite_fresh",
+          claim_id: "claim_fresh",
+          degraded_reason: null,
+          range: {
+            end: 8,
+            label: "README.md:4-8",
+            start: 4,
+            unit: "line",
+          },
+          source_id: "source_readme",
+          wiki_page_id: "page_search",
+        },
+      ],
+      index_status: {
+        last_good_revision: "wiki_rev_2",
+        stale_reason: null,
+        state: "fresh",
+        updated_at: "2026-04-28T00:20:00.000Z",
+      },
+      kind: "claim",
+      result_id: "result_fresh",
+      snippet: "Fresh cited search result.",
+      title: "Fresh citation result",
+    },
+    {
+      citation_refs: [
+        {
+          citation_id: "cite_stale",
+          claim_id: "claim_stale",
+          degraded_reason: "index_stale",
+          range: {
+            end: 3,
+            label: "notes.md:1-3",
+            start: 1,
+            unit: "line",
+          },
+          source_id: "source_notes",
+          wiki_page_id: "page_notes",
+        },
+      ],
+      index_status: {
+        last_good_revision: "wiki_rev_1",
+        stale_reason: "source visibility changed",
+        state: "stale",
+        updated_at: "2026-04-28T00:10:00.000Z",
+      },
+      kind: "wiki_page",
+      result_id: "result_stale",
+      snippet: "Stale cited search result.",
+      title: "Stale citation result",
+    },
+  ] satisfies readonly SearchResultDTO[];
 }
 
 describe("domain use case shells", () => {
@@ -341,5 +401,37 @@ describe("domain use case shells", () => {
         workspaceId: "ws_1",
       }),
     ).resolves.toEqual(result);
+  });
+
+  it("returns typed SearchResultDTOs only through the search.query domain use case", async () => {
+    const results = searchResults();
+    const transport = createMockTransportClient({
+      responder(record) {
+        expect(record.method).toBe(M0_DOMAIN_USE_CASE_METHODS.SEARCH_QUERY);
+
+        return results;
+      },
+    });
+    const client = createDomainClient(transport);
+
+    const response: readonly SearchResultDTO[] = await client.search.query({
+      query: "citation freshness",
+      workspaceId: "ws_1",
+    });
+
+    expect(response).toEqual(results);
+    expect(response.map((result) => result.index_status.state)).toEqual(["fresh", "stale"]);
+    expect(
+      response.flatMap((result) => result.citation_refs).map((ref) => ref.citation_id),
+    ).toEqual(["cite_fresh", "cite_stale"]);
+    expect(transport.getRequests()).toEqual([
+      {
+        input: {
+          query: "citation freshness",
+          workspaceId: "ws_1",
+        },
+        method: M0_DOMAIN_USE_CASE_METHODS.SEARCH_QUERY,
+      },
+    ]);
   });
 });
