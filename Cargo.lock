@@ -411,6 +411,9 @@ name = "seaki-wiki"
 version = "0.1.0"
 dependencies = [
  "seaki-dto",
+ "seaki-sandbox",
+ "sha2",
+ "tempfile",
 ]
 
 [[package]]

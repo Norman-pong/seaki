@@ -9,3 +9,8 @@ path = "src/lib.rs"
 
 [dependencies]
 seaki-dto = { path = "../seaki-dto" }
+seaki-sandbox = { path = "../seaki-sandbox" }
+sha2.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
