@@ -3,7 +3,7 @@
 
 export const SCHEMA_VERSION = 1 as const;
 export const SCHEMA_HASH =
-  "333a13dd5100e3641847a27bd243d2fafd66476ff10c9200accb56f06da3c2cb" as const;
+  "df22bc5470cd33f6f37f660548c6c2fe1e29ef3ffccdf8b750f6224867227273" as const;
 
 export type IndexStatusState = "idle" | "indexing" | "fresh" | "stale" | "error";
 
@@ -29,6 +29,15 @@ export type ImportStage =
   | "patch_proposed"
   | "raw_committed"
   | "selected";
+
+export type ApprovalStatus =
+  | "pending"
+  | "approved"
+  | "applying"
+  | "committed"
+  | "rejected"
+  | "expired"
+  | "conflict";
 
 export interface IndexStatusDTO {
   state: IndexStatusState;
@@ -110,27 +119,104 @@ export interface AnnotationDTO {
   conflict_status: string | null;
 }
 
+export interface RiskSummaryDTO {
+  level: "low" | "medium" | "high" | "critical";
+  summary: string;
+  factors: readonly string[];
+  requires_manual_approval: boolean;
+}
+
+export interface PatchDiffDTO {
+  format: "unified" | "structured";
+  text: string;
+  affected_paths: readonly string[];
+  added_lines: number;
+  removed_lines: number;
+}
+
+export interface CitationEvidenceDTO {
+  citation_id: string;
+  source_id: string;
+  source_title: string;
+  range: SourceRangeDTO;
+  cited_ranges: readonly SourceRangeDTO[];
+  excerpt: string;
+  visibility: "visible" | "restricted" | "tombstoned";
+  degraded_reason: string | null;
+}
+
 export interface CitationValidationDTO {
   citation_id: string;
+  claim_id?: string | null;
   state: "valid" | "invalid" | "degraded";
   reason: string | null;
+  evidence?: readonly CitationEvidenceDTO[];
+  cited_ranges?: readonly SourceRangeDTO[];
+  taint_flags?: readonly string[];
+  security_flags?: readonly string[];
+}
+
+export interface ClaimReviewDTO {
+  claim_id: string;
+  page_id: string;
+  text: string;
+  citation_ids: readonly string[];
+  citation_validation: readonly CitationValidationDTO[];
+  risk_summary: RiskSummaryDTO;
+  taint_flags: readonly string[];
+  security_flags: readonly string[];
 }
 
 export interface WikiPatchProposalDTO {
   patch_id: string;
   base_revision: string;
-  diff: string;
+  diff: string | PatchDiffDTO;
   claim_ids: readonly string[];
+  claims?: readonly ClaimReviewDTO[];
   citation_validation: readonly CitationValidationDTO[];
-  risk_summary: string;
+  risk_summary: string | RiskSummaryDTO;
+  taint_flags?: readonly string[];
+  security_flags?: readonly string[];
+}
+
+export interface ApprovalClaimDecisionDTO {
+  claim_id: string;
+  decision: "approve" | "reject";
+  reason: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
 }
 
 export interface ApprovalRequestDTO {
   approval_id: string;
   patch_id: string;
+  status?: ApprovalStatus;
   required_by: string;
   expires_at: string;
   policy_decision: "allow" | "deny" | "requires_approval";
+  proposal?: WikiPatchProposalDTO;
+  claim_decisions?: readonly ApprovalClaimDecisionDTO[];
+  rejection_reason?: string | null;
+  wal_entry_id?: string | null;
+  audit_id?: string | null;
+}
+
+export interface ApprovalReviewDTO {
+  request: ApprovalRequestDTO;
+  proposal: WikiPatchProposalDTO;
+}
+
+export interface ApprovalDecisionResultDTO {
+  approval_id: string;
+  patch_id: string;
+  status: ApprovalStatus;
+  claim_decisions: readonly ApprovalClaimDecisionDTO[];
+  rejection_reason: string | null;
+  wal_entry_id: string | null;
+  audit_id: string | null;
+  transaction_id: string | null;
+  committed_revision: string | null;
+  denied_reason: string | null;
 }
 
 export interface SearchResultDTO {

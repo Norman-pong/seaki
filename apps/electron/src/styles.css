@@ -1,5 +1,5 @@
 :root {
-  color: #18202a;
+  color: #16202a;
   font-family:
     Inter,
     ui-sans-serif,
@@ -8,61 +8,432 @@
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
-  background: #f6f8fb;
+  background: #f3f5f7;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
 }
 
+button,
+textarea {
+  font: inherit;
+}
+
+button {
+  min-height: 34px;
+  border: 1px solid #a9b4bf;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #17212b;
+  cursor: pointer;
+  font-weight: 650;
+  padding: 0 12px;
+}
+
+button:hover:not(:disabled) {
+  border-color: #607080;
+  background: #f8fafb;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
 .shell {
   min-height: 100vh;
   display: grid;
-  place-items: center;
-  padding: 32px;
+  gap: 16px;
+  padding: 18px;
 }
 
-.statusPanel {
-  width: min(520px, 100%);
-  border: 1px solid #d9e0e8;
-  border-radius: 8px;
-  background: #ffffff;
-  padding: 28px;
+.topbar,
+.approvalToolbar,
+.approvalGrid,
+.claimsPanel {
+  width: min(1440px, 100%);
+  margin: 0 auto;
 }
 
+.topbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid #d9dfe5;
+  padding-bottom: 14px;
+}
+
+.eyebrow,
 .label {
-  margin: 0 0 8px;
-  color: #5e6b78;
-  font-size: 13px;
-  font-weight: 600;
+  margin: 0;
+  color: #5c6975;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
 }
 
 h1 {
-  margin: 0 0 24px;
-  font-size: 28px;
-  line-height: 1.2;
+  margin-top: 4px;
+  font-size: 24px;
+  line-height: 1.15;
 }
 
-dl {
-  display: grid;
-  gap: 12px;
+h2 {
+  margin-top: 4px;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+h3 {
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.topMetrics,
+.claimFacts {
   margin: 0;
 }
 
-dl div {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  border-top: 1px solid #edf1f5;
-  padding-top: 12px;
+.topMetrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.topMetrics div {
+  border-left: 1px solid #d9dfe5;
+  padding-left: 12px;
 }
 
 dt {
-  color: #5e6b78;
-  font-weight: 600;
+  color: #63707c;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 dd {
-  margin: 0;
+  margin: 2px 0 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.approvalToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid #d8dee5;
+  background: #ffffff;
+  padding: 12px;
+}
+
+.approvalToolbar strong,
+.approvalToolbar span {
+  margin-right: 10px;
+  font-size: 13px;
+}
+
+.approvalToolbar span {
+  color: #63707c;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.actionGroup {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 8px;
+}
+
+.approvalGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  gap: 16px;
+}
+
+.pane,
+.claimsPanel {
+  border: 1px solid #d8dee5;
+  background: #ffffff;
+}
+
+.pane {
+  min-width: 0;
+}
+
+.paneHeader,
+.panelTitle,
+.claimTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.paneHeader {
+  border-bottom: 1px solid #e5e9ee;
+  padding: 12px;
+}
+
+.badge,
+.statusBadge,
+.citationState {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border: 1px solid #c9d2db;
+  border-radius: 999px;
+  color: #26323e;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+.origin {
+  border-bottom: 1px solid #e5e9ee;
+  color: #5d6873;
+  font-size: 12px;
+  padding: 9px 12px;
+}
+
+.sourcePreview {
+  display: grid;
+  gap: 0;
+}
+
+.rangeBlock {
+  display: grid;
+  gap: 7px;
+  border-bottom: 1px solid #eef1f4;
+  padding: 12px;
+}
+
+.rangeBlock:last-child {
+  border-bottom: 0;
+}
+
+.rangeMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #4e5b66;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.rangeBlock p {
+  color: #1f2a35;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.diffBlock {
+  display: grid;
+  margin: 0;
+  overflow: auto;
+  padding: 10px 0;
+}
+
+.diffLine {
+  display: block;
+  min-height: 27px;
+  border-left: 3px solid transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 4px 12px 4px 14px;
+  white-space: pre-wrap;
+}
+
+.diffLine.add {
+  border-left-color: #2f8a4f;
+  background: #eef8f1;
+}
+
+.diffLine.remove {
+  border-left-color: #c44b45;
+  background: #fff1f0;
+}
+
+.diffLine.context {
+  color: #5b6671;
+}
+
+.claimsPanel {
+  display: grid;
+}
+
+.panelTitle {
+  border-bottom: 1px solid #e5e9ee;
+  padding: 12px;
+}
+
+.statusStrip {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 6px;
+}
+
+.statusStrip span {
+  border: 1px solid #d5dce3;
+  color: #52606c;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 3px 7px;
+}
+
+.claimList {
+  display: grid;
+}
+
+.claimCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+  gap: 14px;
+  border-bottom: 1px solid #e8edf1;
+  padding: 12px;
+}
+
+.claimCard:last-child {
+  border-bottom: 0;
+}
+
+.claimMain {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.claimMain p,
+.reasonLine,
+.rejectLine {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.claimFacts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+}
+
+.reasonLine {
+  color: #8a5a00;
+}
+
+.rejectLine {
+  color: #9d302a;
+}
+
+.rejectBox {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.rejectBox label {
+  color: #5c6975;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+textarea {
+  min-height: 78px;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid #c7d0d8;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #17212b;
+  padding: 8px;
+}
+
+textarea:disabled {
+  background: #f4f6f8;
+}
+
+.approveButton {
+  justify-self: start;
+  border-color: #9fc9ad;
+  color: #1f6b3c;
+}
+
+.rejectButton {
+  justify-self: start;
+  border-color: #c99a96;
+  color: #84231d;
+}
+
+.citationState.valid,
+.statusBadge.approved,
+.statusBadge.committed {
+  border-color: #9fc9ad;
+  background: #eef8f1;
+  color: #1f6b3c;
+}
+
+.citationState.degraded,
+.statusBadge.pending,
+.statusBadge.applying,
+.statusBadge.expired {
+  border-color: #dfc178;
+  background: #fff8e6;
+  color: #785700;
+}
+
+.citationState.invalid,
+.statusBadge.rejected,
+.statusBadge.conflict {
+  border-color: #e1aaa6;
+  background: #fff1f0;
+  color: #8b2f29;
+}
+
+.claimCard.conflict,
+.claimCard.expired {
+  background: #fffdf7;
+}
+
+@media (max-width: 920px) {
+  .topbar,
+  .approvalToolbar,
+  .approvalGrid,
+  .claimCard {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar,
+  .approvalToolbar,
+  .panelTitle {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .topMetrics,
+  .claimFacts {
+    grid-template-columns: 1fr;
+  }
+
+  .actionGroup,
+  .statusStrip {
+    justify-content: start;
+  }
 }

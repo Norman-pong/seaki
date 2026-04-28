@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { SCHEMA_HASH, SCHEMA_VERSION } from "@seaki/dto";
+import type {
+  ApprovalDecisionResultDTO,
+  ApprovalReviewDTO,
+  WikiPatchProposalDTO,
+} from "@seaki/dto";
 import { createMockTransportClient } from "@seaki/transport";
 import type { FrontendTransportEvent } from "@seaki/transport";
 
@@ -35,6 +40,115 @@ function event(
     transaction_id: `tx_${seq}`,
     type: eventType,
     workspace_id: "ws_1",
+  };
+}
+
+function patchProposal(): WikiPatchProposalDTO {
+  const range = {
+    end: 18,
+    label: "README.md:1-2",
+    start: 0,
+    unit: "line" as const,
+  };
+  const validation = {
+    citation_id: "cite_1",
+    claim_id: "claim_1",
+    cited_ranges: [range],
+    evidence: [
+      {
+        citation_id: "cite_1",
+        cited_ranges: [range],
+        degraded_reason: null,
+        excerpt: "seaki requires cited claims.",
+        range,
+        source_id: "source_1",
+        source_title: "README.md",
+        visibility: "visible" as const,
+      },
+    ],
+    reason: null,
+    security_flags: ["no_active_content"],
+    state: "valid" as const,
+    taint_flags: ["untrusted_content"],
+  };
+  const risk = {
+    factors: ["updates committed wiki page"],
+    level: "medium" as const,
+    requires_manual_approval: true,
+    summary: "One cited claim will be added.",
+  };
+
+  return {
+    base_revision: "wiki_rev_0",
+    citation_validation: [validation],
+    claim_ids: ["claim_1"],
+    claims: [
+      {
+        citation_ids: ["cite_1"],
+        citation_validation: [validation],
+        claim_id: "claim_1",
+        page_id: "page_1",
+        risk_summary: risk,
+        security_flags: ["no_active_content"],
+        taint_flags: ["untrusted_content"],
+        text: "Approval changes need citation evidence.",
+      },
+    ],
+    diff: {
+      added_lines: 1,
+      affected_paths: ["wiki/page_1.md"],
+      format: "unified",
+      removed_lines: 0,
+      text: "+ Approval changes need citation evidence.",
+    },
+    patch_id: "patch_1",
+    risk_summary: risk,
+    security_flags: ["no_active_content"],
+    taint_flags: ["untrusted_content"],
+  };
+}
+
+function approvalReview(): ApprovalReviewDTO {
+  const proposal = patchProposal();
+
+  return {
+    proposal,
+    request: {
+      approval_id: "approval_1",
+      audit_id: null,
+      claim_decisions: [],
+      expires_at: "2026-04-28T01:00:00.000Z",
+      patch_id: proposal.patch_id,
+      policy_decision: "requires_approval",
+      proposal,
+      rejection_reason: null,
+      required_by: "wiki.patch.transaction",
+      status: "pending",
+      wal_entry_id: null,
+    },
+  };
+}
+
+function approvalResult(status: ApprovalDecisionResultDTO["status"]): ApprovalDecisionResultDTO {
+  return {
+    approval_id: "approval_1",
+    audit_id: "audit_approval_1",
+    claim_decisions: [
+      {
+        claim_id: "claim_1",
+        decided_at: "2026-04-28T00:10:00.000Z",
+        decided_by: "user_1",
+        decision: status === "rejected" ? "reject" : "approve",
+        reason: status === "rejected" ? "citation insufficient" : null,
+      },
+    ],
+    committed_revision: status === "committed" ? "wiki_rev_1" : null,
+    denied_reason: status === "rejected" ? "citation insufficient" : null,
+    patch_id: "patch_1",
+    rejection_reason: status === "rejected" ? "citation insufficient" : null,
+    status,
+    transaction_id: "txn_approval_1",
+    wal_entry_id: "wal_approval_1",
   };
 }
 
@@ -173,5 +287,59 @@ describe("domain use case shells", () => {
       "search.query",
       "citation.resolve",
     ]);
+  });
+
+  it("returns typed approval review and decision DTOs from domain use cases", async () => {
+    const review = approvalReview();
+    const result = approvalResult("approved");
+    const transport = createMockTransportClient({
+      responder: {
+        "approval.decide": result,
+        "approval.reviewPatch": review,
+      },
+    });
+    const client = createDomainClient(transport);
+
+    await expect(
+      client.approval.reviewPatch({
+        patchId: "patch_1",
+        workspaceId: "ws_1",
+      }),
+    ).resolves.toMatchObject({
+      proposal: {
+        diff: {
+          format: "unified",
+        },
+        claims: [
+          {
+            citation_validation: [
+              {
+                evidence: [
+                  {
+                    source_id: "source_1",
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      request: {
+        status: "pending",
+      },
+    });
+    await expect(
+      client.approval.decide({
+        approvalId: "approval_1",
+        claimDecisions: [
+          {
+            claimId: "claim_1",
+            decision: "approve",
+          },
+        ],
+        decision: "approve",
+        workspaceId: "ws_1",
+      }),
+    ).resolves.toEqual(result);
   });
 });

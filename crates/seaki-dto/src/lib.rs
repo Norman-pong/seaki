@@ -27,6 +27,16 @@ pub const IMPORT_STAGE_VARIANTS: &[&str] = &[
     "selected",
 ];
 
+pub const APPROVAL_STATUS_VARIANTS: &[&str] = &[
+    "pending",
+    "approved",
+    "applying",
+    "committed",
+    "rejected",
+    "expired",
+    "conflict",
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImportStage {
     ApprovalPending,
@@ -99,6 +109,48 @@ impl ImportStage {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApprovalStatus {
+    Pending,
+    Approved,
+    Applying,
+    Committed,
+    Rejected,
+    Expired,
+    Conflict,
+}
+
+impl ApprovalStatus {
+    pub const ALL: [Self; 7] = [
+        Self::Pending,
+        Self::Approved,
+        Self::Applying,
+        Self::Committed,
+        Self::Rejected,
+        Self::Expired,
+        Self::Conflict,
+    ];
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Approved => "approved",
+            Self::Applying => "applying",
+            Self::Committed => "committed",
+            Self::Rejected => "rejected",
+            Self::Expired => "expired",
+            Self::Conflict => "conflict",
+        }
+    }
+
+    pub const fn is_terminal(self) -> bool {
+        matches!(
+            self,
+            Self::Committed | Self::Rejected | Self::Expired | Self::Conflict
+        )
+    }
+}
+
 #[derive(Debug)]
 pub struct StringUnion {
     pub name: &'static str,
@@ -155,6 +207,10 @@ pub const STRING_UNIONS: &[StringUnion] = &[
     StringUnion {
         name: "ImportStage",
         variants: IMPORT_STAGE_VARIANTS,
+    },
+    StringUnion {
+        name: "ApprovalStatus",
+        variants: APPROVAL_STATUS_VARIANTS,
     },
 ];
 
@@ -273,12 +329,69 @@ pub const INTERFACES: &[Interface] = &[
         ],
     },
     Interface {
+        name: "RiskSummaryDTO",
+        generic: None,
+        fields: &[
+            Field::required("level", "\"low\" | \"medium\" | \"high\" | \"critical\""),
+            Field::required("summary", "string"),
+            Field::required("factors", "readonly string[]"),
+            Field::required("requires_manual_approval", "boolean"),
+        ],
+    },
+    Interface {
+        name: "PatchDiffDTO",
+        generic: None,
+        fields: &[
+            Field::required("format", "\"unified\" | \"structured\""),
+            Field::required("text", "string"),
+            Field::required("affected_paths", "readonly string[]"),
+            Field::required("added_lines", "number"),
+            Field::required("removed_lines", "number"),
+        ],
+    },
+    Interface {
+        name: "CitationEvidenceDTO",
+        generic: None,
+        fields: &[
+            Field::required("citation_id", "string"),
+            Field::required("source_id", "string"),
+            Field::required("source_title", "string"),
+            Field::required("range", "SourceRangeDTO"),
+            Field::required("cited_ranges", "readonly SourceRangeDTO[]"),
+            Field::required("excerpt", "string"),
+            Field::required(
+                "visibility",
+                "\"visible\" | \"restricted\" | \"tombstoned\"",
+            ),
+            Field::required("degraded_reason", "string | null"),
+        ],
+    },
+    Interface {
         name: "CitationValidationDTO",
         generic: None,
         fields: &[
             Field::required("citation_id", "string"),
+            Field::optional("claim_id", "string | null"),
             Field::required("state", "\"valid\" | \"invalid\" | \"degraded\""),
             Field::required("reason", "string | null"),
+            Field::optional("evidence", "readonly CitationEvidenceDTO[]"),
+            Field::optional("cited_ranges", "readonly SourceRangeDTO[]"),
+            Field::optional("taint_flags", "readonly string[]"),
+            Field::optional("security_flags", "readonly string[]"),
+        ],
+    },
+    Interface {
+        name: "ClaimReviewDTO",
+        generic: None,
+        fields: &[
+            Field::required("claim_id", "string"),
+            Field::required("page_id", "string"),
+            Field::required("text", "string"),
+            Field::required("citation_ids", "readonly string[]"),
+            Field::required("citation_validation", "readonly CitationValidationDTO[]"),
+            Field::required("risk_summary", "RiskSummaryDTO"),
+            Field::required("taint_flags", "readonly string[]"),
+            Field::required("security_flags", "readonly string[]"),
         ],
     },
     Interface {
@@ -287,10 +400,24 @@ pub const INTERFACES: &[Interface] = &[
         fields: &[
             Field::required("patch_id", "string"),
             Field::required("base_revision", "string"),
-            Field::required("diff", "string"),
+            Field::required("diff", "string | PatchDiffDTO"),
             Field::required("claim_ids", "readonly string[]"),
+            Field::optional("claims", "readonly ClaimReviewDTO[]"),
             Field::required("citation_validation", "readonly CitationValidationDTO[]"),
-            Field::required("risk_summary", "string"),
+            Field::required("risk_summary", "string | RiskSummaryDTO"),
+            Field::optional("taint_flags", "readonly string[]"),
+            Field::optional("security_flags", "readonly string[]"),
+        ],
+    },
+    Interface {
+        name: "ApprovalClaimDecisionDTO",
+        generic: None,
+        fields: &[
+            Field::required("claim_id", "string"),
+            Field::required("decision", "\"approve\" | \"reject\""),
+            Field::required("reason", "string | null"),
+            Field::required("decided_by", "string | null"),
+            Field::required("decided_at", "string | null"),
         ],
     },
     Interface {
@@ -299,12 +426,42 @@ pub const INTERFACES: &[Interface] = &[
         fields: &[
             Field::required("approval_id", "string"),
             Field::required("patch_id", "string"),
+            Field::optional("status", "ApprovalStatus"),
             Field::required("required_by", "string"),
             Field::required("expires_at", "string"),
             Field::required(
                 "policy_decision",
                 "\"allow\" | \"deny\" | \"requires_approval\"",
             ),
+            Field::optional("proposal", "WikiPatchProposalDTO"),
+            Field::optional("claim_decisions", "readonly ApprovalClaimDecisionDTO[]"),
+            Field::optional("rejection_reason", "string | null"),
+            Field::optional("wal_entry_id", "string | null"),
+            Field::optional("audit_id", "string | null"),
+        ],
+    },
+    Interface {
+        name: "ApprovalReviewDTO",
+        generic: None,
+        fields: &[
+            Field::required("request", "ApprovalRequestDTO"),
+            Field::required("proposal", "WikiPatchProposalDTO"),
+        ],
+    },
+    Interface {
+        name: "ApprovalDecisionResultDTO",
+        generic: None,
+        fields: &[
+            Field::required("approval_id", "string"),
+            Field::required("patch_id", "string"),
+            Field::required("status", "ApprovalStatus"),
+            Field::required("claim_decisions", "readonly ApprovalClaimDecisionDTO[]"),
+            Field::required("rejection_reason", "string | null"),
+            Field::required("wal_entry_id", "string | null"),
+            Field::required("audit_id", "string | null"),
+            Field::required("transaction_id", "string | null"),
+            Field::required("committed_revision", "string | null"),
+            Field::required("denied_reason", "string | null"),
         ],
     },
     Interface {
@@ -457,6 +614,18 @@ mod tests {
     }
 
     #[test]
+    fn approval_status_variants_follow_enum_order() {
+        let from_enum = ApprovalStatus::ALL
+            .iter()
+            .map(|status| status.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(from_enum, APPROVAL_STATUS_VARIANTS);
+        assert!(ApprovalStatus::Committed.is_terminal());
+        assert!(!ApprovalStatus::Pending.is_terminal());
+    }
+
+    #[test]
     fn frontend_minimum_dtos_are_in_schema() {
         let names = INTERFACES
             .iter()
@@ -468,8 +637,13 @@ mod tests {
             "SourceManifestDTO",
             "SourceCardDTO",
             "AnnotationDTO",
+            "PatchDiffDTO",
+            "ClaimReviewDTO",
+            "CitationEvidenceDTO",
             "WikiPatchProposalDTO",
             "ApprovalRequestDTO",
+            "ApprovalReviewDTO",
+            "ApprovalDecisionResultDTO",
             "SearchResultDTO",
             "CitationRefDTO",
             "ChannelAnswerDTO",

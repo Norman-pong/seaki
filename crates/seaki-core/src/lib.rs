@@ -7,6 +7,9 @@ pub const CORE_AUTHORITY: &str = "policy-approved-core";
 pub const CURRENT_EVENT_SCHEMA_VERSION: u32 = 1;
 pub const GENESIS_AUDIT_HASH: &str = "GENESIS";
 pub const INDEX_STATUS_STALE: &str = "stale";
+pub const APPROVAL_DECISION_APPROVED: &str = "approved";
+pub const APPROVAL_DECISION_DENIED: &str = "denied";
+pub const APPROVAL_DECISION_EVENT_TYPE: &str = "approval.decided";
 pub const WIKI_PATCH_COMMIT_EVENT_TYPE: &str = "wiki.patch.commit";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,12 +17,16 @@ pub enum CoreRecordKind {
     Task,
     Transaction,
     AuditEvent,
+    ApprovalDecision,
 }
 
 pub fn owns_record_kind(kind: CoreRecordKind) -> bool {
     matches!(
         kind,
-        CoreRecordKind::Task | CoreRecordKind::Transaction | CoreRecordKind::AuditEvent
+        CoreRecordKind::Task
+            | CoreRecordKind::Transaction
+            | CoreRecordKind::AuditEvent
+            | CoreRecordKind::ApprovalDecision
     )
 }
 
@@ -80,6 +87,104 @@ pub struct WorkspaceInitResult {
     pub index_status: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApprovalDecisionStatus {
+    Approved,
+    Denied,
+}
+
+impl ApprovalDecisionStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Approved => APPROVAL_DECISION_APPROVED,
+            Self::Denied => APPROVAL_DECISION_DENIED,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApprovalDecisionRecord {
+    pub approval_id: String,
+    pub patch_id: String,
+    pub decision: ApprovalDecisionStatus,
+    pub decided_by: String,
+    pub reason_present: bool,
+    pub reason_summary: Option<String>,
+}
+
+impl ApprovalDecisionRecord {
+    pub fn new(
+        approval_id: impl Into<String>,
+        patch_id: impl Into<String>,
+        decision: ApprovalDecisionStatus,
+        decided_by: impl Into<String>,
+        reason: Option<String>,
+    ) -> Self {
+        Self {
+            approval_id: approval_id.into(),
+            patch_id: patch_id.into(),
+            decision,
+            decided_by: decided_by.into(),
+            reason_present: reason.is_some(),
+            reason_summary: reason.and_then(|value| sanitized_reason_summary(&value)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApprovalDecisionRequest {
+    pub event_id: String,
+    pub schema_version: u32,
+    pub payload_schema_hash: String,
+    pub actor_id: String,
+    pub workspace_id: String,
+    pub scope: String,
+    pub idempotency_key: String,
+    pub record: ApprovalDecisionRecord,
+}
+
+impl ApprovalDecisionRequest {
+    pub fn new(
+        event_id: impl Into<String>,
+        actor_id: impl Into<String>,
+        workspace_id: impl Into<String>,
+        idempotency_key: impl Into<String>,
+        record: ApprovalDecisionRecord,
+    ) -> Self {
+        let workspace_id = workspace_id.into();
+
+        Self {
+            event_id: event_id.into(),
+            schema_version: CURRENT_EVENT_SCHEMA_VERSION,
+            payload_schema_hash: expected_payload_schema_hash(APPROVAL_DECISION_EVENT_TYPE),
+            actor_id: actor_id.into(),
+            scope: workspace_scope(&workspace_id),
+            workspace_id,
+            idempotency_key: idempotency_key.into(),
+            record,
+        }
+    }
+
+    fn into_event_and_record(self) -> (InertEvent, ApprovalDecisionRecord) {
+        let payload_summary = approval_decision_payload_summary(&self.record);
+
+        (
+            InertEvent {
+                event_id: self.event_id,
+                schema_version: self.schema_version,
+                payload_schema_hash: self.payload_schema_hash,
+                actor_id: self.actor_id,
+                scope: self.scope,
+                workspace_id: self.workspace_id,
+                idempotency_key: self.idempotency_key,
+                event_type: APPROVAL_DECISION_EVENT_TYPE.to_string(),
+                payload_summary,
+            },
+            self.record,
+        )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WikiPatchCommitRequest {
     pub event_id: String,
@@ -91,6 +196,7 @@ pub struct WikiPatchCommitRequest {
     pub idempotency_key: String,
     pub transaction_id: String,
     pub patch_id: String,
+    pub approval_id: String,
     pub committed_revision: u64,
     pub rollback_marker_id: String,
 }
@@ -99,6 +205,7 @@ pub struct WikiPatchCommitRequest {
 pub struct WikiPatchCommitRecord {
     pub transaction_id: String,
     pub patch_id: String,
+    pub approval_id: String,
     pub committed_revision: u64,
     pub rollback_marker_id: String,
 }
@@ -107,12 +214,14 @@ impl WikiPatchCommitRecord {
     pub fn new(
         transaction_id: impl Into<String>,
         patch_id: impl Into<String>,
+        approval_id: impl Into<String>,
         committed_revision: u64,
         rollback_marker_id: impl Into<String>,
     ) -> Self {
         Self {
             transaction_id: transaction_id.into(),
             patch_id: patch_id.into(),
+            approval_id: approval_id.into(),
             committed_revision,
             rollback_marker_id: rollback_marker_id.into(),
         }
@@ -139,6 +248,7 @@ impl WikiPatchCommitRequest {
             idempotency_key: idempotency_key.into(),
             transaction_id: commit.transaction_id,
             patch_id: commit.patch_id,
+            approval_id: commit.approval_id,
             committed_revision: commit.committed_revision,
             rollback_marker_id: commit.rollback_marker_id,
         }
@@ -155,9 +265,10 @@ impl WikiPatchCommitRequest {
             idempotency_key: self.idempotency_key,
             event_type: WIKI_PATCH_COMMIT_EVENT_TYPE.to_string(),
             payload_summary: format!(
-                "transaction_id={} patch_id={} committed_revision={} rollback_marker_id={}",
+                "transaction_id={} patch_id={} approval_id={} committed_revision={} rollback_marker_id={}",
                 self.transaction_id,
                 self.patch_id,
+                self.approval_id,
                 self.committed_revision,
                 self.rollback_marker_id
             ),
@@ -221,15 +332,47 @@ pub struct AuditEntry {
 #[derive(Debug)]
 pub enum CoreError {
     Database(rusqlite::Error),
-    InvalidSchemaVersion { found: u32 },
-    InvalidPayloadSchemaHash { expected: String, found: String },
-    InvalidScope { expected: String, found: String },
+    InvalidSchemaVersion {
+        found: u32,
+    },
+    InvalidPayloadSchemaHash {
+        expected: String,
+        found: String,
+    },
+    InvalidScope {
+        expected: String,
+        found: String,
+    },
     EmptyIdempotencyKey,
     DuplicateIdempotencyKey(String),
     DuplicateEventId(String),
+    DuplicateApprovalDecision(String),
+    ApprovalDecisionRequired {
+        approval_id: String,
+        patch_id: String,
+    },
+    ApprovalDecisionNotApproved {
+        approval_id: String,
+        patch_id: String,
+        decision: ApprovalDecisionStatus,
+    },
+    ApprovalDecisionPatchMismatch {
+        approval_id: String,
+        expected_patch_id: String,
+        actual_patch_id: String,
+    },
+    ApprovalDecisionScopeMismatch {
+        approval_id: String,
+        expected_workspace_id: String,
+        actual_workspace_id: String,
+    },
+    InvalidApprovalDecisionStatus(String),
     WorkspaceAlreadyExists(String),
     WorkspaceMissing(String),
-    WorkspaceRevisionMismatch { expected: u64, found: u64 },
+    WorkspaceRevisionMismatch {
+        expected: u64,
+        found: u64,
+    },
     AuditMissingForEvent(u64),
     SequenceOutOfRange(i64),
 }
@@ -255,6 +398,43 @@ impl fmt::Display for CoreError {
                 write!(f, "duplicate idempotency key: {key}")
             }
             Self::DuplicateEventId(event_id) => write!(f, "duplicate event id: {event_id}"),
+            Self::DuplicateApprovalDecision(approval_id) => {
+                write!(f, "duplicate approval decision: {approval_id}")
+            }
+            Self::ApprovalDecisionRequired {
+                approval_id,
+                patch_id,
+            } => write!(
+                f,
+                "approval decision {approval_id} is required before committing patch {patch_id}"
+            ),
+            Self::ApprovalDecisionNotApproved {
+                approval_id,
+                patch_id,
+                decision,
+            } => write!(
+                f,
+                "approval decision {approval_id} for patch {patch_id} is not approved: {decision:?}"
+            ),
+            Self::ApprovalDecisionPatchMismatch {
+                approval_id,
+                expected_patch_id,
+                actual_patch_id,
+            } => write!(
+                f,
+                "approval decision {approval_id} targets patch {actual_patch_id}, expected {expected_patch_id}"
+            ),
+            Self::ApprovalDecisionScopeMismatch {
+                approval_id,
+                expected_workspace_id,
+                actual_workspace_id,
+            } => write!(
+                f,
+                "approval decision {approval_id} workspace mismatch: expected {expected_workspace_id}, got {actual_workspace_id}"
+            ),
+            Self::InvalidApprovalDecisionStatus(status) => {
+                write!(f, "invalid approval decision status: {status}")
+            }
             Self::WorkspaceAlreadyExists(workspace_id) => {
                 write!(f, "workspace already exists: {workspace_id}")
             }
@@ -334,6 +514,20 @@ impl CoreLedger {
                 hash TEXT NOT NULL,
                 event_digest TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS approval_decisions (
+                approval_id TEXT PRIMARY KEY,
+                workspace_id TEXT NOT NULL,
+                patch_id TEXT NOT NULL,
+                decision TEXT NOT NULL CHECK (decision IN ('approved', 'denied')),
+                decided_by TEXT NOT NULL,
+                reason_present INTEGER NOT NULL CHECK (reason_present IN (0, 1)),
+                reason_summary TEXT,
+                event_seq INTEGER NOT NULL UNIQUE REFERENCES events(seq)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_approval_decisions_patch_id
+                ON approval_decisions (patch_id);
             ",
         )?;
         Ok(())
@@ -393,6 +587,8 @@ impl CoreLedger {
         &mut self,
         request: WikiPatchCommitRequest,
     ) -> CoreResult<EventEnvelope> {
+        let approval_id = request.approval_id.clone();
+        let patch_id = request.patch_id.clone();
         let committed_revision = request.committed_revision;
         let event = request.into_event();
         validate_event(&event)?;
@@ -403,6 +599,7 @@ impl CoreLedger {
         let expected_revision = workspace_revision_in_tx(&tx, &event.workspace_id)?
             .ok_or_else(|| CoreError::WorkspaceMissing(event.workspace_id.clone()))?
             + 1;
+        ensure_approved_decision_for_commit(&tx, &approval_id, &patch_id, &event.workspace_id)?;
         if committed_revision != expected_revision {
             return Err(CoreError::WorkspaceRevisionMismatch {
                 expected: expected_revision,
@@ -413,6 +610,30 @@ impl CoreLedger {
         let envelope = insert_event(&tx, sanitized_event(event))?;
         let audit_head = append_audit_entry(&tx, &envelope)?;
         update_workspace_after_event(&tx, &envelope.workspace_id, expected_revision, &audit_head)?;
+        tx.commit()?;
+
+        Ok(envelope)
+    }
+
+    pub fn append_approval_decision(
+        &mut self,
+        request: ApprovalDecisionRequest,
+    ) -> CoreResult<EventEnvelope> {
+        let (event, record) = request.into_event_and_record();
+        validate_event(&event)?;
+
+        let tx = self.conn.transaction()?;
+        ensure_unique_idempotency_key_in_tx(&tx, &event.idempotency_key)?;
+        ensure_unique_event_id_in_tx(&tx, &event.event_id)?;
+        ensure_approval_decision_absent_in_tx(&tx, &record.approval_id)?;
+        let revision = workspace_revision_in_tx(&tx, &event.workspace_id)?
+            .ok_or_else(|| CoreError::WorkspaceMissing(event.workspace_id.clone()))?
+            + 1;
+
+        let envelope = insert_event(&tx, sanitized_event(event))?;
+        insert_approval_decision(&tx, &record, &envelope.workspace_id, envelope.seq)?;
+        let audit_head = append_audit_entry(&tx, &envelope)?;
+        update_workspace_after_event(&tx, &envelope.workspace_id, revision, &audit_head)?;
         tx.commit()?;
 
         Ok(envelope)
@@ -545,6 +766,24 @@ impl CoreLedger {
             .optional()?)
     }
 
+    pub fn approval_decision(
+        &self,
+        approval_id: &str,
+    ) -> CoreResult<Option<ApprovalDecisionRecord>> {
+        self.conn
+            .query_row(
+                "
+                SELECT approval_id, patch_id, decision, decided_by, reason_present, reason_summary
+                FROM approval_decisions
+                WHERE approval_id = ?1
+                ",
+                params![approval_id],
+                read_approval_decision_record,
+            )
+            .optional()
+            .map_err(CoreError::from)
+    }
+
     fn ensure_unique_idempotency_key(&self, idempotency_key: &str) -> CoreResult<()> {
         let exists: Option<i64> = self
             .conn
@@ -626,6 +865,35 @@ fn validate_event(event: &InertEvent) -> CoreResult<()> {
 
 pub fn expected_payload_schema_hash(event_type: &str) -> String {
     format!("{event_type}.v1")
+}
+
+fn approval_decision_payload_summary(record: &ApprovalDecisionRecord) -> String {
+    let mut summary = format!(
+        "approval_id={} patch_id={} decision={} decided_by={} reason_present={}",
+        record.approval_id,
+        record.patch_id,
+        record.decision.as_str(),
+        record.decided_by,
+        record.reason_present
+    );
+
+    if let Some(reason_summary) = &record.reason_summary {
+        summary.push_str(" reason_summary=");
+        summary.push_str(reason_summary);
+    }
+
+    summary
+}
+
+fn sanitized_reason_summary(reason: &str) -> Option<String> {
+    const MAX_REASON_SUMMARY_CHARS: usize = 96;
+
+    let sanitized = sanitize_payload_summary(reason).trim().to_string();
+    if sanitized.is_empty() {
+        return None;
+    }
+
+    Some(sanitized.chars().take(MAX_REASON_SUMMARY_CHARS).collect())
 }
 
 fn sanitized_event(mut event: InertEvent) -> InertEvent {
@@ -737,6 +1005,113 @@ fn ensure_unique_event_id_in_tx(tx: &Transaction<'_>, event_id: &str) -> CoreRes
     Ok(())
 }
 
+fn ensure_approval_decision_absent_in_tx(
+    tx: &Transaction<'_>,
+    approval_id: &str,
+) -> CoreResult<()> {
+    let exists: Option<i64> = tx
+        .query_row(
+            "SELECT 1 FROM approval_decisions WHERE approval_id = ?1",
+            params![approval_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+
+    if exists.is_some() {
+        return Err(CoreError::DuplicateApprovalDecision(
+            approval_id.to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn ensure_approved_decision_for_commit(
+    tx: &Transaction<'_>,
+    approval_id: &str,
+    patch_id: &str,
+    workspace_id: &str,
+) -> CoreResult<()> {
+    let Some((decision_workspace_id, decision)) = approval_decision_in_tx(tx, approval_id)? else {
+        return Err(CoreError::ApprovalDecisionRequired {
+            approval_id: approval_id.to_string(),
+            patch_id: patch_id.to_string(),
+        });
+    };
+
+    if decision.patch_id != patch_id {
+        return Err(CoreError::ApprovalDecisionPatchMismatch {
+            approval_id: approval_id.to_string(),
+            expected_patch_id: patch_id.to_string(),
+            actual_patch_id: decision.patch_id,
+        });
+    }
+
+    if decision_workspace_id != workspace_id {
+        return Err(CoreError::ApprovalDecisionScopeMismatch {
+            approval_id: approval_id.to_string(),
+            expected_workspace_id: workspace_id.to_string(),
+            actual_workspace_id: decision_workspace_id,
+        });
+    }
+
+    if decision.decision != ApprovalDecisionStatus::Approved {
+        return Err(CoreError::ApprovalDecisionNotApproved {
+            approval_id: approval_id.to_string(),
+            patch_id: patch_id.to_string(),
+            decision: decision.decision,
+        });
+    }
+
+    Ok(())
+}
+
+fn approval_decision_in_tx(
+    tx: &Transaction<'_>,
+    approval_id: &str,
+) -> CoreResult<Option<(String, ApprovalDecisionRecord)>> {
+    tx.query_row(
+        "
+        SELECT
+            approval_id,
+            workspace_id,
+            patch_id,
+            decision,
+            decided_by,
+            reason_present,
+            reason_summary
+        FROM approval_decisions
+        WHERE approval_id = ?1
+        ",
+        params![approval_id],
+        |row| {
+            let decision_status = row.get::<_, String>(3)?;
+            let decision =
+                approval_decision_status_from_str(&decision_status).map_err(|error| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        3,
+                        rusqlite::types::Type::Text,
+                        Box::new(error),
+                    )
+                })?;
+
+            Ok((
+                row.get(1)?,
+                ApprovalDecisionRecord {
+                    approval_id: row.get(0)?,
+                    patch_id: row.get(2)?,
+                    decision,
+                    decided_by: row.get(4)?,
+                    reason_present: row.get::<_, i64>(5)? != 0,
+                    reason_summary: row.get(6)?,
+                },
+            ))
+        },
+    )
+    .optional()
+    .map_err(CoreError::from)
+}
+
 fn insert_event(tx: &Transaction<'_>, event: InertEvent) -> CoreResult<EventEnvelope> {
     tx.execute(
         "
@@ -768,6 +1143,40 @@ fn insert_event(tx: &Transaction<'_>, event: InertEvent) -> CoreResult<EventEnve
 
     let seq = checked_u64(tx.last_insert_rowid())?;
     Ok((seq, event).into())
+}
+
+fn insert_approval_decision(
+    tx: &Transaction<'_>,
+    record: &ApprovalDecisionRecord,
+    workspace_id: &str,
+    event_seq: u64,
+) -> CoreResult<()> {
+    tx.execute(
+        "
+        INSERT INTO approval_decisions (
+            approval_id,
+            workspace_id,
+            patch_id,
+            decision,
+            decided_by,
+            reason_present,
+            reason_summary,
+            event_seq
+        )
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+        ",
+        params![
+            &record.approval_id,
+            workspace_id,
+            &record.patch_id,
+            record.decision.as_str(),
+            &record.decided_by,
+            if record.reason_present { 1_i64 } else { 0_i64 },
+            &record.reason_summary,
+            checked_i64(event_seq)?
+        ],
+    )?;
+    Ok(())
 }
 
 fn append_audit_entry(tx: &Transaction<'_>, envelope: &EventEnvelope) -> CoreResult<String> {
@@ -833,6 +1242,32 @@ fn read_event_envelope(row: &rusqlite::Row<'_>) -> rusqlite::Result<EventEnvelop
         event_type: row.get(8)?,
         payload_summary: row.get(9)?,
     })
+}
+
+fn read_approval_decision_record(
+    row: &rusqlite::Row<'_>,
+) -> rusqlite::Result<ApprovalDecisionRecord> {
+    let decision_status = row.get::<_, String>(2)?;
+    let decision = approval_decision_status_from_str(&decision_status).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(error))
+    })?;
+
+    Ok(ApprovalDecisionRecord {
+        approval_id: row.get(0)?,
+        patch_id: row.get(1)?,
+        decision,
+        decided_by: row.get(3)?,
+        reason_present: row.get::<_, i64>(4)? != 0,
+        reason_summary: row.get(5)?,
+    })
+}
+
+fn approval_decision_status_from_str(value: &str) -> CoreResult<ApprovalDecisionStatus> {
+    match value {
+        APPROVAL_DECISION_APPROVED => Ok(ApprovalDecisionStatus::Approved),
+        APPROVAL_DECISION_DENIED => Ok(ApprovalDecisionStatus::Denied),
+        other => Err(CoreError::InvalidApprovalDecisionStatus(other.to_string())),
+    }
 }
 
 fn event_digest(envelope: &EventEnvelope) -> String {
@@ -1013,13 +1448,25 @@ mod tests {
     #[test]
     fn wiki_patch_commit_appends_wal_audit_and_marks_index_stale() {
         let mut ledger = initialized_ledger();
-        let envelope = ledger
-            .append_wiki_patch_commit(wiki_patch_commit_request(
+        ledger
+            .append_approval_decision(approval_decision_request(
                 "event-2",
                 "idem-2",
-                2,
+                "approval-1",
+                "patch-1",
+                ApprovalDecisionStatus::Approved,
+                None,
+            ))
+            .expect("approval decision appends");
+
+        let envelope = ledger
+            .append_wiki_patch_commit(wiki_patch_commit_request(
+                "event-3",
+                "idem-3",
+                3,
                 "txn-1",
                 "patch-1",
+                "approval-1",
                 "rollback-1",
             ))
             .expect("wiki patch commit appends");
@@ -1033,33 +1480,44 @@ mod tests {
             ledger
                 .workspace_revision("workspace-1")
                 .expect("revision loads"),
-            Some(2)
+            Some(3)
         );
         assert_eq!(
             ledger.index_status("workspace-1").expect("index status"),
             Some(INDEX_STATUS_STALE.to_string())
         );
-        assert_eq!(ledger.audit_count().expect("audit count"), 2);
+        assert_eq!(ledger.audit_count().expect("audit count"), 3);
         assert!(ledger.verify_audit_chain().expect("audit chain verifies"));
     }
 
     #[test]
     fn wiki_patch_commit_rejects_revision_mismatch_before_wal_write() {
         let mut ledger = initialized_ledger();
+        ledger
+            .append_approval_decision(approval_decision_request(
+                "event-2",
+                "idem-2",
+                "approval-1",
+                "patch-1",
+                ApprovalDecisionStatus::Approved,
+                None,
+            ))
+            .expect("approval decision appends");
         let initial_events = ledger.event_count().expect("event count");
         let initial_audit = ledger.audit_count().expect("audit count");
 
         assert!(matches!(
             ledger.append_wiki_patch_commit(wiki_patch_commit_request(
-                "event-2",
-                "idem-2",
+                "event-3",
+                "idem-3",
                 99,
                 "txn-1",
                 "patch-1",
+                "approval-1",
                 "rollback-1",
             )),
             Err(CoreError::WorkspaceRevisionMismatch {
-                expected: 2,
+                expected: 3,
                 found: 99
             })
         ));
@@ -1069,8 +1527,250 @@ mod tests {
             ledger
                 .workspace_revision("workspace-1")
                 .expect("revision loads"),
-            Some(1)
+            Some(2)
         );
+    }
+
+    #[test]
+    fn wiki_patch_commit_rejects_missing_or_denied_approval_decision_before_wal_write() {
+        let mut missing_ledger = initialized_ledger();
+        let missing_events = missing_ledger.event_count().expect("event count");
+        let missing_audit = missing_ledger.audit_count().expect("audit count");
+
+        assert!(matches!(
+            missing_ledger.append_wiki_patch_commit(wiki_patch_commit_request(
+                "event-2",
+                "idem-2",
+                2,
+                "txn-1",
+                "patch-1",
+                "approval-1",
+                "rollback-1",
+            )),
+            Err(CoreError::ApprovalDecisionRequired { .. })
+        ));
+        assert_eq!(
+            missing_ledger.event_count().expect("event count"),
+            missing_events
+        );
+        assert_eq!(
+            missing_ledger.audit_count().expect("audit count"),
+            missing_audit
+        );
+
+        let mut denied_ledger = initialized_ledger();
+        denied_ledger
+            .append_approval_decision(approval_decision_request(
+                "event-2",
+                "idem-2",
+                "approval-1",
+                "patch-1",
+                ApprovalDecisionStatus::Denied,
+                Some("citation does not support claim".to_string()),
+            ))
+            .expect("denied approval records");
+        let denied_events = denied_ledger.event_count().expect("event count");
+        let denied_audit = denied_ledger.audit_count().expect("audit count");
+
+        assert!(matches!(
+            denied_ledger.append_wiki_patch_commit(wiki_patch_commit_request(
+                "event-3",
+                "idem-3",
+                3,
+                "txn-1",
+                "patch-1",
+                "approval-1",
+                "rollback-1",
+            )),
+            Err(CoreError::ApprovalDecisionNotApproved { .. })
+        ));
+        assert_eq!(
+            denied_ledger.event_count().expect("event count"),
+            denied_events
+        );
+        assert_eq!(
+            denied_ledger.audit_count().expect("audit count"),
+            denied_audit
+        );
+    }
+
+    #[test]
+    fn approved_decision_appends_wal_audit_and_record() {
+        let mut ledger = initialized_ledger();
+        let record = ApprovalDecisionRecord::new(
+            "approval-1",
+            "patch-1",
+            ApprovalDecisionStatus::Approved,
+            "user-1",
+            None,
+        );
+
+        let envelope = ledger
+            .append_approval_decision(ApprovalDecisionRequest::new(
+                "event-2",
+                "actor-1",
+                "workspace-1",
+                "idem-2",
+                record.clone(),
+            ))
+            .expect("approval decision appends");
+
+        assert_eq!(envelope.event_type, APPROVAL_DECISION_EVENT_TYPE);
+        assert_eq!(
+            envelope.payload_schema_hash,
+            expected_payload_schema_hash(APPROVAL_DECISION_EVENT_TYPE)
+        );
+        assert!(envelope.payload_summary.contains("decision=approved"));
+        assert!(envelope.payload_summary.contains("reason_present=false"));
+        assert_eq!(
+            ledger
+                .approval_decision("approval-1")
+                .expect("approval decision loads"),
+            Some(record)
+        );
+        assert_eq!(
+            ledger
+                .workspace_revision("workspace-1")
+                .expect("revision loads"),
+            Some(2)
+        );
+        assert_eq!(ledger.audit_count().expect("audit count"), 2);
+        assert!(ledger.verify_audit_chain().expect("audit chain verifies"));
+    }
+
+    #[test]
+    fn denied_decision_appends_wal_audit_with_sanitized_reason_summary() {
+        let mut ledger = initialized_ledger();
+        let reason = format!(
+            "Bearer abc123 token=super-secret {}",
+            "rejection explanation ".repeat(12)
+        );
+
+        let envelope = ledger
+            .append_approval_decision(approval_decision_request(
+                "event-2",
+                "idem-2",
+                "approval-1",
+                "patch-1",
+                ApprovalDecisionStatus::Denied,
+                Some(reason),
+            ))
+            .expect("approval denial appends");
+
+        assert_eq!(envelope.event_type, APPROVAL_DECISION_EVENT_TYPE);
+        assert!(envelope.payload_summary.contains("decision=denied"));
+        assert!(envelope.payload_summary.contains("reason_present=true"));
+        assert!(!envelope.payload_summary.contains("abc123"));
+        assert!(!envelope.payload_summary.contains("super-secret"));
+        assert!(!envelope.payload_summary.to_lowercase().contains("bearer"));
+
+        let stored = ledger
+            .approval_decision("approval-1")
+            .expect("approval decision loads")
+            .expect("approval decision exists");
+        let reason_summary = stored.reason_summary.expect("reason summary stored");
+        assert!(stored.reason_present);
+        assert!(reason_summary.chars().count() <= 96);
+        assert!(!reason_summary.contains("abc123"));
+        assert!(!reason_summary.contains("super-secret"));
+        assert!(ledger.verify_audit_chain().expect("audit chain verifies"));
+    }
+
+    #[test]
+    fn approval_decision_validation_failures_do_not_write_events_or_audit() {
+        let mut ledger = initialized_ledger();
+        let initial_events = ledger.event_count().expect("event count");
+        let initial_audit = ledger.audit_count().expect("audit count");
+
+        let mut invalid_schema = approval_decision_request(
+            "event-2",
+            "idem-2",
+            "approval-1",
+            "patch-1",
+            ApprovalDecisionStatus::Approved,
+            None,
+        );
+        invalid_schema.schema_version = CURRENT_EVENT_SCHEMA_VERSION + 1;
+        assert!(matches!(
+            ledger.append_approval_decision(invalid_schema),
+            Err(CoreError::InvalidSchemaVersion { .. })
+        ));
+
+        let mut invalid_scope = approval_decision_request(
+            "event-3",
+            "idem-3",
+            "approval-2",
+            "patch-1",
+            ApprovalDecisionStatus::Approved,
+            None,
+        );
+        invalid_scope.scope = "workspace:other".to_string();
+        assert!(matches!(
+            ledger.append_approval_decision(invalid_scope),
+            Err(CoreError::InvalidScope { .. })
+        ));
+
+        assert!(matches!(
+            ledger.append_approval_decision(approval_decision_request(
+                "event-4",
+                "idem-1",
+                "approval-3",
+                "patch-1",
+                ApprovalDecisionStatus::Approved,
+                None,
+            )),
+            Err(CoreError::DuplicateIdempotencyKey(_))
+        ));
+
+        assert!(matches!(
+            ledger.append_approval_decision(approval_decision_request(
+                "event-1",
+                "idem-4",
+                "approval-4",
+                "patch-1",
+                ApprovalDecisionStatus::Approved,
+                None,
+            )),
+            Err(CoreError::DuplicateEventId(_))
+        ));
+
+        assert_eq!(ledger.event_count().expect("event count"), initial_events);
+        assert_eq!(ledger.audit_count().expect("audit count"), initial_audit);
+        assert!(ledger
+            .approval_decision("approval-1")
+            .expect("approval decision loads")
+            .is_none());
+    }
+
+    #[test]
+    fn approval_decision_workspace_missing_does_not_write() {
+        let mut ledger = initialized_ledger();
+        let initial_events = ledger.event_count().expect("event count");
+        let initial_audit = ledger.audit_count().expect("audit count");
+
+        assert!(matches!(
+            ledger.append_approval_decision(ApprovalDecisionRequest::new(
+                "event-2",
+                "actor-1",
+                "workspace-missing",
+                "idem-2",
+                ApprovalDecisionRecord::new(
+                    "approval-1",
+                    "patch-1",
+                    ApprovalDecisionStatus::Denied,
+                    "user-1",
+                    Some("not enough citation evidence".to_string()),
+                ),
+            )),
+            Err(CoreError::WorkspaceMissing(_))
+        ));
+
+        assert_eq!(ledger.event_count().expect("event count"), initial_events);
+        assert_eq!(ledger.audit_count().expect("audit count"), initial_audit);
+        assert!(ledger
+            .approval_decision("approval-1")
+            .expect("approval decision loads")
+            .is_none());
     }
 
     #[test]
@@ -1144,6 +1844,7 @@ mod tests {
         committed_revision: u64,
         transaction_id: &str,
         patch_id: &str,
+        approval_id: &str,
         rollback_marker_id: &str,
     ) -> WikiPatchCommitRequest {
         WikiPatchCommitRequest::new(
@@ -1154,9 +1855,27 @@ mod tests {
             WikiPatchCommitRecord::new(
                 transaction_id,
                 patch_id,
+                approval_id,
                 committed_revision,
                 rollback_marker_id,
             ),
+        )
+    }
+
+    fn approval_decision_request(
+        event_id: &str,
+        idempotency_key: &str,
+        approval_id: &str,
+        patch_id: &str,
+        decision: ApprovalDecisionStatus,
+        reason: Option<String>,
+    ) -> ApprovalDecisionRequest {
+        ApprovalDecisionRequest::new(
+            event_id,
+            "actor-1",
+            "workspace-1",
+            idempotency_key,
+            ApprovalDecisionRecord::new(approval_id, patch_id, decision, "user-1", reason),
         )
     }
 

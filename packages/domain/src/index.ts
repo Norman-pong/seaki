@@ -1,5 +1,7 @@
 import { M0_DOMAIN_USE_CASE_METHODS } from "@seaki/dto";
 import type {
+  ApprovalDecisionResultDTO,
+  ApprovalReviewDTO,
   FrontendEventEnvelope,
   IndexStatusDTO,
   UserSelectedFileDTO,
@@ -76,9 +78,16 @@ export interface ReviewPatchInput {
 
 export interface DecideApprovalInput {
   readonly approvalId: string;
+  readonly claimDecisions?: readonly ClaimApprovalDecisionInput[];
   readonly decision: "approve" | "reject";
   readonly reason?: string;
   readonly workspaceId: string;
+}
+
+export interface ClaimApprovalDecisionInput {
+  readonly claimId: string;
+  readonly decision: "approve" | "reject";
+  readonly reason?: string;
 }
 
 export interface ReadWikiPageInput {
@@ -99,8 +108,8 @@ export interface ResolveCitationInput {
 
 export interface DomainClient {
   readonly approval: {
-    reviewPatch(input: ReviewPatchInput): Promise<unknown>;
-    decide(input: DecideApprovalInput): Promise<unknown>;
+    reviewPatch(input: ReviewPatchInput): Promise<ApprovalReviewDTO>;
+    decide(input: DecideApprovalInput): Promise<ApprovalDecisionResultDTO>;
   };
   readonly citation: {
     resolve(input: ResolveCitationInput): Promise<unknown>;

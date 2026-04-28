@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { SCHEMA_HASH, SCHEMA_VERSION } from "@seaki/dto";
+import type {
+  ApprovalDecisionResultDTO,
+  ApprovalRequestDTO,
+  WikiPatchProposalDTO,
+} from "@seaki/dto";
 
 import {
   advanceImportState,
@@ -34,10 +39,120 @@ function event(
     schema_version: SCHEMA_VERSION,
     scope: "workspace:ws_1",
     seq,
-    task_id: eventType.startsWith("import.") ? "task_import_1" : "task_workspace_1",
+    task_id: eventType.startsWith("import.")
+      ? "task_import_1"
+      : eventType.startsWith("approval.")
+        ? "task_approval_1"
+        : "task_workspace_1",
     transaction_id: `tx_${seq}`,
     type: eventType,
     workspace_id: "ws_1",
+  };
+}
+
+function approvalProposal(): WikiPatchProposalDTO {
+  const range = {
+    end: 12,
+    label: "source.md:1",
+    start: 1,
+    unit: "line" as const,
+  };
+  const validation = {
+    citation_id: "cite_1",
+    claim_id: "claim_1",
+    cited_ranges: [range],
+    evidence: [
+      {
+        citation_id: "cite_1",
+        cited_ranges: [range],
+        degraded_reason: null,
+        excerpt: "Approval evidence comes from cited source ranges.",
+        range,
+        source_id: "source_1",
+        source_title: "source.md",
+        visibility: "visible" as const,
+      },
+    ],
+    reason: null,
+    security_flags: ["no_active_content"],
+    state: "valid" as const,
+    taint_flags: ["untrusted_content"],
+  };
+  const risk = {
+    factors: ["writes wiki page"],
+    level: "medium" as const,
+    requires_manual_approval: true,
+    summary: "Patch changes one claim.",
+  };
+
+  return {
+    base_revision: "wiki_rev_0",
+    citation_validation: [validation],
+    claim_ids: ["claim_1"],
+    claims: [
+      {
+        citation_ids: ["cite_1"],
+        citation_validation: [validation],
+        claim_id: "claim_1",
+        page_id: "page_1",
+        risk_summary: risk,
+        security_flags: ["no_active_content"],
+        taint_flags: ["untrusted_content"],
+        text: "Draft claim",
+      },
+    ],
+    diff: {
+      added_lines: 1,
+      affected_paths: ["wiki/page_1.md"],
+      format: "unified",
+      removed_lines: 0,
+      text: "+ Draft claim",
+    },
+    patch_id: "patch_1",
+    risk_summary: risk,
+    security_flags: ["no_active_content"],
+    taint_flags: ["untrusted_content"],
+  };
+}
+
+function approvalRequest(status: ApprovalRequestDTO["status"] = "pending"): ApprovalRequestDTO {
+  const proposal = approvalProposal();
+
+  return {
+    approval_id: "approval_1",
+    audit_id: null,
+    claim_decisions: [],
+    expires_at: "2026-04-28T01:00:00.000Z",
+    patch_id: proposal.patch_id,
+    policy_decision: "requires_approval",
+    proposal,
+    rejection_reason: null,
+    required_by: "wiki.patch.transaction",
+    status,
+    wal_entry_id: null,
+  };
+}
+
+function approvalResult(status: ApprovalDecisionResultDTO["status"]): ApprovalDecisionResultDTO {
+  return {
+    approval_id: "approval_1",
+    audit_id: "audit_approval_1",
+    claim_decisions: [
+      {
+        claim_id: "claim_1",
+        decided_at: "2026-04-28T00:10:00.000Z",
+        decided_by: "user_1",
+        decision: status === "rejected" ? "reject" : "approve",
+        reason: status === "rejected" ? "not enough evidence" : null,
+      },
+    ],
+    committed_revision: status === "committed" ? "wiki_rev_1" : null,
+    denied_reason: status === "rejected" ? "not enough evidence" : null,
+    patch_id: "patch_1",
+    rejection_reason: status === "rejected" ? "not enough evidence" : null,
+    status,
+    transaction_id: "txn_approval_1",
+    wal_entry_id: "wal_approval_1",
   };
 }
 
@@ -310,5 +425,137 @@ describe("frontend runtime state", () => {
     expect(snapshot.tasks.task_import_1).toMatchObject({
       stage: "index_stale",
     });
+  });
+
+  it("consumes approval review, decision, applying, and committed events", () => {
+    const store = createRuntimeStore();
+
+    store.dispatch(
+      event(1, "approval.reviewed", {
+        request: approvalRequest(),
+      }),
+    );
+    store.dispatch(
+      event(2, "approval.decided", {
+        result: approvalResult("approved"),
+      }),
+    );
+    store.dispatch(
+      event(3, "approval.applying", {
+        approval_id: "approval_1",
+        patch_id: "patch_1",
+      }),
+    );
+    store.dispatch(
+      event(4, "approval.committed", {
+        result: approvalResult("committed"),
+      }),
+    );
+
+    expect(store.getSnapshot()).toMatchObject({
+      approvals: [
+        {
+          approvalId: "approval_1",
+          claimDecisions: [
+            {
+              claim_id: "claim_1",
+              decision: "approve",
+            },
+          ],
+          committed: true,
+          committedRevision: "wiki_rev_1",
+          patchId: "patch_1",
+          status: "committed",
+          taskId: "task_approval_1",
+          workspaceId: "ws_1",
+        },
+      ],
+      tasks: {
+        task_approval_1: {
+          kind: "approval",
+          lastEventSeq: 4,
+          stage: "committed",
+        },
+      },
+    });
+  });
+
+  it("tracks rejected, conflict, and expired approval terminal states", () => {
+    const rejected = reduceRuntimeState(
+      createInitialRuntimeState(),
+      event(1, "approval.rejected", {
+        approval_id: "approval_rejected",
+        patch_id: "patch_rejected",
+      }),
+    );
+    const conflict = reduceRuntimeState(
+      rejected,
+      event(2, "approval.conflict", {
+        approval_id: "approval_conflict",
+        patch_id: "patch_conflict",
+      }),
+    );
+    const expired = reduceRuntimeState(
+      conflict,
+      event(3, "approval.expired", {
+        approval_id: "approval_expired",
+        patch_id: "patch_expired",
+      }),
+    );
+
+    expect(expired.approvals.map((approval) => approval.status)).toEqual([
+      "rejected",
+      "conflict",
+      "expired",
+    ]);
+  });
+
+  it("maps core approval decision vocabulary into approval state", () => {
+    const approved = reduceRuntimeState(
+      createInitialRuntimeState(),
+      event(1, "approval.decided", {
+        approval_id: "approval_approved",
+        decision: "approved",
+        patch_id: "patch_approved",
+      }),
+    );
+    const denied = reduceRuntimeState(
+      approved,
+      event(2, "approval.decided", {
+        approval_id: "approval_denied",
+        decision: "denied",
+        patch_id: "patch_denied",
+      }),
+    );
+
+    expect(denied.approvals.map((approval) => approval.status)).toEqual(["approved", "rejected"]);
+  });
+
+  it("does not promote draft approval commits into authoritative committed state", () => {
+    const reviewed = reduceRuntimeState(
+      createInitialRuntimeState(),
+      event(1, "approval.reviewed", {
+        request: approvalRequest("pending"),
+      }),
+    );
+    const approved = reduceRuntimeState(
+      reviewed,
+      event(2, "approval.decided", {
+        result: approvalResult("approved"),
+      }),
+    );
+    const draftCommitted = reduceRuntimeState(
+      approved,
+      event(3, "approval.committed", {
+        draft: true,
+        result: approvalResult("committed"),
+      }),
+    );
+
+    expect(draftCommitted.approvals[0]).toMatchObject({
+      committed: false,
+      status: "approved",
+    });
+    expect(draftCommitted.approvals[0]?.committedRevision).toBeUndefined();
   });
 });

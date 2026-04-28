@@ -1,8 +1,13 @@
 import type {
+  ApprovalClaimDecisionDTO,
+  ApprovalDecisionResultDTO,
+  ApprovalRequestDTO,
+  ApprovalStatus as DTOApprovalStatus,
   DaemonConnectionStatus,
   FrontendEventEnvelope,
   ImportStage as DTOImportStage,
   IndexStatusDTO,
+  WikiPatchProposalDTO,
   WorkspaceDTO,
 } from "@seaki/dto";
 
@@ -30,15 +35,31 @@ export interface ImportState {
   readonly workspaceId?: string;
 }
 
+export type ApprovalStatus = DTOApprovalStatus;
+
+export interface ApprovalState {
+  readonly approvalId: string;
+  readonly patchId: string;
+  readonly status: ApprovalStatus;
+  readonly committed: boolean;
+  readonly claimDecisions: readonly ApprovalClaimDecisionDTO[];
+  readonly committedRevision?: string;
+  readonly request?: ApprovalRequestDTO;
+  readonly result?: ApprovalDecisionResultDTO;
+  readonly taskId?: string;
+  readonly workspaceId?: string;
+}
+
 export interface TaskRuntimeState {
   readonly id: string;
-  readonly kind: "workspace.init" | "source.ingest" | "unknown";
+  readonly kind: "workspace.init" | "source.ingest" | "approval" | "unknown";
   readonly lastEventSeq: number;
   readonly stage: string;
 }
 
 export interface FrontendRuntimeState {
   readonly appBoot: AppBootState;
+  readonly approvals: readonly ApprovalState[];
   readonly imports: readonly ImportState[];
   readonly lastSeq: number;
   readonly tasks: Readonly<Record<string, TaskRuntimeState>>;
@@ -79,11 +100,30 @@ const IMPORT_STAGE_ORDER: Record<ImportStage, readonly ImportStage[]> = {
 
 const COMMITTED_IMPORT_STAGES = new Set<ImportStage>(["committed", "indexed", "index_stale"]);
 
+const APPROVAL_STATUS_BY_EVENT_TYPE: Readonly<Record<string, ApprovalStatus>> = {
+  "approval.applying": "applying",
+  "approval.committed": "committed",
+  "approval.conflict": "conflict",
+  "approval.expired": "expired",
+  "approval.rejected": "rejected",
+};
+
+const APPROVAL_STATUSES = new Set<ApprovalStatus>([
+  "pending",
+  "approved",
+  "applying",
+  "committed",
+  "rejected",
+  "expired",
+  "conflict",
+]);
+
 export function createInitialRuntimeState(): FrontendRuntimeState {
   return {
     appBoot: {
       stage: "daemon.connecting",
     },
+    approvals: [],
     imports: [],
     lastSeq: 0,
     tasks: {},
@@ -201,6 +241,12 @@ function getImportStage(value: unknown): ImportStage | undefined {
     : undefined;
 }
 
+function getApprovalStatus(value: unknown): ApprovalStatus | undefined {
+  return typeof value === "string" && APPROVAL_STATUSES.has(value as ApprovalStatus)
+    ? (value as ApprovalStatus)
+    : undefined;
+}
+
 function taskIdFor(
   event: FrontendRuntimeEvent,
   payload: Record<string, unknown>,
@@ -307,6 +353,147 @@ function reduceImportEvent(
   };
 }
 
+function getRequest(value: unknown): ApprovalRequestDTO | undefined {
+  return value && typeof value === "object" ? (value as ApprovalRequestDTO) : undefined;
+}
+
+function getProposal(value: unknown): WikiPatchProposalDTO | undefined {
+  return value && typeof value === "object" ? (value as WikiPatchProposalDTO) : undefined;
+}
+
+function getDecisionResult(value: unknown): ApprovalDecisionResultDTO | undefined {
+  return value && typeof value === "object" ? (value as ApprovalDecisionResultDTO) : undefined;
+}
+
+function getClaimDecisions(value: unknown): readonly ApprovalClaimDecisionDTO[] | undefined {
+  return Array.isArray(value) ? (value as readonly ApprovalClaimDecisionDTO[]) : undefined;
+}
+
+function approvalIdFor(payload: Record<string, unknown>, request?: ApprovalRequestDTO): string {
+  return (
+    getString(payload.approval_id) ??
+    getString(payload.approvalId) ??
+    request?.approval_id ??
+    "approval:unknown"
+  );
+}
+
+function patchIdFor(payload: Record<string, unknown>, request?: ApprovalRequestDTO): string {
+  return (
+    getString(payload.patch_id) ??
+    getString(payload.patchId) ??
+    request?.patch_id ??
+    request?.proposal?.patch_id ??
+    "patch:unknown"
+  );
+}
+
+function statusFromDecision(value: unknown): ApprovalStatus | undefined {
+  if (value === "approve" || value === "approved") {
+    return "approved";
+  }
+
+  if (value === "reject" || value === "denied") {
+    return "rejected";
+  }
+
+  return undefined;
+}
+
+function reduceApprovalEvent(
+  state: FrontendRuntimeState,
+  event: FrontendRuntimeEvent,
+): FrontendRuntimeState {
+  const eventType = getEventType(event);
+  const payload = getPayload(event);
+  const request = getRequest(payload.request);
+  const result = getDecisionResult(payload.result);
+  const explicitStatus =
+    getApprovalStatus(payload.status) ??
+    result?.status ??
+    request?.status ??
+    statusFromDecision(payload.decision);
+  const eventStatus = APPROVAL_STATUS_BY_EVENT_TYPE[eventType];
+  const nextStatus = eventStatus ?? explicitStatus ?? "pending";
+  const approvalId = result?.approval_id ?? approvalIdFor(payload, request);
+  const patchId = result?.patch_id ?? patchIdFor(payload, request);
+  const taskId = taskIdFor(event, payload);
+  const workspaceId = getString(event.workspace_id);
+  const existingIndex = state.approvals.findIndex((approval) => {
+    if (approval.approvalId === approvalId) {
+      return true;
+    }
+
+    return approval.patchId === patchId;
+  });
+  const fallbackApproval: ApprovalState = {
+    approvalId,
+    claimDecisions: [],
+    committed: false,
+    patchId,
+    status: "pending",
+  };
+  const current =
+    existingIndex >= 0 ? (state.approvals[existingIndex] ?? fallbackApproval) : fallbackApproval;
+  const draftOrTemporary = payload.draft === true || payload.temporary === true;
+  const claimDecisions =
+    result?.claim_decisions ??
+    getClaimDecisions(payload.claim_decisions) ??
+    request?.claim_decisions ??
+    current.claimDecisions;
+  const proposal = getProposal(payload.proposal) ?? request?.proposal;
+  const requestFromReview =
+    request ??
+    (proposal
+      ? {
+          approval_id: approvalId,
+          audit_id: null,
+          claim_decisions: claimDecisions,
+          expires_at: getString(payload.expires_at) ?? "",
+          patch_id: patchId,
+          policy_decision: "requires_approval" as const,
+          proposal,
+          rejection_reason: null,
+          required_by: getString(payload.required_by) ?? "",
+          status: nextStatus,
+          wal_entry_id: null,
+        }
+      : undefined);
+  const committedRevision =
+    eventType === "approval.committed" && !draftOrTemporary
+      ? (result?.committed_revision ??
+        getString(payload.committed_revision) ??
+        getString(payload.revision) ??
+        event.revision)
+      : current.committedRevision;
+  const resultForState = draftOrTemporary && nextStatus === "committed" ? undefined : result;
+  const nextApproval = {
+    ...current,
+    approvalId,
+    claimDecisions,
+    committed: current.committed || (eventType === "approval.committed" && !draftOrTemporary),
+    patchId,
+    status: draftOrTemporary && nextStatus === "committed" ? current.status : nextStatus,
+    ...(committedRevision ? { committedRevision } : {}),
+    ...(requestFromReview ? { request: requestFromReview } : {}),
+    ...(resultForState ? { result: resultForState } : {}),
+    ...(taskId ? { taskId } : {}),
+    ...(workspaceId ? { workspaceId } : {}),
+  };
+  const approvals =
+    existingIndex >= 0
+      ? state.approvals.map((approval, index) =>
+          index === existingIndex ? nextApproval : approval,
+        )
+      : [...state.approvals, nextApproval];
+
+  return {
+    ...state,
+    approvals,
+    tasks: upsertTask(state, event, "approval", nextApproval.status),
+  };
+}
+
 export function reduceRuntimeState(
   state: FrontendRuntimeState,
   event: FrontendRuntimeEvent,
@@ -353,6 +540,18 @@ export function reduceRuntimeState(
 
   if (eventType === "import.stage.changed" || eventType === "source.ingest.stage.changed") {
     return reduceImportEvent(nextState, event);
+  }
+
+  if (
+    eventType === "approval.reviewed" ||
+    eventType === "approval.decided" ||
+    eventType === "approval.applying" ||
+    eventType === "approval.committed" ||
+    eventType === "approval.rejected" ||
+    eventType === "approval.conflict" ||
+    eventType === "approval.expired"
+  ) {
+    return reduceApprovalEvent(nextState, event);
   }
 
   return nextState;
