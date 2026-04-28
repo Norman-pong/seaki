@@ -6,3 +6,10 @@ license.workspace = true
 
 [lib]
 path = "src/lib.rs"
+
+[dependencies]
+rusqlite.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
