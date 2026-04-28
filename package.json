@@ -1,0 +1,33 @@
+{
+  "name": "seaki",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "format": "oxfmt --write package.json pnpm-workspace.yaml tsconfig.json tsconfig.base.json \"apps/electron/**/*.{html,css,json,ts,tsx}\" \"packages/**/*.{json,ts,tsx}\"",
+    "format:check": "oxfmt --check package.json pnpm-workspace.yaml tsconfig.json tsconfig.base.json \"apps/electron/**/*.{html,css,json,ts,tsx}\" \"packages/**/*.{json,ts,tsx}\"",
+    "lint": "oxlint apps/electron packages --react-plugin --vitest-plugin --jsx-a11y-plugin --deny-warnings",
+    "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
+    "build": "pnpm --filter @seaki/electron build",
+    "test": "vitest run",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build && pnpm test"
+  },
+  "dependencies": {
+    "react": "19.2.5",
+    "react-dom": "19.2.5"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.1",
+    "oxfmt": "0.47.0",
+    "oxlint": "1.62.0",
+    "typescript": "6.0.3",
+    "vite": "8.0.10",
+    "vitest": "4.1.5"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "packageManager": "pnpm@10.33.0"
+}

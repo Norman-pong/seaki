@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "exactOptionalPropertyTypes": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "ignoreDeprecations": "6.0",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleDetection": "force",
+    "moduleResolution": "Bundler",
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noUncheckedIndexedAccess": true,
+    "paths": {
+      "@seaki/domain": ["packages/domain/src/index.ts"],
+      "@seaki/state": ["packages/state/src/index.ts"],
+      "@seaki/transport": ["packages/transport/src/index.ts"]
+    },
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2023",
+    "useDefineForClassFields": true,
+    "verbatimModuleSyntax": true
+  }
+}

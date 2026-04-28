@@ -31,3 +31,11 @@
 - 新增 `docs/plans/phase-1-task-plan.md`，把 M0 本机纵切拆解为可执行任务、验收标准、质量门禁和风险缓解。
 - 新增 `docs/plans/README.md` 作为任务计划索引，避免计划文档混入架构主题页目录。
 - 保持 `docs/architecture.md` 只索引架构权威页，不把执行计划列为架构主题页。
+
+## 2026-04-28 M0-00 CI 与决策记录
+
+- 新增 [开发文档](../development.md)，记录 M0-00 本地开发入口、Rust/TypeScript 门禁、CI 命令和生成物边界。
+- 新增 [CI workflow](../../.github/workflows/ci.yml)，覆盖 Rust `cargo fmt --check`、`cargo clippy --workspace -- -D warnings`、`cargo test --workspace`，以及 Node.js 22.12.0 + pnpm 的 `pnpm install --frozen-lockfile`、`pnpm check`。
+- 新增 [ADR-0001](../decisions/0001-main-platform-sandbox-backend.md)，确定 M0 主平台 sandbox 后端为 macOS Seatbelt；执行环境变化时必须更新该决策和相关文档。
+- 新增 [ADR-0002](../decisions/0002-frontend-toolchain-vite8-oxc.md)，确定 M0 前端工具链采用 Vite 8、`@vitejs/plugin-react` 6、TypeScript 6、Vitest 4 和 Oxc lint/format。
+- 更新 [第一阶段任务计划](../plans/phase-1-task-plan.md) 的 M0-00 行，补齐 CI、开发文档和决策记录交付链接。
