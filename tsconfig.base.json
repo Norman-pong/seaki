@@ -16,6 +16,7 @@
     "noUncheckedIndexedAccess": true,
     "paths": {
       "@seaki/domain": ["packages/domain/src/index.ts"],
+      "@seaki/dto": ["packages/dto/src/index.ts"],
       "@seaki/state": ["packages/state/src/index.ts"],
       "@seaki/transport": ["packages/transport/src/index.ts"]
     },

@@ -376,6 +376,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "seaki-dto"
+version = "0.1.0"
+
+[[package]]
+name = "seaki-dto-codegen"
+version = "0.1.0"
+dependencies = [
+ "seaki-dto",
+ "sha2",
+]
+
+[[package]]
 name = "seaki-index"
 version = "0.1.0"
 
@@ -390,6 +402,9 @@ version = "0.1.0"
 [[package]]
 name = "seaki-wiki"
 version = "0.1.0"
+dependencies = [
+ "seaki-dto",
+]
 
 [[package]]
 name = "semver"

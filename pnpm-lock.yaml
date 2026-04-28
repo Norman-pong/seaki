@@ -45,6 +45,9 @@ importers:
       '@seaki/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@seaki/dto':
+        specifier: workspace:*
+        version: link:../../packages/dto
       '@seaki/state':
         specifier: workspace:*
         version: link:../../packages/state
@@ -70,6 +73,9 @@ importers:
 
   packages/domain:
     dependencies:
+      '@seaki/dto':
+        specifier: workspace:*
+        version: link:../dto
       '@seaki/state':
         specifier: workspace:*
         version: link:../state
@@ -77,13 +83,19 @@ importers:
         specifier: workspace:*
         version: link:../transport
 
+  packages/dto: {}
+
   packages/state:
     dependencies:
-      '@seaki/transport':
+      '@seaki/dto':
         specifier: workspace:*
-        version: link:../transport
+        version: link:../dto
 
-  packages/transport: {}
+  packages/transport:
+    dependencies:
+      '@seaki/dto':
+        specifier: workspace:*
+        version: link:../dto
 
 packages:
 

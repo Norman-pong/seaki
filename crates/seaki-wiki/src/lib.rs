@@ -1,37 +1,6 @@
 pub const RAW_SOURCE_STORAGE: &str = "append-only-content-addressed";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SourceIngestState {
-    Selected,
-    GrantRequested,
-    Granted,
-    RawCommitted,
-    ParseRunning,
-    Parsed,
-    Partial,
-    Failed,
-    PatchProposed,
-    ApprovalPending,
-    Committed,
-    Denied,
-    Indexed,
-    IndexStale,
-}
-
-impl SourceIngestState {
-    pub const fn is_terminal(self) -> bool {
-        matches!(
-            self,
-            Self::Parsed
-                | Self::Partial
-                | Self::Failed
-                | Self::Committed
-                | Self::Denied
-                | Self::Indexed
-                | Self::IndexStale
-        )
-    }
-}
+pub use seaki_dto::ImportStage as SourceIngestState;
 
 #[cfg(test)]
 mod tests {

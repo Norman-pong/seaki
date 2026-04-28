@@ -1,5 +1,5 @@
 {
-  "name": "@seaki/transport",
+  "name": "@seaki/dto",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -8,8 +8,5 @@
       "types": "./src/index.ts",
       "import": "./src/index.ts"
     }
-  },
-  "dependencies": {
-    "@seaki/dto": "workspace:*"
   }
 }

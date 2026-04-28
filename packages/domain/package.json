@@ -10,6 +10,7 @@
     }
   },
   "dependencies": {
+    "@seaki/dto": "workspace:*",
     "@seaki/state": "workspace:*",
     "@seaki/transport": "workspace:*"
   }

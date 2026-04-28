@@ -2,6 +2,8 @@
 members = [
     "crates/seaki-core",
     "crates/seaki-daemon",
+    "crates/seaki-dto",
+    "crates/seaki-dto-codegen",
     "crates/seaki-index",
     "crates/seaki-policy",
     "crates/seaki-sandbox",
