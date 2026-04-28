@@ -11,6 +11,8 @@ import type {
 import { createMockTransportClient } from "@seaki/transport";
 import type { FrontendTransportEvent } from "@seaki/transport";
 import type { ClaimApprovalDecisionInput, DecideApprovalInput, DomainClient } from "@seaki/domain";
+import { createMvpScreenModel } from "./mvpScreenModel";
+import type { MvpScreenModel } from "./mvpScreenModel";
 
 export type ApprovalResult =
   | "pending"
@@ -57,7 +59,7 @@ export interface ApprovalDiffModel {
   readonly statusCounts: Readonly<Record<ApprovalResult, number>>;
 }
 
-export interface ElectronAppModel {
+export interface ElectronAppModel extends MvpScreenModel {
   readonly approval: ApprovalDiffModel;
   readonly importStage: string;
   readonly workspaceStage: string;
@@ -99,17 +101,18 @@ export async function createElectronAppModel(): Promise<ElectronAppModel> {
     events: [
       previewEvent(1, "daemon.ready"),
       previewEvent(2, "workspace.init.completed", {
+        reason: "index_stale",
         workspace: {
           audit_head: "audit_preview",
           current_revision: "wiki_rev_0",
           index_status: {
             last_good_revision: null,
-            stale_reason: null,
+            stale_reason: "source visibility changed; rebuild required",
             state: "stale",
             updated_at: null,
           },
           root_uri: "file:///workspace",
-          state: "ready",
+          state: "degraded",
           workspace_id: "ws_local_preview",
         },
       }),
@@ -153,6 +156,7 @@ export async function createElectronAppModel(): Promise<ElectronAppModel> {
 
   return {
     approval: createApprovalDiffModel(review),
+    ...createMvpScreenModel(snapshot.workspace.dto, snapshot.appBoot.stage),
     importStage: snapshot.imports[0]?.stage ?? "selected",
     workspaceStage: snapshot.workspace.stage,
     workspaceTitle: snapshot.workspace.dto ? "ws_local_preview" : "ws_local_preview",

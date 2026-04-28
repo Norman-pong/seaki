@@ -286,9 +286,10 @@ function reduceWorkspaceEvent(
   const reason = getWorkspaceReason(
     payload.reason ?? payload.degradedReason ?? payload.degraded_reason,
   );
+  const workspaceDto = payload.workspace as WorkspaceDTO | undefined;
   const workspace = finishWorkspaceInit({
-    dto: payload.workspace as WorkspaceDTO | undefined,
-    indexStatus: payload.indexStatus as IndexStatusDTO | undefined,
+    dto: workspaceDto,
+    indexStatus: (payload.indexStatus as IndexStatusDTO | undefined) ?? workspaceDto?.index_status,
     reason,
   });
 

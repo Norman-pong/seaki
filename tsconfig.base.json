@@ -15,6 +15,7 @@
     "noImplicitReturns": true,
     "noUncheckedIndexedAccess": true,
     "paths": {
+      "@/*": ["apps/electron/src/*"],
       "@seaki/domain": ["packages/domain/src/index.ts"],
       "@seaki/dto": ["packages/dto/src/index.ts"],
       "@seaki/state": ["packages/state/src/index.ts"],

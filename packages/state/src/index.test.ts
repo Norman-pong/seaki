@@ -320,6 +320,58 @@ describe("frontend runtime state", () => {
     });
   });
 
+  it("recovers a degraded workspace when replay receives a fresh ready workspace", () => {
+    const degraded = reduceRuntimeState(
+      createInitialRuntimeState(),
+      event(1, "workspace.init.completed", {
+        reason: "index_stale",
+        workspace: {
+          audit_head: "audit_1",
+          current_revision: "wiki_rev_0",
+          index_status: {
+            last_good_revision: null,
+            stale_reason: "source visibility changed",
+            state: "stale",
+            updated_at: null,
+          },
+          root_uri: "file:///tmp/seaki",
+          state: "degraded",
+          workspace_id: "ws_1",
+        },
+      }),
+    );
+    const recovered = reduceRuntimeState(
+      degraded,
+      event(2, "workspace.ready", {
+        workspace: {
+          audit_head: "audit_2",
+          current_revision: "wiki_rev_1",
+          index_status: {
+            last_good_revision: "wiki_rev_1",
+            stale_reason: null,
+            state: "fresh",
+            updated_at: "2026-04-28T00:10:00.000Z",
+          },
+          root_uri: "file:///tmp/seaki",
+          state: "ready",
+          workspace_id: "ws_1",
+        },
+      }),
+    );
+
+    expect(degraded.workspace).toMatchObject({
+      reason: "index_stale",
+      stage: "degraded",
+    });
+    expect(recovered.workspace).toMatchObject({
+      indexStatus: {
+        state: "fresh",
+      },
+      stage: "ready",
+    });
+    expect(recovered.workspace.reason).toBeUndefined();
+  });
+
   it("replays the complete import happy path from selected to indexed", () => {
     const stages: readonly ImportStage[] = [
       "selected",
@@ -557,5 +609,33 @@ describe("frontend runtime state", () => {
       status: "approved",
     });
     expect(draftCommitted.approvals[0]?.committedRevision).toBeUndefined();
+  });
+
+  it("does not retain committed result from temporary approval commit events", () => {
+    const approved = reduceRuntimeState(
+      reduceRuntimeState(
+        createInitialRuntimeState(),
+        event(1, "approval.reviewed", {
+          request: approvalRequest("pending"),
+        }),
+      ),
+      event(2, "approval.decided", {
+        result: approvalResult("approved"),
+      }),
+    );
+    const temporaryCommitted = reduceRuntimeState(
+      approved,
+      event(3, "approval.committed", {
+        result: approvalResult("committed"),
+        temporary: true,
+      }),
+    );
+
+    expect(temporaryCommitted.approvals[0]).toMatchObject({
+      committed: false,
+      status: "approved",
+    });
+    expect(temporaryCommitted.approvals[0]?.committedRevision).toBeUndefined();
+    expect(temporaryCommitted.approvals[0]?.result?.status).toBe("approved");
   });
 });

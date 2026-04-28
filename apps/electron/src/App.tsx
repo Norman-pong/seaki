@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   applyApprovedClaimsViaDomain,
   approveClaimViaDomain,
@@ -10,6 +13,7 @@ import {
   rejectClaimViaDomain,
   updateRejectionDraft,
 } from "./appModel";
+import { createMvpScreenModel } from "./mvpScreenModel";
 import "./styles.css";
 import type {
   ApprovalClaimModel,
@@ -34,8 +38,47 @@ const CITATION_LABEL: Record<ApprovalClaimModel["citationState"], string> = {
   valid: "有效",
 };
 
+const IMPORT_ACTION_LABEL: Record<ElectronAppModel["importQueue"][number]["action"], string> = {
+  authorize: "重新授权",
+  inspect: "查看",
+  none: "无操作",
+  rebuild_index: "重建索引",
+  retry_parse: "重试解析",
+};
+
+const PREVIEW_STATUS_LABEL: Record<ElectronAppModel["citationPreview"]["status"], string> = {
+  degraded: "降级",
+  no_access: "无权限",
+  open_source_range: "可打开 source range",
+  open_wiki_anchor: "可打开 wiki anchor",
+  resolving: "解析中",
+};
+
+type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
+
+function approvalBadgeVariant(status: ApprovalResult): BadgeVariant {
+  if (status === "rejected" || status === "conflict") {
+    return "destructive";
+  }
+
+  if (status === "approved" || status === "committed") {
+    return "secondary";
+  }
+
+  return "outline";
+}
+
+function citationBadgeVariant(state: ApprovalClaimModel["citationState"]): BadgeVariant {
+  if (state === "invalid") {
+    return "destructive";
+  }
+
+  return state === "valid" ? "secondary" : "outline";
+}
+
 const initialModel: ElectronAppModel = {
   approval: createApprovalDiffModel(),
+  ...createMvpScreenModel(),
   importStage: "selected",
   workspaceStage: "initializing",
   workspaceTitle: "ws_local_preview",
@@ -101,6 +144,202 @@ export function App() {
         </dl>
       </header>
 
+      <section className="screenGrid" aria-label="electron mvp screens">
+        <article className="screenPanel">
+          <div className="paneHeader compact">
+            <div>
+              <p className="label">DaemonStatus</p>
+              <h2>{model.daemonStatus.status}</h2>
+            </div>
+            <Badge variant="outline">{model.daemonStatus.auditMode}</Badge>
+          </div>
+          <p className="screenDetail">{model.daemonStatus.detail}</p>
+          <div className="miniActions">
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              disabled={!model.daemonStatus.canReconnect}
+            >
+              重连
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              disabled={!model.daemonStatus.canOpenLogs}
+            >
+              日志
+            </Button>
+          </div>
+        </article>
+
+        <article className="screenPanel">
+          <div className="paneHeader compact">
+            <div>
+              <p className="label">WorkspaceShell</p>
+              <h2>{model.workspaceShell.workspaceId}</h2>
+            </div>
+            <Badge variant="outline">{model.workspaceShell.indexStatus.state}</Badge>
+          </div>
+          <dl className="compactFacts">
+            <div>
+              <dt>Revision</dt>
+              <dd>{model.workspaceShell.currentRevision}</dd>
+            </div>
+            <div>
+              <dt>Audit</dt>
+              <dd>{model.workspaceShell.auditHead}</dd>
+            </div>
+            <div>
+              <dt>Recover</dt>
+              <dd>{model.workspaceShell.degradedReasons.join(", ") || "none"}</dd>
+            </div>
+          </dl>
+          <div className="miniActions">
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              disabled={!model.workspaceShell.canInitWorkspace}
+            >
+              初始化
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              disabled={!model.workspaceShell.canRebuildIndex}
+            >
+              重建索引
+            </Button>
+          </div>
+        </article>
+
+        <article className="screenPanel wide">
+          <div className="paneHeader compact">
+            <div>
+              <p className="label">ImportQueue</p>
+              <h2>{model.importQueue.length} tasks</h2>
+            </div>
+            <Badge variant="outline">{model.importStage}</Badge>
+          </div>
+          <div className="queueList">
+            {model.importQueue.map((item) => (
+              <section key={item.taskId} className="queueItem">
+                <div>
+                  <strong>{item.displayName}</strong>
+                  <p>{item.detail}</p>
+                </div>
+                <div className="queueMeta">
+                  <Badge variant={item.committed ? "secondary" : "outline"}>{item.stage}</Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    disabled={item.action === "none"}
+                  >
+                    {IMPORT_ACTION_LABEL[item.action]}
+                  </Button>
+                </div>
+              </section>
+            ))}
+          </div>
+        </article>
+
+        <article className="screenPanel wide">
+          <div className="paneHeader compact">
+            <div>
+              <p className="label">WikiReader</p>
+              <h2>{model.wikiReader.title}</h2>
+            </div>
+            <Badge variant={model.wikiReader.status === "committed" ? "secondary" : "outline"}>
+              {model.wikiReader.status}
+            </Badge>
+          </div>
+          <p className="screenDetail">
+            {model.wikiReader.committedRevision}
+            {model.wikiReader.warning ? ` · ${model.wikiReader.warning}` : ""}
+          </p>
+          <div className="citationChips">
+            {model.wikiReader.citationRefs.map((citation) => (
+              <Badge
+                key={citation.citation_id}
+                variant={citation.degraded_reason ? "outline" : "secondary"}
+              >
+                {citation.citation_id}
+                {citation.degraded_reason ? ` · ${citation.degraded_reason}` : ""}
+              </Badge>
+            ))}
+          </div>
+        </article>
+
+        <article className="screenPanel wide">
+          <div className="paneHeader compact">
+            <div>
+              <p className="label">SearchResults</p>
+              <h2>{model.searchResults.query}</h2>
+            </div>
+            <Badge variant={model.searchResults.status === "ready" ? "secondary" : "outline"}>
+              {model.searchResults.status}
+            </Badge>
+          </div>
+          <div className="searchList">
+            {model.searchResults.results.map((result) => (
+              <section key={result.result_id} className="searchItem">
+                <div>
+                  <strong>{result.title}</strong>
+                  <p>{result.snippet ?? "snippet hidden by permission"}</p>
+                </div>
+                <Badge variant="outline">{result.index_status.state}</Badge>
+              </section>
+            ))}
+          </div>
+          <p className="screenDetail">
+            filtered_by_permission {model.searchResults.filteredByPermission}
+          </p>
+        </article>
+
+        <article className="screenPanel">
+          <div className="paneHeader compact">
+            <div>
+              <p className="label">CitationPreview</p>
+              <h2>{model.citationPreview.citation.citation_id}</h2>
+            </div>
+            <Badge
+              variant={
+                model.citationPreview.status === "open_source_range" ? "secondary" : "outline"
+              }
+            >
+              {PREVIEW_STATUS_LABEL[model.citationPreview.status]}
+            </Badge>
+          </div>
+          <p className="screenDetail">
+            {model.citationPreview.preview
+              ? model.citationPreview.preview.summary
+              : "source preview hidden"}
+          </p>
+          <div className="miniActions">
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              disabled={model.citationPreview.status !== "open_source_range"}
+            >
+              打开
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              disabled={model.citationPreview.recoverability !== "request_access"}
+            >
+              授权
+            </Button>
+          </div>
+        </article>
+      </section>
+
       <section className="approvalToolbar" aria-label="approval actions">
         <div>
           <p className="label">Patch</p>
@@ -108,7 +347,9 @@ export function App() {
           <span>{approval.patch.base_revision}</span>
         </div>
         <div className="actionGroup">
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             type="button"
             onClick={() => {
               replaceApproval(approvePendingClaimsViaDomain(approval));
@@ -116,8 +357,10 @@ export function App() {
             disabled={batchApprovalCount === 0}
           >
             批量批准
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             type="button"
             onClick={() => {
               replaceApproval(markApprovedClaimsApplyingViaDomain(approval));
@@ -125,8 +368,10 @@ export function App() {
             disabled={!canApply}
           >
             应用
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             type="button"
             onClick={() => {
               replaceApproval(applyApprovedClaimsViaDomain(approval));
@@ -134,7 +379,7 @@ export function App() {
             disabled={!canCommit}
           >
             提交
-          </button>
+          </Button>
         </div>
       </section>
 
@@ -145,7 +390,7 @@ export function App() {
               <p className="label">Source</p>
               <h2>{approval.source.title}</h2>
             </div>
-            <span className="badge">{approval.source.visibility}</span>
+            <Badge variant="outline">{approval.source.visibility}</Badge>
           </div>
           <p className="origin">{approval.source.origin_display}</p>
           <div className="sourcePreview">
@@ -153,9 +398,9 @@ export function App() {
               <section key={claim.claimId} className="rangeBlock">
                 <div className="rangeMeta">
                   <span>{claim.sourceRange}</span>
-                  <span className={`citationState ${claim.citationState}`}>
+                  <Badge variant={citationBadgeVariant(claim.citationState)}>
                     {CITATION_LABEL[claim.citationState]}
-                  </span>
+                  </Badge>
                 </div>
                 <p>{claim.sourceExcerpt}</p>
               </section>
@@ -169,7 +414,7 @@ export function App() {
               <p className="label">Patch diff</p>
               <h2>{approval.approvalRequest.approval_id}</h2>
             </div>
-            <span className="badge">{approval.approvalRequest.policy_decision}</span>
+            <Badge variant="outline">{approval.approvalRequest.policy_decision}</Badge>
           </div>
           <pre className="diffBlock" aria-label="patch diff">
             {approval.patchLines.map((line) => (
@@ -189,9 +434,9 @@ export function App() {
           </div>
           <div className="statusStrip" aria-label="approval result counts">
             {Object.entries(approval.statusCounts).map(([status, count]) => (
-              <span key={status}>
+              <Badge key={status} variant={approvalBadgeVariant(status as ApprovalResult)}>
                 {STATUS_LABEL[status as ApprovalResult]} {count}
-              </span>
+              </Badge>
             ))}
           </div>
         </div>
@@ -208,9 +453,9 @@ export function App() {
                   <div>
                     <div className="claimTitle">
                       <h3>{claim.title}</h3>
-                      <span className={`statusBadge ${claim.status}`}>
+                      <Badge variant={approvalBadgeVariant(claim.status)}>
                         {STATUS_LABEL[claim.status]}
-                      </span>
+                      </Badge>
                     </div>
                     <p>{claim.statement}</p>
                   </div>
@@ -246,7 +491,7 @@ export function App() {
 
                 <div className="rejectBox">
                   <label htmlFor={`reject-${claim.claimId}`}>拒绝原因</label>
-                  <textarea
+                  <Textarea
                     id={`reject-${claim.claimId}`}
                     value={draft}
                     onChange={(event) => {
@@ -259,26 +504,28 @@ export function App() {
                     }}
                     disabled={!canReject}
                   />
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     type="button"
-                    className="approveButton"
                     disabled={!canApprove}
                     onClick={() => {
                       replaceApproval(approveClaimViaDomain(approval, claim.claimId));
                     }}
                   >
                     批准
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
                     type="button"
-                    className="rejectButton"
                     disabled={!canReject || draft.trim().length === 0}
                     onClick={() => {
                       replaceApproval(rejectClaimViaDomain(approval, claim.claimId));
                     }}
                   >
                     拒绝
-                  </button>
+                  </Button>
                 </div>
               </article>
             );

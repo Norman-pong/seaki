@@ -14,18 +14,94 @@ import {
   updateRejectionDraft,
 } from "./appModel";
 import type { ApprovalActionClient } from "./appModel";
+import {
+  createCitationPreviewModel,
+  createMvpScreenModel,
+  createSearchResultsModel,
+  createWikiReaderModel,
+} from "./mvpScreenModel";
 import type { DecideApprovalInput } from "@seaki/domain";
+import type { CitationRefDTO, SearchResultDTO, SourceCardDTO, WorkspaceDTO } from "@seaki/dto";
 
 describe("createElectronAppModel", () => {
   it("binds Electron preview state to domain/state packages", async () => {
     const model = await createElectronAppModel();
 
     expect(model.importStage).toBe("selected");
-    expect(model.workspaceStage).toBe("ready");
+    expect(model.workspaceStage).toBe("degraded");
     expect(model.workspaceTitle).toBe("ws_local_preview");
+    expect(model.daemonStatus.status).toBe("daemon.degraded");
+    expect(model.workspaceShell.indexStatus.state).toBe("stale");
+    expect(model.workspaceShell.canRebuildIndex).toBe(true);
+    expect(model.importQueue.map((item) => item.stage)).toEqual(["index_stale", "failed"]);
+    expect(model.searchResults.status).toBe("stale");
+    expect(model.searchResults.filteredByPermission).toBe(1);
+    expect(model.wikiReader.draftVisible).toBe(false);
+    expect(model.citationPreview.status).toBe("no_access");
     expect(model.approval.approvalRequest.policy_decision).toBe("requires_approval");
     expect(model.approval.patch.claim_ids).toContain("claim_source_scope");
     expect(model.approval.source.citation_refs).toHaveLength(3);
+  });
+
+  it("keeps draft wiki content hidden from committed reader state", () => {
+    const workspace = workspaceDto("fresh");
+    const reader = createWikiReaderModel(workspace, [citationRef()]);
+
+    expect(reader.status).toBe("committed");
+    expect(reader.committedRevision).toBe("wiki_rev_committed");
+    expect(reader.draftVisible).toBe(false);
+    expect(reader.warning).toBeNull();
+  });
+
+  it("models stale and permission-filtered search results without restricted snippets", () => {
+    const stale = searchResult("result_stale", "stale", "visible snippet", "index_stale");
+    const hidden = searchResult("result_hidden", "fresh", null, "no_access");
+    const search = createSearchResultsModel({
+      query: "workspace source boundary",
+      results: [stale, hidden],
+    });
+
+    expect(search.status).toBe("stale");
+    expect(search.filteredByPermission).toBe(1);
+    expect(search.results[1]?.snippet).toBeNull();
+    expect(search.results[1]?.citation_refs[0]?.degraded_reason).toBe("no_access");
+  });
+
+  it("models citation preview degraded and no_access recovery states", () => {
+    const visibleSource = sourceCard("visible");
+    const degraded = createCitationPreviewModel(
+      {
+        ...citationRef(),
+        degraded_reason: "index_stale",
+      },
+      visibleSource,
+    );
+    const noAccess = createCitationPreviewModel(citationRef(), sourceCard("restricted"));
+
+    expect(degraded).toMatchObject({
+      recoverability: "inspect_source",
+      status: "degraded",
+    });
+    expect(noAccess).toMatchObject({
+      preview: null,
+      recoverability: "request_access",
+      status: "no_access",
+    });
+  });
+
+  it("exposes all M0-09 screen contracts in a single Electron model", () => {
+    const screens = createMvpScreenModel(workspaceDto("stale"));
+
+    expect(Object.keys(screens).sort()).toEqual([
+      "citationPreview",
+      "daemonStatus",
+      "importQueue",
+      "searchResults",
+      "wikiReader",
+      "workspaceShell",
+    ]);
+    expect(screens.workspaceShell.degradedReasons).toContain("index_stale");
+    expect(screens.importQueue.some((item) => item.action === "retry_parse")).toBe(true);
   });
 });
 
@@ -159,3 +235,79 @@ describe("ApprovalDiff model actions", () => {
     );
   });
 });
+
+function workspaceDto(state: "fresh" | "stale"): WorkspaceDTO {
+  return {
+    audit_head: "audit_head",
+    current_revision: "wiki_rev_committed",
+    index_status: {
+      last_good_revision: state === "fresh" ? "wiki_rev_committed" : "wiki_rev_previous",
+      stale_reason: state === "stale" ? "source visibility changed" : null,
+      state,
+      updated_at: state === "fresh" ? "2026-04-28T00:10:00.000Z" : null,
+    },
+    root_uri: "file:///workspace",
+    state: state === "stale" ? "degraded" : "ready",
+    workspace_id: "ws_test",
+  };
+}
+
+function citationRef(): CitationRefDTO {
+  return {
+    citation_id: "cite_test",
+    claim_id: "claim_test",
+    degraded_reason: null,
+    range: {
+      end: 4,
+      label: "source.md:1-4",
+      start: 1,
+      unit: "line",
+    },
+    source_id: "source_test",
+    wiki_page_id: "wiki_test",
+  };
+}
+
+function searchResult(
+  resultId: string,
+  state: "fresh" | "stale",
+  snippet: string | null,
+  degradedReason: string | null,
+): SearchResultDTO {
+  return {
+    citation_refs: [
+      {
+        ...citationRef(),
+        citation_id: `cite_${resultId}`,
+        degraded_reason: degradedReason,
+      },
+    ],
+    index_status: {
+      last_good_revision: "wiki_rev_committed",
+      stale_reason: state === "stale" ? "index stale" : null,
+      state,
+      updated_at: state === "fresh" ? "2026-04-28T00:10:00.000Z" : null,
+    },
+    kind: "claim",
+    result_id: resultId,
+    snippet,
+    title: resultId,
+  };
+}
+
+function sourceCard(visibility: SourceCardDTO["visibility"]): SourceCardDTO {
+  return {
+    citation_refs: [citationRef()],
+    origin_display: "source.md",
+    range: {
+      end: 4,
+      label: "source.md:1-4",
+      start: 1,
+      unit: "line",
+    },
+    source_id: "source_test",
+    summary: "Visible source excerpt.",
+    title: "source.md",
+    visibility,
+  };
+}
