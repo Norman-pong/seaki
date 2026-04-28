@@ -1,0 +1,27 @@
+# 架构维护记录
+
+[返回架构索引](../architecture.md)
+
+## 2026-04-28
+
+- 将单一 `docs/architecture.md` 拆分为架构 wiki 入口页和 `docs/architecture/` 下的主题页。
+- 保留 `docs/architecture.md` 作为兼容入口，避免旧链接直接失效。
+- 主题页按事实家族分配权威范围：总览、边界、管道、Channel Bridge、记忆、沙盒、前端、路线风险、需求推演、参考溯源。
+- 后续风险：若代码实现开始落地，需要把已实现事实与设计假设分离，避免架构草案被误读为当前实现状态。
+
+## 2026-04-28 索引清晰度调整
+
+- 按文档审核意见重写 `docs/architecture.md`：增加一句话定位、架构不变式、五层结构、首次 10 分钟阅读路线、架构深入路线和按任务查找表。
+- 新增 `wiki-source-citation.md` 作为 `raw source -> parsed frame -> wiki claim -> citation -> index freshness` 的知识层权威页。
+- 将 `sandbox-runtime.md` 中 raw source / parsed frame 语义收敛为指向知识层权威页，本页保留沙盒和 parser 安全约束。
+- 明确索引页中的总体架构图和执行链路是导航摘要，权威事实以主题页为准。
+
+## 2026-04-28 主题页标题去编号
+
+- 移除 `docs/architecture/` 主题页标题中的原长文序号，避免分层后的 wiki 页面继续暗示线性阅读顺序。
+- 删除索引页中关于“主题页内部编号沿用原始长文”的说明。
+
+## 2026-04-28 参考溯源并入索引
+
+- 将 `docs/architecture/references.md` 的参考表移动到 `docs/architecture.md`，作为索引页附录。
+- 删除独立参考主题页入口，减少架构入口中的一次跳转。
