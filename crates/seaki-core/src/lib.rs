@@ -1071,9 +1071,7 @@ impl CoreLedger {
         manifests
             .into_iter()
             .filter(|m| match &filter {
-                Some(seaki_pipe::SideEffectFilter::Level(level)) => {
-                    m.side_effect_level == *level
-                }
+                Some(seaki_pipe::SideEffectFilter::Level(level)) => m.side_effect_level == *level,
                 _ => true,
             })
             .map(|m| seaki_pipe::PipeCommandSummary {

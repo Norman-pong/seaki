@@ -2,9 +2,7 @@ use seaki_channel::outbox::{
     FakeProviderQueryAPI, Outbox, OutboxItem, OutboxStatus, ProviderQueryResult,
 };
 use seaki_channel::webhook::{hex_encode, hmac_sha256, WEBHOOK_SECRET};
-use seaki_channel::{
-    BindingEntry, ChannelMessagePayload, FakeChannelProvider, WebhookError,
-};
+use seaki_channel::{BindingEntry, ChannelMessagePayload, FakeChannelProvider, WebhookError};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, SystemTime};

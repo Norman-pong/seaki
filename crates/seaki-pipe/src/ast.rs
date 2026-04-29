@@ -154,7 +154,9 @@ fn command_input_frame(command_id: &str) -> Option<TypedFrame> {
     match command_id {
         "wiki.search" => Some((FrameType::JsonValue, Cardinality::One)),
         "citation.resolve" => Some((FrameType::ParagraphFrame, Cardinality::Many)),
-        "adr.summarize" | "wiki.patch.propose" => Some((FrameType::CitedParagraph, Cardinality::Many)),
+        "adr.summarize" | "wiki.patch.propose" => {
+            Some((FrameType::CitedParagraph, Cardinality::Many))
+        }
         "filter" | "map" => Some((FrameType::JsonValue, Cardinality::Many)),
         _ => None,
     }
