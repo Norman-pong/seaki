@@ -3,7 +3,7 @@ pub use crate::grant::*;
 pub use crate::outbox::*;
 pub use crate::webhook::*;
 
-mod fake_provider_tests;
-mod grant_tests;
-mod outbox_tests;
-mod webhook_tests;
+mod fake_provider;
+mod grant;
+mod outbox;
+mod webhook;

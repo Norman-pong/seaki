@@ -1,3 +1,3 @@
-mod note_tests;
-mod redaction_tests;
-mod session_search_tests;
+mod note;
+mod redaction;
+mod session_search;
