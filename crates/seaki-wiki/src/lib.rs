@@ -464,7 +464,7 @@ fn ingest_committed_source(
     let artifact = parse_raw_source(
         &source_id,
         &raw_blob.content_hash,
-        input.declared_mime,
+        input.declared_mime.as_deref(),
         &sniffed_mime,
         &input.bytes,
         config,
@@ -485,26 +485,20 @@ fn ingest_committed_source(
 fn parse_raw_source(
     source_id: &str,
     source_hash: &str,
-    declared_mime: Option<String>,
+    declared_mime: Option<&str>,
     sniffed_mime: &str,
     bytes: &[u8],
     config: ParserConfig,
 ) -> ParsedArtifact {
     if is_markdown_mime(sniffed_mime) {
-        return parse_markdown(
-            source_id,
-            source_hash,
-            declared_mime.as_deref(),
-            sniffed_mime,
-            bytes,
-        );
+        return parse_markdown(source_id, source_hash, declared_mime, sniffed_mime, bytes);
     }
 
-    if is_pdf_mime(sniffed_mime) || declared_mime.as_deref() == Some("application/pdf") {
+    if is_pdf_mime(sniffed_mime) || declared_mime == Some("application/pdf") {
         return parse_pdf_stub(
             source_id,
             source_hash,
-            declared_mime.as_deref(),
+            declared_mime,
             sniffed_mime,
             bytes,
             config,
