@@ -3,6 +3,11 @@ use seaki_index::{
     CandidateKind, IndexCandidateId, IndexGeneration, IndexScope, IndexedCitationRef,
     IndexedDocument, SourceRange, SourceRangeUnit, SourceStatus, Visibility,
 };
+use seaki_memory::{
+    note::{memory_scope, NoteStore},
+    redaction::RedactedSessionManifest,
+    session_search::{session_scope, SessionCleanupAction, SessionSearchIndex},
+};
 use tempfile::NamedTempFile;
 
 #[test]
@@ -950,4 +955,547 @@ fn m0_reject_path_search_excludes_restricted_candidates_from_authorization() {
         .expect("search query succeeds");
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].result_id, "doc-visible");
+}
+
+#[test]
+fn pipe_list_enumerates_builtin_commands() {
+    let ledger = initialized_ledger();
+    let results = ledger.pipe_list(None);
+    assert_eq!(results.len(), 6);
+    let ids: Vec<_> = results.iter().map(|r| r.command_id.as_str()).collect();
+    assert!(ids.contains(&"wiki.search"));
+    assert!(ids.contains(&"wiki.patch.propose"));
+}
+
+#[test]
+fn pipe_list_filters_by_side_effect_level() {
+    let ledger = initialized_ledger();
+    let results = ledger.pipe_list(Some(seaki_pipe::SideEffectFilter::Level(
+        seaki_pipe::SideEffectLevel::None,
+    )));
+    assert_eq!(results.len(), 5);
+    for r in &results {
+        assert_eq!(r.side_effect_level, "none");
+    }
+}
+
+#[test]
+fn pipe_inspect_returns_full_manifest() {
+    let ledger = initialized_ledger();
+    let manifest = ledger
+        .pipe_inspect("wiki.search")
+        .expect("wiki.search exists");
+    assert_eq!(manifest.command_id, "wiki.search");
+    assert!(!manifest.description.is_empty());
+    assert!(manifest.validate_schema_hash());
+}
+
+#[test]
+fn pipe_inspect_unknown_returns_command_not_found() {
+    let ledger = initialized_ledger();
+    let result = ledger.pipe_inspect("unknown.command");
+    assert!(matches!(result, Err(seaki_pipe::CommandNotFound(ref id)) if id == "unknown.command"));
+}
+
+#[test]
+fn pipe_dry_run_side_effect_free_chain() {
+    let ledger = initialized_ledger();
+    let ast = seaki_pipe::PipelineAst {
+        pipeline_id: "dry-run-pipe".to_string(),
+        steps: vec![
+            seaki_pipe::PipelineStep {
+                step_id: "s1".to_string(),
+                command_id: "wiki.search".to_string(),
+                input_binding: seaki_pipe::InputBinding::Constant(
+                    serde_json::json!({"keyword": "rust"}),
+                ),
+                failure_policy: seaki_pipe::FailurePolicy::FailFast,
+            },
+            seaki_pipe::PipelineStep {
+                step_id: "s2".to_string(),
+                command_id: "citation.resolve".to_string(),
+                input_binding: seaki_pipe::InputBinding::PreviousStep,
+                failure_policy: seaki_pipe::FailurePolicy::FailFast,
+            },
+            seaki_pipe::PipelineStep {
+                step_id: "s3".to_string(),
+                command_id: "adr.summarize".to_string(),
+                input_binding: seaki_pipe::InputBinding::PreviousStep,
+                failure_policy: seaki_pipe::FailurePolicy::FailFast,
+            },
+        ],
+    };
+    let result = ledger
+        .pipe_dry_run(ast, serde_json::json!({"keyword": "rust"}))
+        .expect("dry run succeeds");
+    assert!(!result.events.is_empty());
+    assert!(result.proposal_artifact.is_none());
+    assert!(result.expected_frame_count > 0);
+}
+
+#[test]
+fn pipe_dry_run_proposal_chain_outputs_artifact() {
+    let ledger = initialized_ledger();
+    let ast = seaki_pipe::PipelineAst {
+        pipeline_id: "prop-pipe".to_string(),
+        steps: vec![
+            seaki_pipe::PipelineStep {
+                step_id: "s1".to_string(),
+                command_id: "wiki.search".to_string(),
+                input_binding: seaki_pipe::InputBinding::Constant(
+                    serde_json::json!({"keyword": "rust"}),
+                ),
+                failure_policy: seaki_pipe::FailurePolicy::FailFast,
+            },
+            seaki_pipe::PipelineStep {
+                step_id: "s2".to_string(),
+                command_id: "citation.resolve".to_string(),
+                input_binding: seaki_pipe::InputBinding::PreviousStep,
+                failure_policy: seaki_pipe::FailurePolicy::FailFast,
+            },
+            seaki_pipe::PipelineStep {
+                step_id: "s3".to_string(),
+                command_id: "wiki.patch.propose".to_string(),
+                input_binding: seaki_pipe::InputBinding::PreviousStep,
+                failure_policy: seaki_pipe::FailurePolicy::FailFast,
+            },
+        ],
+    };
+    let result = ledger
+        .pipe_dry_run(ast, serde_json::json!({"keyword": "rust"}))
+        .expect("dry run succeeds");
+    assert!(
+        result.proposal_artifact.is_some(),
+        "expected proposal artifact"
+    );
+    let artifact = result.proposal_artifact.unwrap();
+    assert_eq!(artifact.patch_id, "patch-prop-pipe");
+}
+
+#[test]
+fn pipe_dry_run_rejects_type_mismatch() {
+    let ledger = initialized_ledger();
+    let ast = seaki_pipe::PipelineAst {
+        pipeline_id: "bad-pipe".to_string(),
+        steps: vec![
+            seaki_pipe::PipelineStep {
+                step_id: "s1".to_string(),
+                command_id: "wiki.search".to_string(),
+                input_binding: seaki_pipe::InputBinding::Constant(
+                    serde_json::json!({"keyword": "rust"}),
+                ),
+                failure_policy: seaki_pipe::FailurePolicy::FailFast,
+            },
+            seaki_pipe::PipelineStep {
+                step_id: "s2".to_string(),
+                command_id: "adr.summarize".to_string(),
+                input_binding: seaki_pipe::InputBinding::PreviousStep,
+                failure_policy: seaki_pipe::FailurePolicy::FailFast,
+            },
+        ],
+    };
+    let result = ledger.pipe_dry_run(ast, serde_json::json!({"keyword": "rust"}));
+    assert!(
+        matches!(result, Err(CoreError::PipelineCompose(_))),
+        "expected compose error, got {:?}",
+        result
+    );
+}
+
+#[test]
+fn memory_propose_creates_note_with_proposed_status() {
+    let mut ledger = initialized_ledger();
+    let envelope = ledger
+        .append_memory_propose(memory_propose_request("event-2", "idem-2", "note-1"))
+        .expect("memory propose succeeds");
+
+    assert_eq!(envelope.event_type, MEMORY_PROPOSE_EVENT_TYPE);
+    let note = ledger
+        .memory_note("note-1")
+        .expect("note loads")
+        .expect("note exists");
+    assert_eq!(note.status, "proposed");
+    assert_eq!(note.title, "test-title");
+}
+
+#[test]
+fn memory_propose_lifecycle_includes_source_checking() {
+    let mut ledger = initialized_ledger();
+    ledger
+        .append_memory_propose(memory_propose_request("event-2", "idem-2", "note-1"))
+        .expect("memory propose succeeds");
+
+    // source_checking 无冲突 -> 状态变为 source_checking
+    let note = ledger
+        .memory_source_check("note-1", &["bitcoin".to_string()])
+        .expect("source check succeeds");
+    assert_eq!(note.status, "source_checking");
+}
+
+#[test]
+fn memory_source_check_conflict_downgrades_note() {
+    let mut ledger = initialized_ledger();
+    ledger
+        .append_memory_propose(memory_propose_request("event-2", "idem-2", "note-1"))
+        .expect("memory propose succeeds");
+
+    // source_checking 发现冲突 -> 降级为 conflict
+    let note = ledger
+        .memory_source_check("note-1", &["test content".to_string()])
+        .expect("source check succeeds");
+    assert_eq!(note.status, "conflict");
+}
+
+#[test]
+fn memory_commit_requires_approved_decision() {
+    let mut ledger = initialized_ledger();
+    ledger
+        .append_memory_propose(memory_propose_request("event-2", "idem-2", "note-1"))
+        .expect("memory propose succeeds");
+
+    let initial_events = ledger.event_count().expect("event count");
+    assert!(matches!(
+        ledger.append_memory_commit(memory_commit_request(
+            "event-3",
+            "idem-3",
+            "note-1",
+            "approval-1",
+            3
+        )),
+        Err(CoreError::ApprovalDecisionRequired { .. })
+    ));
+    assert_eq!(ledger.event_count().expect("event count"), initial_events);
+}
+
+#[test]
+fn memory_commit_activates_note_after_approval() {
+    let mut ledger = initialized_ledger();
+    ledger
+        .append_memory_propose(memory_propose_request("event-2", "idem-2", "note-1"))
+        .expect("memory propose succeeds");
+    ledger
+        .append_approval_decision(approval_decision_request(
+            "event-3",
+            "idem-3",
+            "approval-1",
+            "note-1",
+            ApprovalDecisionStatus::Approved,
+            None,
+        ))
+        .expect("approval decision appends");
+
+    let envelope = ledger
+        .append_memory_commit(memory_commit_request(
+            "event-4",
+            "idem-4",
+            "note-1",
+            "approval-1",
+            4,
+        ))
+        .expect("memory commit succeeds");
+
+    assert_eq!(envelope.event_type, MEMORY_COMMIT_EVENT_TYPE);
+    let note = ledger
+        .memory_note("note-1")
+        .expect("note loads")
+        .expect("note exists");
+    assert_eq!(note.status, "active");
+}
+
+fn memory_propose_request(
+    event_id: &str,
+    idempotency_key: &str,
+    note_id: &str,
+) -> MemoryProposeRequest {
+    MemoryProposeRequest::new(
+        event_id,
+        "actor-1",
+        "workspace-1",
+        idempotency_key,
+        note_id,
+        "test-title",
+        "test content",
+    )
+}
+
+fn memory_commit_request(
+    event_id: &str,
+    idempotency_key: &str,
+    note_id: &str,
+    approval_id: &str,
+    committed_revision: u64,
+) -> MemoryCommitRequest {
+    MemoryCommitRequest::new(
+        event_id,
+        "actor-1",
+        "workspace-1",
+        idempotency_key,
+        note_id,
+        approval_id,
+        committed_revision,
+    )
+}
+
+// ---- M1 E2E: Pipeline dry-run + Proposal Artifact ----
+
+#[test]
+fn m1_pipe_dry_run_produces_proposal_artifact() {
+    let ledger = initialized_ledger();
+    let initial_events = ledger.event_count().expect("event count");
+
+    // 1. pipe_list 验证 builtin 命令存在
+    let commands = ledger.pipe_list(None);
+    let ids: Vec<_> = commands.iter().map(|c| c.command_id.as_str()).collect();
+    assert!(ids.contains(&"wiki.search"));
+    assert!(ids.contains(&"citation.resolve"));
+    assert!(ids.contains(&"wiki.patch.propose"));
+
+    // 2. pipe_inspect 验证返回完整 manifest
+    let manifest = ledger
+        .pipe_inspect("wiki.search")
+        .expect("wiki.search manifest");
+    assert_eq!(manifest.command_id, "wiki.search");
+    assert!(!manifest.description.is_empty());
+    assert!(manifest.validate_schema_hash());
+
+    // 3. 构造 PipelineAst：wiki.search -> citation.resolve -> wiki.patch.propose
+    let ast = seaki_pipe::PipelineAst {
+        pipeline_id: "m1-proposal-pipe".to_string(),
+        steps: vec![
+            seaki_pipe::PipelineStep {
+                step_id: "s1".to_string(),
+                command_id: "wiki.search".to_string(),
+                input_binding: seaki_pipe::InputBinding::Constant(
+                    serde_json::json!({"keyword": "rust"}),
+                ),
+                failure_policy: seaki_pipe::FailurePolicy::FailFast,
+            },
+            seaki_pipe::PipelineStep {
+                step_id: "s2".to_string(),
+                command_id: "citation.resolve".to_string(),
+                input_binding: seaki_pipe::InputBinding::PreviousStep,
+                failure_policy: seaki_pipe::FailurePolicy::FailFast,
+            },
+            seaki_pipe::PipelineStep {
+                step_id: "s3".to_string(),
+                command_id: "wiki.patch.propose".to_string(),
+                input_binding: seaki_pipe::InputBinding::PreviousStep,
+                failure_policy: seaki_pipe::FailurePolicy::FailFast,
+            },
+        ],
+    };
+
+    // 4. 调用 pipe_dry_run
+    let result = ledger
+        .pipe_dry_run(ast, serde_json::json!({"keyword": "rust"}))
+        .expect("dry run succeeds");
+
+    // 5. 验证 DryRunResult
+    assert!(!result.events.is_empty());
+    assert!(result
+        .events
+        .iter()
+        .any(|e| matches!(e, seaki_pipe::DryRunEvent::Request { .. })));
+    assert!(result
+        .events
+        .iter()
+        .any(|e| matches!(e, seaki_pipe::DryRunEvent::StepStarted { .. })));
+    assert!(result
+        .events
+        .iter()
+        .any(|e| matches!(e, seaki_pipe::DryRunEvent::Frame { .. })));
+    assert!(result
+        .events
+        .iter()
+        .any(|e| matches!(e, seaki_pipe::DryRunEvent::Checkpoint { .. })));
+    assert!(result
+        .events
+        .iter()
+        .any(|e| matches!(e, seaki_pipe::DryRunEvent::StepCompleted { .. })));
+    assert!(result.expected_frame_count > 0);
+
+    // 6. proposal_artifact 非空（最后一步是 proposal_only）
+    let artifact = result
+        .proposal_artifact
+        .expect("proposal artifact should exist");
+    assert_eq!(artifact.patch_id, "patch-m1-proposal-pipe");
+    assert!(!artifact.diff.is_empty());
+
+    // 7. 无实际副作用（事件数不变）
+    assert_eq!(
+        ledger.event_count().expect("event count"),
+        initial_events,
+        "dry run must not write events"
+    );
+}
+
+// ---- M1 E2E: Session Search + Project Note ----
+
+#[test]
+fn m1_memory_note_lifecycle_with_source_checking() {
+    let mut ledger = initialized_ledger();
+    let mut index = Bm25CandidateIndex::new();
+    let mut store = NoteStore::new();
+    let scope = IndexScope::new("workspace-1", "account-1");
+
+    // 1. 通过 CoreLedger 创建 project note（事件持久化）
+    ledger
+        .append_memory_propose(MemoryProposeRequest::new(
+            "event-2",
+            "actor-1",
+            "workspace-1",
+            "idem-2",
+            "note-1",
+            "rust ownership",
+            "ownership and borrowing in rust",
+        ))
+        .expect("memory propose succeeds");
+
+    let note = ledger
+        .memory_note("note-1")
+        .expect("note loads")
+        .expect("note exists");
+    assert_eq!(note.status, "proposed");
+    assert_eq!(note.title, "rust ownership");
+
+    // 2. 在 NoteStore 中创建对应 note 并重建 BM25 索引（memory scope 隔离）
+    let store_note = store.create_note(
+        "rust ownership".to_string(),
+        "ownership and borrowing in rust".to_string(),
+        scope.clone(),
+    );
+    store
+        .rebuild_index(&mut index, &scope)
+        .expect("rebuild index");
+
+    // 3. 搜索 note，验证 BM25 返回结果
+    let results = store.search_notes("ownership", &scope, &index, 10);
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].note_id, store_note.note_id);
+    assert_eq!(results[0].status, seaki_memory::note::NoteStatus::Proposed);
+
+    // 4. 模拟 source_checking 冲突 -> 降级为 Conflict
+    let conflict_note = ledger
+        .memory_source_check("note-1", &["borrowing".to_string()])
+        .expect("source check succeeds");
+    assert_eq!(conflict_note.status, "conflict");
+
+    // 5. 验证 note 不可被 citation 直接引用（citation_ref 为 null）
+    let mem_scope = memory_scope(&scope);
+    let doc = index
+        .get_document(&mem_scope, &IndexCandidateId::new(&store_note.note_id))
+        .expect("indexed document exists");
+    assert!(doc.citation_ref.is_none());
+    assert_eq!(doc.kind, CandidateKind::MemoryNote);
+}
+
+#[test]
+fn m1_session_search_indexes_redacted_manifest() {
+    let mut index = Bm25CandidateIndex::new();
+    let mut sessions = SessionSearchIndex::new();
+    let scope = IndexScope::new("workspace-1", "account-1");
+
+    // 1. 创建 RedactedSessionManifest
+    let manifest = RedactedSessionManifest::new(
+        "session-1",
+        "user asked about rust ownership",
+        scope.clone(),
+        "ref://original-transcript-1",
+    );
+
+    // 2. 索引到 Bm25CandidateIndex
+    sessions
+        .index_redacted_session(manifest, &mut index)
+        .expect("index session");
+
+    // 3. 搜索返回 candidate ids
+    let results = sessions
+        .search_sessions("rust", &scope, &index, 10)
+        .expect("search succeeds");
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].session_id, "session-1");
+
+    // 4. 验证原始 transcript 不在索引中，只有 summary
+    let sess_scope = session_scope(&scope);
+    let doc = index
+        .get_document(&sess_scope, &IndexCandidateId::new("session-1"))
+        .expect("document exists");
+    assert!(doc.body.contains("user asked about rust ownership"));
+    assert!(!doc.body.contains("ref://original-transcript-1"));
+
+    // 5. 验证 TTL 过期后先标记 expired，grace period 后物理删除
+    let mut expired_manifest = RedactedSessionManifest::new(
+        "session-2",
+        "temporary session",
+        scope.clone(),
+        "ref://original-2",
+    );
+    expired_manifest.redacted_at = 0;
+    expired_manifest.ttl_seconds = 10;
+    sessions
+        .index_redacted_session(expired_manifest, &mut index)
+        .expect("index expired session");
+
+    // TTL 刚到期 -> 标记 expired
+    let actions = sessions
+        .cleanup_expired_sessions(15, &mut index)
+        .expect("cleanup");
+    assert_eq!(actions.len(), 1);
+    assert!(
+        matches!(&actions[0], SessionCleanupAction::MarkExpired { session_id } if session_id == "session-2")
+    );
+
+    // 索引中已不可搜索
+    let results_after = sessions
+        .search_sessions("temporary", &scope, &index, 10)
+        .expect("search");
+    assert!(results_after.is_empty());
+
+    // grace period 后 -> 物理删除
+    let actions = sessions
+        .cleanup_expired_sessions(15 + 7 * 24 * 60 * 60 + 1, &mut index)
+        .expect("cleanup");
+    assert!(
+        matches!(&actions[0], SessionCleanupAction::PhysicallyDelete { session_id, .. } if session_id == "session-2")
+    );
+    assert_eq!(sessions.entry_count(), 1); // session-1 仍在
+}
+
+// ---- M1 E2E: 低信任 Data Block 注入边界验证 ----
+
+#[test]
+fn m1_memory_propose_does_not_hot_replace_session_prompt() {
+    let mut ledger = initialized_ledger();
+
+    // 提交 memory.propose
+    ledger
+        .append_memory_propose(MemoryProposeRequest::new(
+            "event-2",
+            "actor-1",
+            "workspace-1",
+            "idem-2",
+            "note-1",
+            "tips",
+            "use borrow checker",
+        ))
+        .expect("memory propose succeeds");
+
+    // replay 所有事件
+    let events = ledger.replay_events_after(0).expect("replay");
+
+    // 验证只有 memory.proposed 事件，没有 prompt.replace 事件
+    let memory_events: Vec<_> = events
+        .iter()
+        .filter(|e| e.event_type == MEMORY_PROPOSE_EVENT_TYPE)
+        .collect();
+    assert_eq!(memory_events.len(), 1);
+
+    let prompt_replace_events: Vec<_> = events
+        .iter()
+        .filter(|e| e.event_type == "prompt.replace")
+        .collect();
+    assert!(
+        prompt_replace_events.is_empty(),
+        "memory.propose must not emit prompt.replace events"
+    );
 }
