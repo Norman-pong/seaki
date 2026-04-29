@@ -871,9 +871,20 @@ impl CoreLedger {
         );
 
         let candidate_search = self.search_index.search_candidates(&query);
+        let candidate_ids = if request.candidate_ids.is_empty() {
+            candidate_search.candidate_ids.clone()
+        } else {
+            let allowed: std::collections::HashSet<_> =
+                request.candidate_ids.iter().cloned().collect();
+            candidate_search
+                .candidate_ids
+                .into_iter()
+                .filter(|id| allowed.contains(&id.0))
+                .collect()
+        };
         let authorized = self
             .search_index
-            .authorize_candidates(&query, &candidate_search.candidate_ids);
+            .authorize_candidates(&query, &candidate_ids);
 
         let mut citation_refs = Vec::new();
         let mut answer_text = String::new();

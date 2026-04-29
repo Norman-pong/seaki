@@ -71,6 +71,7 @@ export interface AnswerState {
   readonly status: "composing" | "composed" | "failed";
   readonly text: string;
   readonly citationRefs: readonly CitationRefDTO[];
+  readonly committed: boolean;
   readonly degradedReason?: string;
 }
 
@@ -85,11 +86,7 @@ export interface FrontendRuntimeState {
   readonly workspace: WorkspaceState;
 }
 
-export type FrontendRuntimeEvent = FrontendEventEnvelope & {
-  readonly event_type?: string;
-  readonly payload?: unknown;
-  readonly type?: string;
-};
+export type FrontendRuntimeEvent = FrontendEventEnvelope;
 
 export type RuntimeStateListener = (state: FrontendRuntimeState) => void;
 
@@ -572,15 +569,21 @@ function reduceAnswerEvent(
           status: "composing",
           text: "",
           citationRefs: [],
+          committed: false,
         })
-      : { answerId, status: "composing", text: "", citationRefs: [] };
+      : { answerId, status: "composing", text: "", citationRefs: [], committed: false };
+
+  const draftOrTemporary = payload.draft === true || payload.temporary === true;
+  const nextStatus = draftOrTemporary ? current.status : (status as AnswerState["status"]);
+  const nextCommitted = current.committed || (!draftOrTemporary && nextStatus === "composed");
 
   const next: AnswerState = {
     ...current,
     answerId,
     text: text || current.text,
-    status: status as AnswerState["status"],
+    status: nextStatus,
     citationRefs: citationRefs.length > 0 ? citationRefs : current.citationRefs,
+    committed: nextCommitted,
     ...(degradedReason ? { degradedReason } : {}),
   };
 
