@@ -9,3 +9,6 @@ pub use fake_provider::{BindingEntry, ChannelEvent, ChannelMessagePayload, FakeC
 pub use grant::{ChannelResourceGrant, GrantError};
 pub use outbox::{FakeProviderQueryAPI, Outbox, OutboxItem, OutboxStatus, ProviderQueryResult};
 pub use webhook::{FakeWebhookVerifier, WebhookError};
+
+#[cfg(test)]
+mod tests;

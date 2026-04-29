@@ -45,7 +45,7 @@ pub fn redact_and_summarize(transcript: &str) -> (String, RedactionStatus) {
     (summary, status)
 }
 
-fn redact_transcript(text: &str) -> (String, RedactionStatus) {
+pub(crate) fn redact_transcript(text: &str) -> (String, RedactionStatus) {
     let mut has_secrets = false;
     let mut result = String::new();
 
@@ -103,7 +103,7 @@ fn redact_line(line: &str) -> String {
     "[REDACTED]".to_string()
 }
 
-fn extract_summary(redacted: &str) -> String {
+pub(crate) fn extract_summary(redacted: &str) -> String {
     const MAX_SUMMARY_CHARS: usize = 200;
     let prefix: String = redacted.chars().take(MAX_SUMMARY_CHARS).collect();
     let suffix = if redacted.chars().count() > MAX_SUMMARY_CHARS {
@@ -119,56 +119,4 @@ fn current_timestamp() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn redaction_detects_api_key_and_masks_value() {
-        let input = "user login api_key=secret123 and then done";
-        let (redacted, status) = redact_transcript(input);
-        assert_eq!(status, RedactionStatus::HasSecrets);
-        assert!(!redacted.contains("secret123"));
-        assert!(redacted.contains("api_key=[REDACTED]"));
-    }
-
-    #[test]
-    fn redaction_detects_bearer_token() {
-        let input = "Authorization: Bearer abc123.def456";
-        let (redacted, status) = redact_transcript(input);
-        assert_eq!(status, RedactionStatus::HasSecrets);
-        assert!(!redacted.contains("abc123"));
-        assert!(redacted.contains("Bearer [REDACTED]"));
-    }
-
-    #[test]
-    fn clean_text_passes_through() {
-        let input = "user asked about rust ownership";
-        let (redacted, status) = redact_transcript(input);
-        assert_eq!(status, RedactionStatus::Clean);
-        assert_eq!(redacted, input);
-    }
-
-    #[test]
-    fn summary_is_truncated_to_200_chars_with_annotation() {
-        let input = "a".repeat(250);
-        let summary = extract_summary(&input);
-        assert!(summary.contains("... [session summary]"));
-        assert!(summary.len() <= 230); // 200 + suffix
-    }
-
-    #[test]
-    fn manifest_defaults_ttl_to_30_days() {
-        let manifest = RedactedSessionManifest::new(
-            "s-1",
-            "summary",
-            seaki_index::IndexScope::new("ws", "ac"),
-            "ref://original",
-        );
-        assert_eq!(manifest.ttl_seconds, 30 * 24 * 60 * 60);
-        assert_eq!(manifest.session_id, "s-1");
-        assert_eq!(manifest.original_transcript_ref, "ref://original");
-    }
 }

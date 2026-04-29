@@ -1,0 +1,51 @@
+use crate::redaction::{
+    extract_summary, redact_transcript, RedactedSessionManifest, RedactionStatus,
+};
+use seaki_index::IndexScope;
+
+#[test]
+fn redaction_detects_api_key_and_masks_value() {
+    let input = "user login api_key=secret123 and then done";
+    let (redacted, status) = redact_transcript(input);
+    assert_eq!(status, RedactionStatus::HasSecrets);
+    assert!(!redacted.contains("secret123"));
+    assert!(redacted.contains("api_key=[REDACTED]"));
+}
+
+#[test]
+fn redaction_detects_bearer_token() {
+    let input = "Authorization: Bearer abc123.def456";
+    let (redacted, status) = redact_transcript(input);
+    assert_eq!(status, RedactionStatus::HasSecrets);
+    assert!(!redacted.contains("abc123"));
+    assert!(redacted.contains("Bearer [REDACTED]"));
+}
+
+#[test]
+fn clean_text_passes_through() {
+    let input = "user asked about rust ownership";
+    let (redacted, status) = redact_transcript(input);
+    assert_eq!(status, RedactionStatus::Clean);
+    assert_eq!(redacted, input);
+}
+
+#[test]
+fn summary_is_truncated_to_200_chars_with_annotation() {
+    let input = "a".repeat(250);
+    let summary = extract_summary(&input);
+    assert!(summary.contains("... [session summary]"));
+    assert!(summary.len() <= 230); // 200 + suffix
+}
+
+#[test]
+fn manifest_defaults_ttl_to_30_days() {
+    let manifest = RedactedSessionManifest::new(
+        "s-1",
+        "summary",
+        IndexScope::new("ws", "ac"),
+        "ref://original",
+    );
+    assert_eq!(manifest.ttl_seconds, 30 * 24 * 60 * 60);
+    assert_eq!(manifest.session_id, "s-1");
+    assert_eq!(manifest.original_transcript_ref, "ref://original");
+}

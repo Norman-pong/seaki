@@ -12,3 +12,6 @@ pub use session_search::{
     session_scope, SessionCleanupAction, SessionIndexStatus, SessionManifestEntry,
     SessionSearchCandidate, SessionSearchError, SessionSearchIndex,
 };
+
+#[cfg(test)]
+mod tests;

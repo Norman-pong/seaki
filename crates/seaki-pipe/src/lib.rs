@@ -16,3 +16,6 @@ pub use registry::{
     CommandNotFound, CommandRegistry, PipeCommandManifest, PipeCommandSummary, RegistrationError,
     ResourceQuota, SideEffectFilter, SideEffectLevel,
 };
+
+#[cfg(test)]
+mod tests;
