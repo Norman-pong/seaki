@@ -3,6 +3,11 @@ name = "seaki-daemon"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Daemon process and frontend API for Seaki"
+repository = "https://github.com/normanpong/seaki"
+readme = "../../README.md"
+keywords = ["seaki", "wiki", "local-first"]
+categories = ["development-tools"]
 
 [lib]
 path = "src/lib.rs"
@@ -15,3 +20,4 @@ serde_json.workspace = true
 [dev-dependencies]
 seaki-channel = { path = "../seaki-channel" }
 seaki-index = { path = "../seaki-index" }
+

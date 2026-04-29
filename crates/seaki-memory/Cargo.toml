@@ -3,6 +3,11 @@ name = "seaki-memory"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Memory and session management for Seaki"
+repository = "https://github.com/normanpong/seaki"
+readme = "../../README.md"
+keywords = ["seaki", "wiki", "local-first"]
+categories = ["development-tools"]
 
 [lib]
 path = "src/lib.rs"
@@ -12,3 +17,4 @@ seaki-index = { path = "../seaki-index" }
 
 [dev-dependencies]
 tempfile.workspace = true
+

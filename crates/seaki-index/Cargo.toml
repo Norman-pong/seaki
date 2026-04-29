@@ -3,6 +3,12 @@ name = "seaki-index"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "BM25 full-text search index for Seaki"
+repository = "https://github.com/normanpong/seaki"
+readme = "../../README.md"
+keywords = ["seaki", "wiki", "local-first"]
+categories = ["development-tools"]
 
 [lib]
 path = "src/lib.rs"
+

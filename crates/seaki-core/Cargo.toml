@@ -3,6 +3,11 @@ name = "seaki-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Core ledger and event sourcing engine for Seaki"
+repository = "https://github.com/normanpong/seaki"
+readme = "../../README.md"
+keywords = ["seaki", "wiki", "local-first"]
+categories = ["development-tools"]
 
 [lib]
 path = "src/lib.rs"
@@ -17,3 +22,4 @@ sha2.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+

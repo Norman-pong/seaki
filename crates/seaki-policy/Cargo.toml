@@ -3,6 +3,11 @@ name = "seaki-policy"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Capability-based security policy engine"
+repository = "https://github.com/normanpong/seaki"
+readme = "../../README.md"
+keywords = ["seaki", "wiki", "local-first"]
+categories = ["development-tools"]
 
 [lib]
 path = "src/lib.rs"
@@ -12,3 +17,4 @@ sha2.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+

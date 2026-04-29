@@ -3,6 +3,12 @@ name = "seaki-dto"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Domain type definitions and schema contracts"
+repository = "https://github.com/normanpong/seaki"
+readme = "../../README.md"
+keywords = ["seaki", "wiki", "local-first"]
+categories = ["development-tools"]
 
 [lib]
 path = "src/lib.rs"
+
