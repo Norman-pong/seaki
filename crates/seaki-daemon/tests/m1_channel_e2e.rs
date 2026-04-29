@@ -133,7 +133,7 @@ fn m1_channel_bridge_webhook_to_outbox_happy_path() {
         .resolve_unknown("o3", &NotFoundQueryAPI)
         .expect("resolve unknown");
     assert_eq!(resolved, OutboxStatus::Retry);
-    assert_eq!(outbox.get_item("o3").unwrap().status, OutboxStatus::Retry);
+    assert_eq!(outbox.item("o3").unwrap().status, OutboxStatus::Retry);
 
     // 7. 验证并发 lease 仅一人成功
     let outbox_arc = Arc::new(Outbox::new());

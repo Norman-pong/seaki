@@ -1383,7 +1383,7 @@ fn m1_memory_note_lifecycle_with_source_checking() {
     // 5. 验证 note 不可被 citation 直接引用（citation_ref 为 null）
     let mem_scope = memory_scope(&scope);
     let doc = index
-        .get_document(&mem_scope, &IndexCandidateId::new(&store_note.note_id))
+        .document(&mem_scope, &IndexCandidateId::new(&store_note.note_id))
         .expect("indexed document exists");
     assert!(doc.citation_ref.is_none());
     assert_eq!(doc.kind, CandidateKind::MemoryNote);
@@ -1418,7 +1418,7 @@ fn m1_session_search_indexes_redacted_manifest() {
     // 4. 验证原始 transcript 不在索引中，只有 summary
     let sess_scope = session_scope(&scope);
     let doc = index
-        .get_document(&sess_scope, &IndexCandidateId::new("session-1"))
+        .document(&sess_scope, &IndexCandidateId::new("session-1"))
         .expect("document exists");
     assert!(doc.body.contains("user asked about rust ownership"));
     assert!(!doc.body.contains("ref://original-transcript-1"));

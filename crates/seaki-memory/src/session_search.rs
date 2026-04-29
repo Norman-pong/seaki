@@ -110,7 +110,7 @@ impl SessionSearchIndex {
 
         let mut candidates = Vec::new();
         for candidate_id in &search.candidate_ids {
-            if let Some(doc) = index.get_document(&session_scope, candidate_id) {
+            if let Some(doc) = index.document(&session_scope, candidate_id) {
                 if doc.visibility == Visibility::Visible
                     && doc.source_status == SourceStatus::Active
                 {
@@ -186,7 +186,7 @@ impl SessionSearchIndex {
     }
 
     #[must_use]
-    pub fn get_entry(&self, session_id: &str) -> Option<&SessionManifestEntry> {
+    pub fn entry(&self, session_id: &str) -> Option<&SessionManifestEntry> {
         self.entries.get(session_id)
     }
 

@@ -21,7 +21,7 @@ fn index_does_not_save_original_transcript() {
 
     // 索引中只存在 summary，不存在 transcript ref
     let doc = bm25
-        .get_document(&session_scope(&scope()), &IndexCandidateId::new("s-1"))
+        .document(&session_scope(&scope()), &IndexCandidateId::new("s-1"))
         .unwrap();
     assert!(doc.body.contains("user asked about rust"));
     assert!(!doc.body.contains("ref://"));

@@ -29,7 +29,7 @@ fn note_lifecycle_from_proposed_to_active() {
         .transition_status(&note.note_id, NoteStatus::Active)
         .unwrap();
 
-    let n = store.get_note(&note.note_id).unwrap();
+    let n = store.note(&note.note_id).unwrap();
     assert_eq!(n.status, NoteStatus::Active);
 }
 
@@ -78,7 +78,7 @@ fn source_conflict_downgrades_note_to_conflict() {
         .unwrap();
     assert!(conflict);
 
-    let n = store.get_note(&note.note_id).unwrap();
+    let n = store.note(&note.note_id).unwrap();
     assert_eq!(n.status, NoteStatus::Conflict);
 }
 
@@ -111,7 +111,7 @@ fn note_has_no_citation_ref() {
     store.rebuild_index(&mut bm25, &scope()).unwrap();
 
     let doc = bm25
-        .get_document(
+        .document(
             &memory_scope(&scope()),
             &IndexCandidateId::new(&note.note_id),
         )

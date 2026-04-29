@@ -523,7 +523,7 @@ impl Bm25CandidateIndex {
     }
 
     #[must_use]
-    pub fn get_document(
+    pub fn document(
         &self,
         scope: &IndexScope,
         candidate_id: &IndexCandidateId,

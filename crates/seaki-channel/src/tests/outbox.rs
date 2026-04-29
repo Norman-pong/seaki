@@ -42,7 +42,7 @@ fn pending_to_leased_to_sent() {
         .transition("i1", &OutboxStatus::Sending, &OutboxStatus::Sent)
         .unwrap();
 
-    assert_eq!(outbox.get_item("i1").unwrap().status, OutboxStatus::Sent);
+    assert_eq!(outbox.item("i1").unwrap().status, OutboxStatus::Sent);
     assert!(outbox.is_idempotency_key_sent("k1"));
 }
 
@@ -56,10 +56,7 @@ fn failed_to_compensated() {
     outbox
         .transition("i1", &OutboxStatus::Failed, &OutboxStatus::Compensated)
         .unwrap();
-    assert_eq!(
-        outbox.get_item("i1").unwrap().status,
-        OutboxStatus::Compensated
-    );
+    assert_eq!(outbox.item("i1").unwrap().status, OutboxStatus::Compensated);
 }
 
 #[test]
@@ -90,7 +87,7 @@ fn unknown_must_query_before_retry() {
     };
     let resolved = outbox.resolve_unknown("i1", &api).unwrap();
     assert_eq!(resolved, OutboxStatus::Retry);
-    assert_eq!(outbox.get_item("i1").unwrap().status, OutboxStatus::Retry);
+    assert_eq!(outbox.item("i1").unwrap().status, OutboxStatus::Retry);
 }
 
 #[test]
@@ -130,6 +127,6 @@ fn concurrent_lease_only_one_wins() {
     let wins = results.iter().filter(|&&r| r).count();
     assert_eq!(wins, 1);
 
-    let item = outbox.get_item("i1").unwrap();
+    let item = outbox.item("i1").unwrap();
     assert!(item.lease_holder.is_some());
 }

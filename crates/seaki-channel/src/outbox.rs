@@ -217,7 +217,7 @@ impl Outbox {
     /// # Panics
     ///
     /// Panics if the internal mutex is poisoned.
-    pub fn get_item(&self, item_id: &str) -> Option<OutboxItem> {
+    pub fn item(&self, item_id: &str) -> Option<OutboxItem> {
         let items = self.items.lock().unwrap();
         items.get(item_id).cloned()
     }

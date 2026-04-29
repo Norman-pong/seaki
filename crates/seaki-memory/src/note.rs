@@ -136,7 +136,7 @@ impl NoteStore {
     }
 
     #[must_use]
-    pub fn get_note(&self, note_id: &str) -> Option<&ProjectNote> {
+    pub fn note(&self, note_id: &str) -> Option<&ProjectNote> {
         self.notes.get(note_id)
     }
 
@@ -210,7 +210,7 @@ impl NoteStore {
             .candidate_ids
             .iter()
             .filter_map(|id| {
-                let doc = index.get_document(&memory_scope, id)?;
+                let doc = index.document(&memory_scope, id)?;
                 if doc.visibility != Visibility::Visible
                     || doc.source_status != SourceStatus::Active
                 {
