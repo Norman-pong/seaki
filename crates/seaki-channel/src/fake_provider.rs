@@ -37,6 +37,7 @@ pub struct BindingEntry {
 /// Binding table maps `(provider_tenant_id, channel_binding_id, provider_user_id)`
 /// to a `BindingEntry`.  The provider itself **cannot** declare `seaki_actor_id`;
 /// it is resolved exclusively through the binding table.
+#[derive(Debug)]
 pub struct FakeChannelProvider {
     verifier: FakeWebhookVerifier,
     bindings: Mutex<HashMap<(String, String, String), BindingEntry>>,

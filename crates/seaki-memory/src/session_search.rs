@@ -30,6 +30,7 @@ pub enum SessionIndexStatus {
     Expired,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionManifestEntry {
     pub manifest: RedactedSessionManifest,
     pub status: SessionIndexStatus,
@@ -50,6 +51,7 @@ pub enum SessionCleanupAction {
 }
 
 /// 管理 session manifest 的内存存储与 BM25 索引交互。
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionSearchIndex {
     entries: HashMap<String, SessionManifestEntry>,
     generation_counter: u64,

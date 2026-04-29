@@ -31,6 +31,7 @@ pub struct QuarantinedDownload {
 }
 
 /// Simulated file broker that "downloads" attachments into a quarantine path.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FakeBroker {
     quarantine_root: String,
 }
@@ -99,6 +100,7 @@ impl std::fmt::Display for GrantError {
 impl std::error::Error for GrantError {}
 
 /// In-memory store for `ChannelResourceGrant`.
+#[derive(Debug)]
 pub struct ChannelResourceGrantStore {
     grants: Mutex<HashMap<String, ChannelResourceGrant>>,
 }

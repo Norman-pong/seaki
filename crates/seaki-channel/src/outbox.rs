@@ -49,6 +49,7 @@ pub trait FakeProviderQueryAPI {
     fn query(&self, provider_idempotency_key: &str) -> ProviderQueryResult;
 }
 
+#[derive(Debug)]
 pub struct Outbox {
     items: Mutex<HashMap<String, OutboxItem>>,
     attempts: Mutex<Vec<ChannelSendAttempt>>,

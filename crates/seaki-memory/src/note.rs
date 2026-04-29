@@ -74,6 +74,7 @@ pub enum NoteStoreError {
 }
 
 /// 内存中的 note 存储，负责 CRUD 与 BM25 索引交互。
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NoteStore {
     notes: HashMap<String, ProjectNote>,
     generation_counter: u64,

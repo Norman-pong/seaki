@@ -70,6 +70,7 @@ pub fn hex_encode(bytes: &[u8]) -> String {
 
 /// Verifies webhook payloads using HMAC-SHA256, timestamp tolerance and
 /// idempotency-based replay protection.
+#[derive(Debug)]
 pub struct FakeWebhookVerifier {
     secret: Vec<u8>,
     seen_event_ids: Mutex<HashMap<String, SystemTime>>,
