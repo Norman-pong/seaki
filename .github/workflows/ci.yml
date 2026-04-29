@@ -29,6 +29,9 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
 
+      - name: Generate TypeScript DTO
+        run: cargo run -p seaki-dto-codegen -- packages/dto/src/generated.ts
+
       - name: Check formatting
         run: cargo fmt --check
 
@@ -45,6 +48,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -60,6 +69,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Generate TypeScript DTO
+        run: pnpm dto:generate
 
       - name: Run checks
         run: pnpm check

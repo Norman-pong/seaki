@@ -61,9 +61,18 @@ M0-00 的前端 `pnpm check` 应聚合这些门禁：
 - `target/`
 - `node_modules/`
 - `coverage/`
+- `packages/dto/src/generated.ts`（由 `pnpm dto:generate` 从 Rust `seaki-dto` 生成）
 - 系统文件和本机编辑器缓存。
 
 当前忽略规则由 [`.gitignore`](../.gitignore) 维护。新增工具产生新的生成目录时，先确认是否属于可重建产物；若是，只补 `.gitignore`，不要把产物纳入版本控制。
+
+### DTO 生成规则
+
+`packages/dto/src/generated.ts` 是 Rust `seaki-dto-codegen` 的生成产物：
+
+- **不要手动修改**。Schema 变更应在 `crates/seaki-dto/src/lib.rs` 中完成，然后运行 `pnpm dto:generate` 重新生成。
+- **修改 Rust DTO 后必须重新生成**。`cargo test -p seaki-dto-codegen` 中的 `generated_typescript_is_current` 测试会验证生成文件是否最新；`pnpm dto:check` 也会做相同校验。
+- **新 clone 仓库后**，在运行 `pnpm typecheck` 或 `pnpm test` 前，先执行 `pnpm dto:generate` 确保 TypeScript 类型存在。
 
 ## 决策记录
 

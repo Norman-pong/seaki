@@ -27,6 +27,12 @@
 - 不随意新增依赖、目录层级或抽象；除非它们解决当前任务的真实复杂度。
 - 涉及安全边界、权限模型、source/wiki/citation 权威关系或沙盒执行链路时，优先遵循架构文档中的不变式和权威主题页。
 
+## 生成物边界
+
+- `packages/dto/src/generated.ts` 是 Rust `seaki-dto-codegen` 的生成文件，**已纳入 `.gitignore`**。
+- 修改 Rust DTO（`crates/seaki-dto/src/lib.rs`）后，必须运行 `pnpm dto:generate` 重新生成 TypeScript 类型，否则 `cargo test -p seaki-dto-codegen` 和 `pnpm dto:check` 会失败。
+- 不要手动修改 `generated.ts`；所有 schema 变更走 Rust DTO 定义 -> 重新生成 -> 提交 Rust 变更 的链路。
+
 ## 验证
 
 - 文档改动后至少检查本地 Markdown 链接是否仍可解析。

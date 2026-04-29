@@ -12,7 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
     "build": "pnpm --filter @seaki/electron build",
     "test": "vitest run",
-    "check": "pnpm dto:check && pnpm format:check && pnpm lint && pnpm typecheck && pnpm build && pnpm test"
+    "check": "pnpm dto:generate && pnpm format:check && pnpm lint && pnpm typecheck && pnpm build && pnpm test"
   },
   "dependencies": {
     "react": "19.2.5",

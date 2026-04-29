@@ -33,3 +33,6 @@ coverage/
 dist/
 out/
 target/
+
+# Generated DTO (run `pnpm dto:generate` to recreate)
+packages/dto/src/generated.ts
