@@ -1,7 +1,9 @@
 import { M0_DOMAIN_USE_CASE_METHODS } from "@seaki/dto";
 import type {
+  AnswerDTO,
   ApprovalDecisionResultDTO,
   ApprovalReviewDTO,
+  CitationResolveResultDTO,
   FrontendEventEnvelope,
   IndexStatusDTO,
   SearchResultDTO,
@@ -107,13 +109,21 @@ export interface ResolveCitationInput {
   readonly workspaceId: string;
 }
 
+export interface ComposeAnswerInput {
+  readonly query: string;
+  readonly workspaceId: string;
+}
+
 export interface DomainClient {
+  readonly answer: {
+    compose(input: ComposeAnswerInput): Promise<AnswerDTO>;
+  };
   readonly approval: {
     reviewPatch(input: ReviewPatchInput): Promise<ApprovalReviewDTO>;
     decide(input: DecideApprovalInput): Promise<ApprovalDecisionResultDTO>;
   };
   readonly citation: {
-    resolve(input: ResolveCitationInput): Promise<unknown>;
+    resolve(input: ResolveCitationInput): Promise<CitationResolveResultDTO>;
   };
   readonly files: {
     prepareUserSelected(
@@ -150,6 +160,11 @@ function request<TOutput, TInput>(
 
 export function createDomainClient(transport: TransportClient): DomainClient {
   return {
+    answer: {
+      compose(input) {
+        return request(transport, "answer.compose", input);
+      },
+    },
     approval: {
       decide(input) {
         return request(transport, DOMAIN_METHOD.approvalDecide, input);

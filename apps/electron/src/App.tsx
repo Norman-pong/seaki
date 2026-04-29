@@ -300,6 +300,30 @@ export function App() {
           </p>
         </article>
 
+        <article className="screenPanel wide">
+          <div className="paneHeader compact">
+            <div>
+              <p className="label">Answer</p>
+              <h2>{model.answer.answerId}</h2>
+            </div>
+            <Badge variant={model.answer.status === "composed" ? "secondary" : "outline"}>
+              {model.answer.status}
+            </Badge>
+          </div>
+          <p className="screenDetail">{model.answer.text}</p>
+          <div className="citationChips">
+            {model.answer.citationRefs.map((citation) => (
+              <Badge
+                key={citation.citation_id}
+                variant={citation.degraded_reason ? "outline" : "secondary"}
+              >
+                {citation.citation_id}
+                {citation.degraded_reason ? ` · ${citation.degraded_reason}` : ""}
+              </Badge>
+            ))}
+          </div>
+        </article>
+
         <article className="screenPanel">
           <div className="paneHeader compact">
             <div>

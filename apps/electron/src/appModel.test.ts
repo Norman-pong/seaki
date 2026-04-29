@@ -93,6 +93,7 @@ describe("createElectronAppModel", () => {
     const screens = createMvpScreenModel(workspaceDto("stale"));
 
     expect(Object.keys(screens).sort()).toEqual([
+      "answer",
       "citationPreview",
       "daemonStatus",
       "importQueue",

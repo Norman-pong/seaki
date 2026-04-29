@@ -732,3 +732,80 @@ fn test_event(event_id: &str, idempotency_key: &str, event_type: &str) -> InertE
         payload_summary: "Bearer abc123 token=super-secret".to_string(),
     }
 }
+
+#[test]
+fn citation_resolve_returns_source_range_for_visible_citation() {
+    let mut ledger = initialized_ledger();
+    seed_search_index(&mut ledger);
+
+    let result = ledger
+        .citation_resolve(CitationResolveRequest::new(
+            "workspace-1",
+            "account-1",
+            "citation-doc-visible",
+        ))
+        .expect("citation resolve succeeds");
+
+    assert_eq!(result.citation_id, "citation-doc-visible");
+    assert_eq!(result.source_id, "source-1");
+    assert_eq!(result.preview_target, "source_range");
+    assert!(result.degraded_reason.is_none());
+    assert!(result.source_card.is_some());
+}
+
+#[test]
+fn citation_resolve_returns_no_access_for_missing_citation() {
+    let mut ledger = initialized_ledger();
+    seed_search_index(&mut ledger);
+
+    let result = ledger
+        .citation_resolve(CitationResolveRequest::new(
+            "workspace-1",
+            "account-1",
+            "citation-missing",
+        ))
+        .expect("citation resolve succeeds");
+
+    assert_eq!(result.preview_target, "none");
+    assert!(result.degraded_reason.is_some());
+    assert!(result.source_card.is_none());
+}
+
+#[test]
+fn compose_answer_includes_only_visible_citations() {
+    let mut ledger = initialized_ledger();
+    seed_search_index(&mut ledger);
+
+    let answer = ledger
+        .compose_answer(AnswerComposerRequest::new(
+            "workspace-1",
+            "account-1",
+            "needle",
+            vec!["doc-visible".to_string()],
+        ))
+        .expect("compose answer succeeds");
+
+    assert_eq!(answer.status, "composed");
+    assert!(!answer.text.is_empty());
+    assert_eq!(answer.citation_refs.len(), 1);
+    assert_eq!(answer.citation_refs[0].citation_id, "citation-doc-visible");
+}
+
+#[test]
+fn compose_answer_returns_no_access_when_no_visible_candidates() {
+    let mut ledger = initialized_ledger();
+    seed_search_index(&mut ledger);
+
+    let answer = ledger
+        .compose_answer(AnswerComposerRequest::new(
+            "workspace-1",
+            "account-1",
+            "nonexistent",
+            vec![],
+        ))
+        .expect("compose answer succeeds");
+
+    assert_eq!(answer.status, "no_access");
+    assert!(answer.text.is_empty());
+    assert!(answer.citation_refs.is_empty());
+}

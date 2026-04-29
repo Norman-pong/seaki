@@ -153,6 +153,82 @@ pub struct SearchResultDTO {
     pub index_status: IndexStatusDTO,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CitationResolveRequest {
+    pub workspace_id: String,
+    pub account_id: String,
+    pub citation_id: String,
+}
+
+impl CitationResolveRequest {
+    pub fn new(
+        workspace_id: impl Into<String>,
+        account_id: impl Into<String>,
+        citation_id: impl Into<String>,
+    ) -> Self {
+        Self {
+            workspace_id: workspace_id.into(),
+            account_id: account_id.into(),
+            citation_id: citation_id.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CitationResolveResult {
+    pub citation_id: String,
+    pub source_id: String,
+    pub range: SourceRangeDTO,
+    pub wiki_page_id: String,
+    pub claim_id: String,
+    pub preview_target: String,
+    pub degraded_reason: Option<String>,
+    pub source_card: Option<SourceCardDTO>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceCardDTO {
+    pub source_id: String,
+    pub title: String,
+    pub origin_display: String,
+    pub range: SourceRangeDTO,
+    pub summary: String,
+    pub visibility: String,
+    pub citation_refs: Vec<CitationRefDTO>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnswerComposerRequest {
+    pub workspace_id: String,
+    pub account_id: String,
+    pub query: String,
+    pub candidate_ids: Vec<String>,
+}
+
+impl AnswerComposerRequest {
+    pub fn new(
+        workspace_id: impl Into<String>,
+        account_id: impl Into<String>,
+        query: impl Into<String>,
+        candidate_ids: Vec<String>,
+    ) -> Self {
+        Self {
+            workspace_id: workspace_id.into(),
+            account_id: account_id.into(),
+            query: query.into(),
+            candidate_ids,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnswerDTO {
+    pub answer_id: String,
+    pub text: String,
+    pub citation_refs: Vec<CitationRefDTO>,
+    pub status: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ApprovalDecisionStatus {
     Approved,
@@ -687,6 +763,153 @@ impl CoreLedger {
                 index_status: index_status.clone(),
             })
             .collect())
+    }
+
+    pub fn citation_resolve(
+        &self,
+        request: CitationResolveRequest,
+    ) -> CoreResult<CitationResolveResult> {
+        self.workspace_revision(&request.workspace_id)?
+            .ok_or_else(|| CoreError::WorkspaceMissing(request.workspace_id.clone()))?;
+
+        let scope = seaki_index::IndexScope::new(request.workspace_id, request.account_id);
+        let resolved = self
+            .search_index
+            .resolve_citation(&scope, &request.citation_id);
+
+        let Some(result) = resolved else {
+            return Ok(CitationResolveResult {
+                citation_id: request.citation_id.clone(),
+                source_id: String::new(),
+                range: SourceRangeDTO {
+                    unit: "line".to_string(),
+                    start: 0,
+                    end: 0,
+                    label: None,
+                },
+                wiki_page_id: String::new(),
+                claim_id: String::new(),
+                preview_target: "none".to_string(),
+                degraded_reason: Some("citation not found or not visible".to_string()),
+                source_card: None,
+            });
+        };
+
+        let citation_ref = result.citation_refs.first().cloned();
+        let degraded = citation_ref
+            .as_ref()
+            .and_then(|c| c.degraded_reason.clone());
+
+        let source_card = if degraded.is_some() {
+            None
+        } else {
+            Some(SourceCardDTO {
+                source_id: result.source_id.clone(),
+                title: result.title.clone(),
+                origin_display: result.title.clone(),
+                range: SourceRangeDTO {
+                    unit: "line".to_string(),
+                    start: 0,
+                    end: 0,
+                    label: None,
+                },
+                summary: result.snippet.unwrap_or_default(),
+                visibility: "visible".to_string(),
+                citation_refs: result
+                    .citation_refs
+                    .into_iter()
+                    .map(CitationRefDTO::from)
+                    .collect(),
+            })
+        };
+
+        let preview_target = if degraded.is_some() {
+            "none"
+        } else {
+            "source_range"
+        }
+        .to_string();
+
+        let citation_ref =
+            citation_ref
+                .map(CitationRefDTO::from)
+                .unwrap_or_else(|| CitationRefDTO {
+                    citation_id: request.citation_id.clone(),
+                    source_id: result.source_id.clone(),
+                    range: SourceRangeDTO {
+                        unit: "line".to_string(),
+                        start: 0,
+                        end: 0,
+                        label: None,
+                    },
+                    wiki_page_id: String::new(),
+                    claim_id: String::new(),
+                    degraded_reason: degraded.clone(),
+                });
+
+        Ok(CitationResolveResult {
+            citation_id: citation_ref.citation_id.clone(),
+            source_id: citation_ref.source_id.clone(),
+            range: citation_ref.range.clone(),
+            wiki_page_id: citation_ref.wiki_page_id.clone(),
+            claim_id: citation_ref.claim_id.clone(),
+            preview_target,
+            degraded_reason: degraded,
+            source_card,
+        })
+    }
+
+    pub fn compose_answer(&self, request: AnswerComposerRequest) -> CoreResult<AnswerDTO> {
+        self.workspace_revision(&request.workspace_id)?
+            .ok_or_else(|| CoreError::WorkspaceMissing(request.workspace_id.clone()))?;
+
+        let query = seaki_index::SearchQuery::new(
+            request.workspace_id.clone(),
+            request.account_id.clone(),
+            request.query.clone(),
+            request.candidate_ids.len().max(10),
+        );
+
+        let candidate_search = self.search_index.search_candidates(&query);
+        let authorized = self
+            .search_index
+            .authorize_candidates(&query, &candidate_search.candidate_ids);
+
+        let mut citation_refs = Vec::new();
+        let mut answer_text = String::new();
+
+        for result in authorized {
+            if result.snippet.is_none() {
+                continue;
+            }
+            for citation_ref in &result.citation_refs {
+                if citation_ref.degraded_reason.is_some() {
+                    continue;
+                }
+                citation_refs.push(CitationRefDTO::from(citation_ref.clone()));
+            }
+            if !answer_text.is_empty() {
+                answer_text.push('\n');
+            }
+            answer_text.push_str(&result.title);
+            answer_text.push_str(": ");
+            answer_text.push_str(result.snippet.as_deref().unwrap_or(""));
+        }
+
+        let status = if citation_refs.is_empty() {
+            "no_access"
+        } else if candidate_search.status != seaki_index::IndexStatus::Fresh {
+            "degraded"
+        } else {
+            "composed"
+        };
+
+        Ok(AnswerDTO {
+            answer_id: format!("answer-{}-{}", request.workspace_id, request.query),
+            text: answer_text,
+            citation_refs,
+            status: status.to_string(),
+        })
     }
 
     pub fn append_inert_event(&mut self, event: InertEvent) -> CoreResult<EventEnvelope> {

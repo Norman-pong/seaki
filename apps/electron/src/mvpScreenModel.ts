@@ -61,6 +61,13 @@ export interface SearchResultsModel {
   readonly status: "loading" | "ready" | "empty" | "stale" | "filtered_by_permission";
 }
 
+export interface AnswerModel {
+  readonly answerId: string;
+  readonly text: string;
+  readonly citationRefs: readonly CitationRefDTO[];
+  readonly status: "composed" | "degraded" | "no_access";
+}
+
 export interface CitationPreviewModel {
   readonly annotation?: {
     readonly annotationId: string;
@@ -78,6 +85,7 @@ export interface CitationPreviewModel {
 }
 
 export interface MvpScreenModel {
+  readonly answer: AnswerModel;
   readonly citationPreview: CitationPreviewModel;
   readonly daemonStatus: DaemonStatusModel;
   readonly importQueue: readonly ImportQueueItemModel[];
@@ -247,6 +255,20 @@ export function createSearchResultsModel(input: {
   };
 }
 
+export function createAnswerModel(input: {
+  readonly answerId: string;
+  readonly text: string;
+  readonly citationRefs: readonly CitationRefDTO[];
+  readonly status: "composed" | "degraded" | "no_access";
+}): AnswerModel {
+  return {
+    answerId: input.answerId,
+    text: input.text,
+    citationRefs: input.citationRefs,
+    status: input.status,
+  };
+}
+
 export function createCitationPreviewModel(
   citation: CitationRefDTO,
   preview: SourceCardDTO | null,
@@ -339,6 +361,12 @@ export function createMvpScreenModel(
   );
 
   return {
+    answer: createAnswerModel({
+      answerId: "answer_preview_1",
+      citationRefs: [staleSearchResult.citation_refs[0] as CitationRefDTO],
+      status: "composed",
+      text: "根据本机导入范围限制，当前 workspace 选择文件只能来自已授权路径。",
+    }),
     citationPreview,
     daemonStatus: {
       auditMode: resolvedWorkspace.state === "audit_readonly" ? "readonly" : "writable",

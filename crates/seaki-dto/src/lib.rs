@@ -477,6 +477,33 @@ pub const INTERFACES: &[Interface] = &[
         ],
     },
     Interface {
+        name: "AnswerDTO",
+        generic: None,
+        fields: &[
+            Field::required("answer_id", "string"),
+            Field::required("text", "string"),
+            Field::required("citation_refs", "readonly CitationRefDTO[]"),
+            Field::required("status", "\"composed\" | \"degraded\" | \"no_access\""),
+        ],
+    },
+    Interface {
+        name: "CitationResolveResultDTO",
+        generic: None,
+        fields: &[
+            Field::required("citation_id", "string"),
+            Field::required("source_id", "string"),
+            Field::required("range", "SourceRangeDTO"),
+            Field::required("wiki_page_id", "string"),
+            Field::required("claim_id", "string"),
+            Field::required(
+                "preview_target",
+                "\"source_range\" | \"wiki_anchor\" | \"none\"",
+            ),
+            Field::required("degraded_reason", "string | null"),
+            Field::optional("source_card", "SourceCardDTO | null"),
+        ],
+    },
+    Interface {
         name: "ChannelAnswerDTO",
         generic: None,
         fields: &[
@@ -646,6 +673,8 @@ mod tests {
             "ApprovalDecisionResultDTO",
             "SearchResultDTO",
             "CitationRefDTO",
+            "AnswerDTO",
+            "CitationResolveResultDTO",
             "ChannelAnswerDTO",
             "OutboxItemDTO",
         ] {

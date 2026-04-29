@@ -454,6 +454,39 @@ impl Bm25CandidateIndex {
         self.mark_status(scope, IndexStatus::Stale, None)
     }
 
+    pub fn resolve_citation(
+        &self,
+        scope: &IndexScope,
+        citation_id: &str,
+    ) -> Option<AuthorizedSearchResult> {
+        let candidate = self.documents.values().find(|entry| {
+            entry.document.scope() == *scope
+                && entry.document.is_candidate_visible()
+                && entry
+                    .document
+                    .citation_ref
+                    .as_ref()
+                    .is_some_and(|citation_ref| citation_ref.citation_id == citation_id)
+        })?;
+
+        let citation_ref = candidate.document.citation_ref.as_ref()?;
+        if citation_ref.source_id != candidate.document.source_id {
+            return None;
+        }
+
+        Some(AuthorizedSearchResult {
+            candidate_id: candidate.document.candidate_id.clone(),
+            workspace_id: candidate.document.workspace_id.clone(),
+            account_id: candidate.document.account_id.clone(),
+            source_id: candidate.document.source_id.clone(),
+            citation_id: citation_ref.citation_id.clone(),
+            kind: candidate.document.kind.clone(),
+            title: candidate.document.title.clone(),
+            snippet: Some(candidate.document.body.chars().take(160).collect()),
+            citation_refs: vec![citation_ref.clone()],
+        })
+    }
+
     pub fn mark_failed(
         &mut self,
         scope: &IndexScope,
@@ -928,6 +961,41 @@ mod tests {
         let search =
             index.search_candidates(&SearchQuery::new("workspace-a", "account-a", "needle", 10));
         assert_eq!(search.candidate_ids, vec![IndexCandidateId::new("doc-3")]);
+    }
+
+    #[test]
+    fn resolve_citation_finds_visible_candidate_by_citation_id() {
+        let mut index = Bm25CandidateIndex::new();
+        let scope = IndexScope::new("workspace-a", "account-a");
+        index
+            .replace_scope(
+                IndexGeneration::fresh(1, scope.clone(), 1, 1),
+                [document("doc-1", &scope, "needle", "visible body")],
+            )
+            .unwrap();
+
+        let resolved = index.resolve_citation(&scope, "citation-doc-1");
+        assert!(resolved.is_some());
+        let result = resolved.unwrap();
+        assert_eq!(result.citation_id, "citation-doc-1");
+        assert_eq!(result.source_id, "source-1");
+        assert_eq!(result.title, "needle");
+        assert_eq!(result.snippet.as_deref(), Some("visible body"));
+    }
+
+    #[test]
+    fn resolve_citation_returns_none_for_restricted_or_tombstoned() {
+        let mut index = Bm25CandidateIndex::new();
+        let scope = IndexScope::new("workspace-a", "account-a");
+        let mut restricted = document("doc-restricted", &scope, "needle", "restricted");
+        restricted.visibility = Visibility::Restricted;
+        index
+            .replace_scope(IndexGeneration::fresh(1, scope.clone(), 1, 1), [restricted])
+            .unwrap();
+
+        assert!(index
+            .resolve_citation(&scope, "citation-doc-restricted")
+            .is_none());
     }
 
     #[test]

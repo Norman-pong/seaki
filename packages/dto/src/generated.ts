@@ -3,7 +3,7 @@
 
 export const SCHEMA_VERSION = 1 as const;
 export const SCHEMA_HASH =
-  "df22bc5470cd33f6f37f660548c6c2fe1e29ef3ffccdf8b750f6224867227273" as const;
+  "4b1c456e9f187807a017e4806e87289ec7b7352fedd82dc9724cd75a45ff3917" as const;
 
 export type IndexStatusState = "idle" | "indexing" | "fresh" | "stale" | "error";
 
@@ -226,6 +226,24 @@ export interface SearchResultDTO {
   snippet: string | null;
   citation_refs: readonly CitationRefDTO[];
   index_status: IndexStatusDTO;
+}
+
+export interface AnswerDTO {
+  answer_id: string;
+  text: string;
+  citation_refs: readonly CitationRefDTO[];
+  status: "composed" | "degraded" | "no_access";
+}
+
+export interface CitationResolveResultDTO {
+  citation_id: string;
+  source_id: string;
+  range: SourceRangeDTO;
+  wiki_page_id: string;
+  claim_id: string;
+  preview_target: "source_range" | "wiki_anchor" | "none";
+  degraded_reason: string | null;
+  source_card?: SourceCardDTO | null;
 }
 
 export interface ChannelAnswerDTO {

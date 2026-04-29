@@ -3,6 +3,8 @@ import type {
   ApprovalDecisionResultDTO,
   ApprovalRequestDTO,
   ApprovalStatus as DTOApprovalStatus,
+  CitationRefDTO,
+  CitationResolveResultDTO,
   DaemonConnectionStatus,
   FrontendEventEnvelope,
   ImportStage as DTOImportStage,
@@ -57,10 +59,27 @@ export interface TaskRuntimeState {
   readonly stage: string;
 }
 
+export interface CitationResolveState {
+  readonly citationId: string;
+  readonly status: "resolving" | "resolved" | "failed";
+  readonly result?: CitationResolveResultDTO;
+  readonly error?: string;
+}
+
+export interface AnswerState {
+  readonly answerId: string;
+  readonly status: "composing" | "composed" | "failed";
+  readonly text: string;
+  readonly citationRefs: readonly CitationRefDTO[];
+  readonly degradedReason?: string;
+}
+
 export interface FrontendRuntimeState {
   readonly appBoot: AppBootState;
   readonly approvals: readonly ApprovalState[];
   readonly imports: readonly ImportState[];
+  readonly answers: readonly AnswerState[];
+  readonly citationResolves: readonly CitationResolveState[];
   readonly lastSeq: number;
   readonly tasks: Readonly<Record<string, TaskRuntimeState>>;
   readonly workspace: WorkspaceState;
@@ -125,6 +144,8 @@ export function createInitialRuntimeState(): FrontendRuntimeState {
     },
     approvals: [],
     imports: [],
+    answers: [],
+    citationResolves: [],
     lastSeq: 0,
     tasks: {},
     workspace: {
@@ -495,6 +516,85 @@ function reduceApprovalEvent(
   };
 }
 
+function reduceCitationResolveEvent(
+  state: FrontendRuntimeState,
+  event: FrontendRuntimeEvent,
+): FrontendRuntimeState {
+  const payload = getPayload(event);
+  const citationId = getString(payload.citation_id) ?? "";
+  const result = payload.result as CitationResolveResultDTO | undefined;
+  const error = getString(payload.error);
+  const existingIndex = state.citationResolves.findIndex((item) => item.citationId === citationId);
+  const current: CitationResolveState =
+    existingIndex >= 0
+      ? (state.citationResolves[existingIndex] ?? {
+          citationId,
+          status: "resolving",
+        })
+      : { citationId, status: "resolving" };
+
+  const next: CitationResolveState = {
+    ...current,
+    citationId,
+    status: error ? "failed" : result ? "resolved" : current.status,
+    ...(result ? { result } : {}),
+    ...(error ? { error } : {}),
+  };
+
+  const citationResolves =
+    existingIndex >= 0
+      ? state.citationResolves.map((item, index) => (index === existingIndex ? next : item))
+      : [...state.citationResolves, next];
+
+  return {
+    ...state,
+    citationResolves,
+  };
+}
+
+function reduceAnswerEvent(
+  state: FrontendRuntimeState,
+  event: FrontendRuntimeEvent,
+): FrontendRuntimeState {
+  const payload = getPayload(event);
+  const answerId = getString(payload.answer_id) ?? "";
+  const text = getString(payload.text) ?? "";
+  const status = getString(payload.status) ?? "composed";
+  const citationRefs = Array.isArray(payload.citation_refs)
+    ? (payload.citation_refs as CitationRefDTO[])
+    : [];
+  const degradedReason = getString(payload.degraded_reason);
+  const existingIndex = state.answers.findIndex((item) => item.answerId === answerId);
+  const current: AnswerState =
+    existingIndex >= 0
+      ? (state.answers[existingIndex] ?? {
+          answerId,
+          status: "composing",
+          text: "",
+          citationRefs: [],
+        })
+      : { answerId, status: "composing", text: "", citationRefs: [] };
+
+  const next: AnswerState = {
+    ...current,
+    answerId,
+    text: text || current.text,
+    status: status as AnswerState["status"],
+    citationRefs: citationRefs.length > 0 ? citationRefs : current.citationRefs,
+    ...(degradedReason ? { degradedReason } : {}),
+  };
+
+  const answers =
+    existingIndex >= 0
+      ? state.answers.map((item, index) => (index === existingIndex ? next : item))
+      : [...state.answers, next];
+
+  return {
+    ...state,
+    answers,
+  };
+}
+
 export function reduceRuntimeState(
   state: FrontendRuntimeState,
   event: FrontendRuntimeEvent,
@@ -553,6 +653,14 @@ export function reduceRuntimeState(
     eventType === "approval.expired"
   ) {
     return reduceApprovalEvent(nextState, event);
+  }
+
+  if (eventType === "citation.resolved") {
+    return reduceCitationResolveEvent(nextState, event);
+  }
+
+  if (eventType === "answer.composed") {
+    return reduceAnswerEvent(nextState, event);
   }
 
   return nextState;
