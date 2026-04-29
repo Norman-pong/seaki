@@ -13,6 +13,7 @@ import type {
   PipeCommandSummaryDTO,
   PipelineDryRunInputDTO,
   SearchResultDTO,
+  SessionRedactResultDTO,
   SessionSearchCandidateDTO,
   UserSelectedFileDTO,
   WorkspaceDTO,
@@ -40,6 +41,7 @@ const DOMAIN_METHOD = {
   pipeList: M0_DOMAIN_USE_CASE_METHODS.PIPE_LIST,
   searchQuery: M0_DOMAIN_USE_CASE_METHODS.SEARCH_QUERY,
   sessionSearch: M0_DOMAIN_USE_CASE_METHODS.SESSION_SEARCH,
+  sessionRedact: M0_DOMAIN_USE_CASE_METHODS.SESSION_REDACT,
   sourceIngestSelectedFile: M0_DOMAIN_USE_CASE_METHODS.SOURCE_INGEST_SELECTED_FILE,
   wikiReadPage: M0_DOMAIN_USE_CASE_METHODS.WIKI_READ_PAGE,
   workspaceInit: M0_DOMAIN_USE_CASE_METHODS.WORKSPACE_INIT,
@@ -180,6 +182,11 @@ export interface DomainClient {
       query: string,
       workspaceId: string,
     ): Promise<readonly SessionSearchCandidateDTO[]>;
+    sessionRedact(
+      sessionId: string,
+      transcript: string,
+      workspaceId: string,
+    ): Promise<SessionRedactResultDTO>;
   };
   readonly pipeline: {
     list(filter?: { sideEffectLevel?: string }): Promise<readonly PipeCommandSummaryDTO[]>;
@@ -255,6 +262,13 @@ export function createDomainClient(transport: TransportClient): DomainClient {
       },
       sessionSearch(query, workspaceId) {
         return request(transport, DOMAIN_METHOD.sessionSearch, { query, workspaceId });
+      },
+      sessionRedact(sessionId, transcript, workspaceId) {
+        return request(transport, DOMAIN_METHOD.sessionRedact, {
+          sessionId,
+          transcript,
+          workspaceId,
+        });
       },
     },
     pipeline: {

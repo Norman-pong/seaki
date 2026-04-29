@@ -449,28 +449,92 @@ export function App() {
           </div>
         </article>
 
+        <article className="screenPanel wide">
+          <div className="paneHeader compact">
+            <div>
+              <p className="label">SessionSearch</p>
+              <h2>{model.sessionSearch.results.length} candidates</h2>
+            </div>
+            <Badge variant={model.sessionSearch.status === "ready" ? "secondary" : "outline"}>
+              {model.sessionSearch.status}
+            </Badge>
+          </div>
+          <div className="searchList">
+            {model.sessionSearch.results.map((candidate) => (
+              <section key={candidate.session_id} className="searchItem">
+                <div>
+                  <strong>{candidate.session_id}</strong>
+                  <p>{candidate.summary}</p>
+                </div>
+                <Badge variant="outline">score {candidate.score.toFixed(2)}</Badge>
+              </section>
+            ))}
+          </div>
+          <div className="miniActions">
+            <Textarea
+              placeholder="transcript to redact"
+              rows={2}
+              value={model.sessionSearch.redactForm.transcript}
+              onChange={() => {}}
+            />
+            <Button variant="outline" size="sm" type="button">
+              Redact Session
+            </Button>
+          </div>
+        </article>
+
+        <article className="screenPanel wide">
+          <div className="paneHeader compact">
+            <div>
+              <p className="label">ProjectNoteEditor</p>
+              <h2>{model.projectNoteEditor.notes.length} notes</h2>
+            </div>
+            <Badge
+              variant={model.projectNoteEditor.status === "ready" ? "secondary" : "outline"}
+            >
+              {model.projectNoteEditor.status}
+            </Badge>
+          </div>
+          <div className="searchList">
+            {model.projectNoteEditor.notes.map((note) => (
+              <section key={note.note_id} className="searchItem">
+                <div>
+                  <strong>{note.title}</strong>
+                  <p>{note.content}</p>
+                </div>
+                <Badge variant="outline">{note.status}</Badge>
+              </section>
+            ))}
+          </div>
+          <div className="miniActions">
+            <Button variant="outline" size="sm" type="button">
+              Create Note
+            </Button>
+          </div>
+        </article>
+
         <article className="screenPanel">
           <div className="paneHeader compact">
             <div>
-              <p className="label">ChannelOutbox</p>
-              <h2>{model.channelOutbox.items.length} items</h2>
+              <p className="label">OutboxViewer</p>
+              <h2>{model.outboxViewer.items.length} items</h2>
             </div>
-            <Badge variant={model.channelOutbox.status === "ready" ? "secondary" : "outline"}>
-              {model.channelOutbox.status}
+            <Badge variant={model.outboxViewer.status === "ready" ? "secondary" : "outline"}>
+              {model.outboxViewer.status}
             </Badge>
           </div>
           <dl className="compactFacts">
             <div>
               <dt>Pending</dt>
-              <dd>{model.channelOutbox.totalPending}</dd>
+              <dd>{model.outboxViewer.totalPending}</dd>
             </div>
             <div>
               <dt>Unknown</dt>
-              <dd>{model.channelOutbox.totalUnknown}</dd>
+              <dd>{model.outboxViewer.totalUnknown}</dd>
             </div>
           </dl>
           <div className="queueList">
-            {model.channelOutbox.items.map((item) => (
+            {model.outboxViewer.items.map((item) => (
               <section key={item.outbox_id} className="queueItem">
                 <div>
                   <strong>{item.outbox_id}</strong>
@@ -484,6 +548,30 @@ export function App() {
               </section>
             ))}
           </div>
+        </article>
+
+        <article className="screenPanel">
+          <div className="paneHeader compact">
+            <div>
+              <p className="label">ChannelStatus</p>
+              <h2>{model.channelStatus.providerStatus}</h2>
+            </div>
+            <Badge
+              variant={model.channelStatus.status === "ready" ? "secondary" : "outline"}
+            >
+              {model.channelStatus.status}
+            </Badge>
+          </div>
+          <dl className="compactFacts">
+            <div>
+              <dt>Bindings</dt>
+              <dd>{model.channelStatus.bindingCount}</dd>
+            </div>
+            <div>
+              <dt>Recent Events</dt>
+              <dd>{model.channelStatus.recentEventCount}</dd>
+            </div>
+          </dl>
         </article>
       </section>
 

@@ -109,22 +109,54 @@ export interface MemoryBrowserModel {
   readonly status: "idle" | "searching" | "ready";
 }
 
-export interface ChannelOutboxModel {
+export interface SessionSearchModel {
+  readonly query: string;
+  readonly results: readonly SessionSearchCandidateDTO[];
+  readonly isRedacting: boolean;
+  readonly redactForm: {
+    readonly sessionId: string;
+    readonly transcript: string;
+  };
+  readonly status: "idle" | "searching" | "ready";
+}
+
+export interface ProjectNoteEditorModel {
+  readonly notes: readonly MemoryNoteDTO[];
+  readonly selectedNoteId: string | null;
+  readonly isEditing: boolean;
+  readonly draftTitle: string;
+  readonly draftContent: string;
+  readonly searchQuery: string;
+  readonly status: "idle" | "searching" | "ready";
+}
+
+export interface ChannelStatusModel {
+  readonly providerStatus: "connected" | "disconnected" | "mock";
+  readonly bindingCount: number;
+  readonly recentEventCount: number;
+  readonly status: "idle" | "querying" | "ready";
+}
+
+export interface OutboxViewerModel {
   readonly items: readonly OutboxItemDTO[];
   readonly totalPending: number;
   readonly totalUnknown: number;
+  readonly filter: "all" | "pending" | "leased" | "sent" | "failed" | "unknown";
   readonly status: "idle" | "querying" | "ready";
 }
 
 export interface MvpScreenModel {
   readonly answer: AnswerModel;
-  readonly channelOutbox: ChannelOutboxModel;
+  readonly channelStatus: ChannelStatusModel;
   readonly citationPreview: CitationPreviewModel;
   readonly daemonStatus: DaemonStatusModel;
   readonly importQueue: readonly ImportQueueItemModel[];
   readonly memoryBrowser: MemoryBrowserModel;
+  readonly outboxViewer: OutboxViewerModel;
   readonly pipelineDryRun: PipelineDryRunModel;
+  readonly projectNoteEditor: ProjectNoteEditorModel;
   readonly searchResults: SearchResultsModel;
+  readonly sessionSearch: SessionSearchModel;
   readonly wikiReader: WikiReaderModel;
   readonly workspaceShell: WorkspaceShellModel;
 }
@@ -442,6 +474,7 @@ const mockSessionCandidates: readonly SessionSearchCandidateDTO[] = [
     session_id: "session_1",
     summary: "Workspace initialization and source ingestion",
     redacted_at: "2026-04-28T02:00:00.000Z",
+    score: 0.85,
   },
 ];
 
@@ -492,13 +525,49 @@ export function createMemoryBrowserModel(
   };
 }
 
-export function createChannelOutboxModel(
+export function createSessionSearchModel(
+  results: readonly SessionSearchCandidateDTO[] = mockSessionCandidates,
+): SessionSearchModel {
+  return {
+    query: "",
+    results,
+    isRedacting: false,
+    redactForm: { sessionId: "", transcript: "" },
+    status: "ready",
+  };
+}
+
+export function createProjectNoteEditorModel(
+  notes: readonly MemoryNoteDTO[] = mockMemoryNotes,
+): ProjectNoteEditorModel {
+  return {
+    notes,
+    selectedNoteId: null,
+    isEditing: false,
+    draftTitle: "",
+    draftContent: "",
+    searchQuery: "",
+    status: "ready",
+  };
+}
+
+export function createChannelStatusModel(): ChannelStatusModel {
+  return {
+    providerStatus: "mock",
+    bindingCount: 3,
+    recentEventCount: 5,
+    status: "ready",
+  };
+}
+
+export function createOutboxViewerModel(
   items: readonly OutboxItemDTO[] = mockOutboxItems,
-): ChannelOutboxModel {
+): OutboxViewerModel {
   return {
     items,
     totalPending: items.filter((item) => item.state === "pending").length,
     totalUnknown: items.filter((item) => item.state === "failed").length,
+    filter: "all",
     status: "ready",
   };
 }
@@ -525,7 +594,7 @@ export function createMvpScreenModel(
       status: "composed",
       text: "根据本机导入范围限制，当前 workspace 选择文件只能来自已授权路径。",
     }),
-    channelOutbox: createChannelOutboxModel(),
+    channelStatus: createChannelStatusModel(),
     citationPreview,
     daemonStatus: {
       auditMode: resolvedWorkspace.state === "audit_readonly" ? "readonly" : "writable",
@@ -540,8 +609,11 @@ export function createMvpScreenModel(
     },
     importQueue: createImportQueueModel(),
     memoryBrowser: createMemoryBrowserModel(),
+    outboxViewer: createOutboxViewerModel(),
     pipelineDryRun: createPipelineDryRunModel(),
+    projectNoteEditor: createProjectNoteEditorModel(),
     searchResults,
+    sessionSearch: createSessionSearchModel(),
     wikiReader: createWikiReaderModel(resolvedWorkspace, [
       staleSearchResult.citation_refs[0] as CitationRefDTO,
       filteredSearchResult.citation_refs[0] as CitationRefDTO,

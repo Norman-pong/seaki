@@ -94,13 +94,16 @@ describe("createElectronAppModel", () => {
 
     expect(Object.keys(screens).sort()).toEqual([
       "answer",
-      "channelOutbox",
+      "channelStatus",
       "citationPreview",
       "daemonStatus",
       "importQueue",
       "memoryBrowser",
+      "outboxViewer",
       "pipelineDryRun",
+      "projectNoteEditor",
       "searchResults",
+      "sessionSearch",
       "wikiReader",
       "workspaceShell",
     ]);
