@@ -671,6 +671,48 @@ pub const INTERFACES: &[Interface] = &[
             Field::required("session_id", "string"),
             Field::required("summary", "string"),
             Field::required("redacted_at", "string"),
+            Field::required("score", "number"),
+        ],
+    },
+    Interface {
+        name: "SessionSearchRequestDTO",
+        generic: None,
+        fields: &[
+            Field::required("workspace_id", "string"),
+            Field::required("account_id", "string"),
+            Field::required("query", "string"),
+            Field::required("limit", "number"),
+        ],
+    },
+    Interface {
+        name: "SessionSearchResultDTO",
+        generic: None,
+        fields: &[
+            Field::required("candidate_id", "string"),
+            Field::required("session_id", "string"),
+            Field::required("summary", "string"),
+            Field::required("redacted_at", "string"),
+            Field::required("score", "number"),
+        ],
+    },
+    Interface {
+        name: "SessionRedactInputDTO",
+        generic: None,
+        fields: &[
+            Field::required("workspace_id", "string"),
+            Field::required("actor_id", "string"),
+            Field::required("session_id", "string"),
+            Field::required("transcript", "string"),
+        ],
+    },
+    Interface {
+        name: "SessionRedactResultDTO",
+        generic: None,
+        fields: &[
+            Field::required("event_id", "string"),
+            Field::required("audit_head", "string"),
+            Field::required("candidate_count", "number"),
+            Field::required("status", "string"),
         ],
     },
     Interface {
@@ -763,6 +805,10 @@ pub const M0_DOMAIN_USE_CASE_METHODS: &[MethodName] = &[
     MethodName {
         key: "SESSION_SEARCH",
         value: "memory.sessionSearch",
+    },
+    MethodName {
+        key: "SESSION_REDACT",
+        value: "memory.sessionRedact",
     },
     MethodName {
         key: "CHANNEL_OUTBOX_QUERY",

@@ -3,7 +3,7 @@
 
 export const SCHEMA_VERSION = 1 as const;
 export const SCHEMA_HASH =
-  "5289b0c53bf3908148fddbe73043199a77702989d18ac5be9bb6055fcfbabb6f" as const;
+  "5ec5dcd8eab3f74259e5c14ed3f07c65adf75ec915eda4b78fe09708d70da656" as const;
 
 export type IndexStatusState = "idle" | "indexing" | "fresh" | "stale" | "error";
 
@@ -361,6 +361,36 @@ export interface SessionSearchCandidateDTO {
   session_id: string;
   summary: string;
   redacted_at: string;
+  score: number;
+}
+
+export interface SessionSearchRequestDTO {
+  workspace_id: string;
+  account_id: string;
+  query: string;
+  limit: number;
+}
+
+export interface SessionSearchResultDTO {
+  candidate_id: string;
+  session_id: string;
+  summary: string;
+  redacted_at: string;
+  score: number;
+}
+
+export interface SessionRedactInputDTO {
+  workspace_id: string;
+  actor_id: string;
+  session_id: string;
+  transcript: string;
+}
+
+export interface SessionRedactResultDTO {
+  event_id: string;
+  audit_head: string;
+  candidate_count: number;
+  status: string;
 }
 
 export interface ChannelOutboxQueryResultDTO {
@@ -404,6 +434,7 @@ export const M0_DOMAIN_USE_CASE_METHODS = {
   MEMORY_PROPOSE: "memory.propose",
   MEMORY_SEARCH: "memory.searchNotes",
   SESSION_SEARCH: "memory.sessionSearch",
+  SESSION_REDACT: "memory.sessionRedact",
   CHANNEL_OUTBOX_QUERY: "channel.outbox.query",
 } as const;
 

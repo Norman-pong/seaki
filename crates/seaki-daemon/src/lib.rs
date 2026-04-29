@@ -2,6 +2,10 @@ pub const DAEMON_ENTRYPOINT: &str = "local-daemon-ingress";
 
 pub type SearchQueryInput = seaki_core::SearchQueryRequest;
 pub type SearchResultDTO = seaki_core::SearchResultDTO;
+pub type SessionSearchInput = seaki_core::SessionSearchRequest;
+pub type SessionSearchResultDTO = seaki_core::SessionSearchResultDTO;
+pub type SessionRedactInput = seaki_core::SessionRedactRequest;
+pub type SessionRedactResult = seaki_core::SessionRedactResultDTO;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DaemonIngressContract {
@@ -165,6 +169,30 @@ where
     ) -> Result<MemoryCommitResult, L::Error> {
         self.ledger.memory_commit(input)
     }
+
+    /// 执行会话搜索查询。
+    ///
+    /// # Errors
+    ///
+    /// 当查询执行失败时返回 `L::Error`。
+    pub fn session_search(
+        &self,
+        input: SessionSearchInput,
+    ) -> Result<Vec<SessionSearchResultDTO>, L::Error> {
+        self.ledger.session_search(input)
+    }
+
+    /// 对会话进行脱敏并加入索引。
+    ///
+    /// # Errors
+    ///
+    /// 当写入 ledger 失败时返回 `L::Error`。
+    pub fn session_redact(
+        &mut self,
+        input: SessionRedactInput,
+    ) -> Result<SessionRedactResult, L::Error> {
+        self.ledger.session_redact(input)
+    }
 }
 
 pub trait CoreLedgerApi {
@@ -246,6 +274,26 @@ pub trait CoreLedgerApi {
         &mut self,
         input: MemoryCommitInput,
     ) -> Result<MemoryCommitResult, Self::Error>;
+
+    /// 执行会话搜索查询。
+    ///
+    /// # Errors
+    ///
+    /// 当操作失败时返回 `Self::Error`。
+    fn session_search(
+        &self,
+        input: SessionSearchInput,
+    ) -> Result<Vec<SessionSearchResultDTO>, Self::Error>;
+
+    /// 对会话进行脱敏并加入索引。
+    ///
+    /// # Errors
+    ///
+    /// 当操作失败时返回 `Self::Error`。
+    fn session_redact(
+        &mut self,
+        input: SessionRedactInput,
+    ) -> Result<SessionRedactResult, Self::Error>;
 }
 
 impl CoreLedgerApi for seaki_core::CoreLedger {
@@ -372,6 +420,20 @@ impl CoreLedgerApi for seaki_core::CoreLedger {
             seq: EventSeq(envelope.seq),
             event_id: envelope.event_id,
         })
+    }
+
+    fn session_search(
+        &self,
+        input: SessionSearchInput,
+    ) -> Result<Vec<SessionSearchResultDTO>, Self::Error> {
+        seaki_core::CoreLedger::session_search(self, input)
+    }
+
+    fn session_redact(
+        &mut self,
+        input: SessionRedactInput,
+    ) -> Result<SessionRedactResult, Self::Error> {
+        seaki_core::CoreLedger::session_redact(self, input)
     }
 }
 

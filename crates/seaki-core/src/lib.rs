@@ -19,6 +19,7 @@ pub const APPROVAL_DECISION_EVENT_TYPE: &str = "approval.decided";
 pub const WIKI_PATCH_COMMIT_EVENT_TYPE: &str = "wiki.patch.commit";
 pub const MEMORY_PROPOSE_EVENT_TYPE: &str = "memory.proposed";
 pub const MEMORY_COMMIT_EVENT_TYPE: &str = "memory.committed";
+pub const SESSION_REDACTED_EVENT_TYPE: &str = "session.redacted";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreRecordKind {
@@ -94,6 +95,92 @@ pub struct WorkspaceInitResult {
     pub workspace_revision: u64,
     pub audit_head: String,
     pub index_status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionSearchRequest {
+    pub workspace_id: String,
+    pub account_id: String,
+    pub query: String,
+    pub limit: usize,
+}
+
+impl SessionSearchRequest {
+    pub fn new(
+        workspace_id: impl Into<String>,
+        account_id: impl Into<String>,
+        query: impl Into<String>,
+        limit: usize,
+    ) -> Self {
+        Self {
+            workspace_id: workspace_id.into(),
+            account_id: account_id.into(),
+            query: query.into(),
+            limit,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SessionSearchResultDTO {
+    pub candidate_id: String,
+    pub session_id: String,
+    pub summary: String,
+    pub redacted_at: String,
+    pub score: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionRedactRequest {
+    pub event_id: String,
+    pub actor_id: String,
+    pub workspace_id: String,
+    pub idempotency_key: String,
+    pub session_id: String,
+    pub transcript: String,
+}
+
+impl SessionRedactRequest {
+    pub fn new(
+        event_id: impl Into<String>,
+        actor_id: impl Into<String>,
+        workspace_id: impl Into<String>,
+        idempotency_key: impl Into<String>,
+        session_id: impl Into<String>,
+        transcript: impl Into<String>,
+    ) -> Self {
+        Self {
+            event_id: event_id.into(),
+            actor_id: actor_id.into(),
+            workspace_id: workspace_id.into(),
+            idempotency_key: idempotency_key.into(),
+            session_id: session_id.into(),
+            transcript: transcript.into(),
+        }
+    }
+
+    fn into_event(self) -> InertEvent {
+        let workspace_id = self.workspace_id.clone();
+        InertEvent {
+            event_id: self.event_id,
+            schema_version: CURRENT_EVENT_SCHEMA_VERSION,
+            payload_schema_hash: expected_payload_schema_hash(SESSION_REDACTED_EVENT_TYPE),
+            actor_id: self.actor_id,
+            scope: workspace_scope(&workspace_id),
+            workspace_id,
+            idempotency_key: self.idempotency_key,
+            event_type: SESSION_REDACTED_EVENT_TYPE.to_string(),
+            payload_summary: format!("session_id={}", self.session_id),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionRedactResultDTO {
+    pub event_id: String,
+    pub audit_head: String,
+    pub candidate_count: usize,
+    pub status: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -645,6 +732,7 @@ pub enum CoreError {
     AuditMissingForEvent(u64),
     SequenceOutOfRange(i64),
     PipelineCompose(String),
+    SessionSearch(String),
 }
 
 impl fmt::Display for CoreError {
@@ -719,6 +807,7 @@ impl fmt::Display for CoreError {
             Self::AuditMissingForEvent(seq) => write!(f, "audit missing for event seq {seq}"),
             Self::SequenceOutOfRange(seq) => write!(f, "sequence out of range: {seq}"),
             Self::PipelineCompose(reason) => write!(f, "pipeline compose error: {reason}"),
+            Self::SessionSearch(reason) => write!(f, "session search error: {reason}"),
         }
     }
 }
@@ -742,6 +831,7 @@ pub type CoreResult<T> = Result<T, CoreError>;
 pub struct CoreLedger {
     conn: Connection,
     search_index: Bm25CandidateIndex,
+    session_search_index: seaki_memory::session_search::SessionSearchIndex,
 }
 
 impl CoreLedger {
@@ -771,6 +861,7 @@ impl CoreLedger {
         let mut ledger = Self {
             conn,
             search_index: Bm25CandidateIndex::new(),
+            session_search_index: seaki_memory::session_search::SessionSearchIndex::new(),
         };
         ledger.initialize()?;
         Ok(ledger)
@@ -930,6 +1021,89 @@ impl CoreLedger {
                 index_status: index_status.clone(),
             })
             .collect())
+    }
+
+    /// 执行会话搜索查询。
+    ///
+    /// # Errors
+    /// 当工作区不存在时返回 `CoreError`。
+    pub fn session_search(
+        &self,
+        request: SessionSearchRequest,
+    ) -> CoreResult<Vec<SessionSearchResultDTO>> {
+        self.workspace_revision(&request.workspace_id)?
+            .ok_or_else(|| CoreError::WorkspaceMissing(request.workspace_id.clone()))?;
+
+        let scope = seaki_index::IndexScope::new(&request.workspace_id, &request.account_id);
+        let candidates = self
+            .session_search_index
+            .search_sessions(&request.query, &scope, &self.search_index, request.limit)
+            .map_err(|e| CoreError::SessionSearch(e.to_string()))?;
+
+        Ok(candidates
+            .into_iter()
+            .map(|c| {
+                let entry = self.session_search_index.entry(&c.session_id);
+                SessionSearchResultDTO {
+                    candidate_id: c.session_id.clone(),
+                    session_id: c.session_id.clone(),
+                    summary: entry
+                        .map(|e| e.manifest.summary.clone())
+                        .unwrap_or_default(),
+                    redacted_at: entry
+                        .map(|e| e.manifest.redacted_at.to_string())
+                        .unwrap_or_default(),
+                    score: 0.0,
+                }
+            })
+            .collect())
+    }
+
+    /// 对会话进行脱敏并加入索引。
+    ///
+    /// # Errors
+    /// 当事件校验失败、键重复、工作区不存在或数据库操作失败时返回 `CoreError`。
+    pub fn session_redact(
+        &mut self,
+        request: SessionRedactRequest,
+    ) -> CoreResult<SessionRedactResultDTO> {
+        let transcript = request.transcript.clone();
+        let session_id = request.session_id.clone();
+        let event = request.into_event();
+        validate_event(&event)?;
+        self.ensure_unique_idempotency_key(&event.idempotency_key)?;
+        self.ensure_unique_event_id(&event.event_id)?;
+
+        let revision = self
+            .workspace_revision(&event.workspace_id)?
+            .ok_or_else(|| CoreError::WorkspaceMissing(event.workspace_id.clone()))?
+            + 1;
+
+        let (summary, _status) = seaki_memory::redaction::redact_and_summarize(&transcript);
+        let scope = seaki_index::IndexScope::new(&event.workspace_id, &event.actor_id);
+        let manifest = seaki_memory::redaction::RedactedSessionManifest::new(
+            &session_id,
+            &summary,
+            scope,
+            &transcript,
+        );
+
+        let tx = self.conn.transaction()?;
+        let envelope = insert_event(&tx, sanitized_event(event))?;
+        let audit_head = append_audit_entry(&tx, &envelope)?;
+        update_workspace_after_event(&tx, &envelope.workspace_id, revision, &audit_head)?;
+        tx.commit()?;
+
+        self.session_search_index
+            .index_redacted_session(&manifest, &mut self.search_index)
+            .map_err(|e| CoreError::SessionSearch(e.to_string()))?;
+
+        Ok(SessionRedactResultDTO {
+            event_id: envelope.event_id,
+            audit_head,
+            candidate_count: self.session_search_index.entry_count(),
+            status: "indexed".to_string(),
+        })
     }
 
     /// 根据请求解析引用并返回结果。
