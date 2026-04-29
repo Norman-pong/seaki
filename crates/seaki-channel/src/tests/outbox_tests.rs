@@ -36,10 +36,10 @@ fn pending_to_leased_to_sent() {
     assert!(!outbox.lease("i1", "w2", Duration::from_secs(30), now));
 
     outbox
-        .transition("i1", OutboxStatus::Leased, OutboxStatus::Sending)
+        .transition("i1", &OutboxStatus::Leased, &OutboxStatus::Sending)
         .unwrap();
     outbox
-        .transition("i1", OutboxStatus::Sending, OutboxStatus::Sent)
+        .transition("i1", &OutboxStatus::Sending, &OutboxStatus::Sent)
         .unwrap();
 
     assert_eq!(outbox.get_item("i1").unwrap().status, OutboxStatus::Sent);
@@ -54,7 +54,7 @@ fn failed_to_compensated() {
     outbox.enqueue(i).unwrap();
 
     outbox
-        .transition("i1", OutboxStatus::Failed, OutboxStatus::Compensated)
+        .transition("i1", &OutboxStatus::Failed, &OutboxStatus::Compensated)
         .unwrap();
     assert_eq!(
         outbox.get_item("i1").unwrap().status,
@@ -68,7 +68,7 @@ fn duplicate_idempotency_key_cannot_enqueue() {
     outbox.enqueue(item("i1", "k1")).unwrap();
 
     outbox
-        .transition("i1", OutboxStatus::Pending, OutboxStatus::Sent)
+        .transition("i1", &OutboxStatus::Pending, &OutboxStatus::Sent)
         .unwrap();
 
     let result = outbox.enqueue(item("i3", "k1"));

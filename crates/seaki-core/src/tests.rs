@@ -782,7 +782,7 @@ fn compose_answer_includes_only_visible_citations() {
     seed_search_index(&mut ledger);
 
     let answer = ledger
-        .compose_answer(AnswerComposerRequest::new(
+        .compose_answer(&AnswerComposerRequest::new(
             "workspace-1",
             "account-1",
             "needle",
@@ -802,7 +802,7 @@ fn compose_answer_returns_no_access_when_no_visible_candidates() {
     seed_search_index(&mut ledger);
 
     let answer = ledger
-        .compose_answer(AnswerComposerRequest::new(
+        .compose_answer(&AnswerComposerRequest::new(
             "workspace-1",
             "account-1",
             "nonexistent",
@@ -858,7 +858,7 @@ fn m0_happy_path_source_to_citation_backed_answer() {
     assert!(resolved.source_card.is_some());
 
     let answer = ledger
-        .compose_answer(AnswerComposerRequest::new(
+        .compose_answer(&AnswerComposerRequest::new(
             "workspace-1",
             "account-1",
             "boundary",
@@ -903,7 +903,7 @@ fn m0_reject_path_citation_resolve_returns_no_access_for_tombstoned_source() {
     assert!(resolved.source_card.is_none());
 
     let answer = ledger
-        .compose_answer(AnswerComposerRequest::new(
+        .compose_answer(&AnswerComposerRequest::new(
             "workspace-1",
             "account-1",
             "hidden",
@@ -970,7 +970,7 @@ fn pipe_list_enumerates_builtin_commands() {
 #[test]
 fn pipe_list_filters_by_side_effect_level() {
     let ledger = initialized_ledger();
-    let results = ledger.pipe_list(Some(seaki_pipe::SideEffectFilter::Level(
+    let results = ledger.pipe_list(Some(&seaki_pipe::SideEffectFilter::Level(
         seaki_pipe::SideEffectLevel::None,
     )));
     assert_eq!(results.len(), 5);
@@ -1026,7 +1026,7 @@ fn pipe_dry_run_side_effect_free_chain() {
         ],
     };
     let result = ledger
-        .pipe_dry_run(ast, serde_json::json!({"keyword": "rust"}))
+        .pipe_dry_run(&ast, serde_json::json!({"keyword": "rust"}))
         .expect("dry run succeeds");
     assert!(!result.events.is_empty());
     assert!(result.proposal_artifact.is_none());
@@ -1062,7 +1062,7 @@ fn pipe_dry_run_proposal_chain_outputs_artifact() {
         ],
     };
     let result = ledger
-        .pipe_dry_run(ast, serde_json::json!({"keyword": "rust"}))
+        .pipe_dry_run(&ast, serde_json::json!({"keyword": "rust"}))
         .expect("dry run succeeds");
     assert!(
         result.proposal_artifact.is_some(),
@@ -1094,7 +1094,7 @@ fn pipe_dry_run_rejects_type_mismatch() {
             },
         ],
     };
-    let result = ledger.pipe_dry_run(ast, serde_json::json!({"keyword": "rust"}));
+    let result = ledger.pipe_dry_run(&ast, serde_json::json!({"keyword": "rust"}));
     assert!(
         matches!(result, Err(CoreError::PipelineCompose(_))),
         "expected compose error, got {:?}",
@@ -1287,7 +1287,7 @@ fn m1_pipe_dry_run_produces_proposal_artifact() {
 
     // 4. 调用 pipe_dry_run
     let result = ledger
-        .pipe_dry_run(ast, serde_json::json!({"keyword": "rust"}))
+        .pipe_dry_run(&ast, serde_json::json!({"keyword": "rust"}))
         .expect("dry run succeeds");
 
     // 5. 验证 DryRunResult
@@ -1361,8 +1361,8 @@ fn m1_memory_note_lifecycle_with_source_checking() {
     // 2. 在 NoteStore 中创建对应 note 并重建 BM25 索引（memory scope 隔离）
     let store_note = store.create_note(
         "rust ownership".to_string(),
-        "ownership and borrowing in rust".to_string(),
-        scope.clone(),
+        "ownership and borrowing in rust",
+        &scope,
     );
     store
         .rebuild_index(&mut index, &scope)
@@ -1405,7 +1405,7 @@ fn m1_session_search_indexes_redacted_manifest() {
 
     // 2. 索引到 Bm25CandidateIndex
     sessions
-        .index_redacted_session(manifest, &mut index)
+        .index_redacted_session(&manifest, &mut index)
         .expect("index session");
 
     // 3. 搜索返回 candidate ids
@@ -1433,7 +1433,7 @@ fn m1_session_search_indexes_redacted_manifest() {
     expired_manifest.redacted_at = 0;
     expired_manifest.ttl_seconds = 10;
     sessions
-        .index_redacted_session(expired_manifest, &mut index)
+        .index_redacted_session(&expired_manifest, &mut index)
         .expect("index expired session");
 
     // TTL 刚到期 -> 标记 expired

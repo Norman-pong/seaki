@@ -18,7 +18,7 @@ fn rejects_citation_when_source_or_frame_does_not_exist_without_mutating_store()
     let approval = approved_request();
 
     let error = store
-        .commit_patch(proposal, Some(approval), &sources, &frames)
+        .commit_patch(proposal, Some(&approval), &sources, &frames)
         .expect_err("missing source must reject the patch");
 
     assert!(matches!(
@@ -37,7 +37,7 @@ fn rejects_citation_when_range_exceeds_frame_without_mutating_store() {
     let approval = approved_request();
 
     let error = store
-        .commit_patch(proposal, Some(approval), &sources, &frames)
+        .commit_patch(proposal, Some(&approval), &sources, &frames)
         .expect_err("out-of-frame citation range must reject the patch");
 
     assert!(matches!(
@@ -56,7 +56,7 @@ fn rejects_new_citation_to_tombstoned_source_without_mutating_store() {
     let approval = approved_request();
 
     let error = store
-        .commit_patch(proposal, Some(approval), &sources, &frames)
+        .commit_patch(proposal, Some(&approval), &sources, &frames)
         .expect_err("new citation to tombstoned source must reject the patch");
 
     assert!(matches!(
@@ -76,7 +76,7 @@ fn rejects_base_revision_conflict_without_mutating_store() {
     let approval = approved_request();
 
     let error = store
-        .commit_patch(proposal, Some(approval), &sources, &frames)
+        .commit_patch(proposal, Some(&approval), &sources, &frames)
         .expect_err("stale base revision must reject the patch");
 
     assert!(matches!(
@@ -114,7 +114,7 @@ fn rejects_pending_approval_without_mutating_store() {
     let approval = approval_request(ApprovalStatus::Pending);
 
     let error = store
-        .commit_patch(proposal, Some(approval), &sources, &frames)
+        .commit_patch(proposal, Some(&approval), &sources, &frames)
         .expect_err("pending approval must reject the patch");
 
     assert!(matches!(
@@ -136,7 +136,7 @@ fn rejects_denied_approval_without_mutating_store() {
     let approval = approval_request(ApprovalStatus::Denied);
 
     let error = store
-        .commit_patch(proposal, Some(approval), &sources, &frames)
+        .commit_patch(proposal, Some(&approval), &sources, &frames)
         .expect_err("denied approval must reject the patch");
 
     assert!(matches!(
@@ -159,7 +159,7 @@ fn rejects_citation_claim_mismatch_without_mutating_store() {
     let approval = approved_request();
 
     let error = store
-        .commit_patch(proposal, Some(approval), &sources, &frames)
+        .commit_patch(proposal, Some(&approval), &sources, &frames)
         .expect_err("citation claim mismatch must reject the patch");
 
     assert!(matches!(error, WikiPatchError::InvalidProposal { .. }));
@@ -177,7 +177,7 @@ fn rejects_active_claim_without_declared_citation_without_mutating_store() {
     let approval = approved_request();
 
     let error = store
-        .commit_patch(proposal, Some(approval), &sources, &frames)
+        .commit_patch(proposal, Some(&approval), &sources, &frames)
         .expect_err("claim without citation must reject the patch");
 
     assert!(matches!(error, WikiPatchError::InvalidProposal { .. }));
@@ -193,7 +193,7 @@ fn rejects_restricted_or_cross_workspace_source_without_mutating_store() {
     let error = restricted_store
         .commit_patch(
             proposal_with_citation(citation("citation-1", "source-1", "frame-1", 0, 6)),
-            Some(approved_request()),
+            Some(&approved_request()),
             &restricted_sources,
             &frames,
         )
@@ -207,7 +207,7 @@ fn rejects_restricted_or_cross_workspace_source_without_mutating_store() {
     let error = cross_workspace_store
         .commit_patch(
             proposal_with_citation(citation("citation-1", "source-1", "frame-1", 0, 6)),
-            Some(approved_request()),
+            Some(&approved_request()),
             &[cross_workspace_source],
             &frames,
         )
@@ -227,7 +227,7 @@ fn rejects_approval_scope_or_decision_mismatch_without_mutating_store() {
     let error = workspace_store
         .commit_patch(
             proposal_with_citation(citation("citation-1", "source-1", "frame-1", 0, 6)),
-            Some(workspace_approval),
+            Some(&workspace_approval),
             &sources,
             &frames,
         )
@@ -247,7 +247,7 @@ fn rejects_approval_scope_or_decision_mismatch_without_mutating_store() {
     let error = requester_store
         .commit_patch(
             proposal_with_citation(citation("citation-1", "source-1", "frame-1", 0, 6)),
-            Some(requester_approval),
+            Some(&requester_approval),
             &sources,
             &frames,
         )
@@ -267,7 +267,7 @@ fn rejects_approval_scope_or_decision_mismatch_without_mutating_store() {
     let error = decision_store
         .commit_patch(
             proposal_with_citation(citation("citation-1", "source-1", "frame-1", 0, 6)),
-            Some(decision_approval),
+            Some(&decision_approval),
             &sources,
             &frames,
         )
@@ -288,7 +288,7 @@ fn wal_append_failure_keeps_store_unchanged() {
     let error = store
         .commit_patch_with_wal(
             proposal_with_citation(citation("citation-1", "source-1", "frame-1", 0, 6)),
-            Some(approved_request()),
+            Some(&approved_request()),
             &sources,
             &frames,
             |_| Err("wal unavailable"),
@@ -308,7 +308,7 @@ fn commits_valid_patch_and_records_page_claim_citation_audit_and_stale_index() {
     let approval = approved_request();
 
     let transaction = store
-        .commit_patch(proposal, Some(approval), &sources, &frames)
+        .commit_patch(proposal, Some(&approval), &sources, &frames)
         .expect("valid patch should commit");
 
     assert_eq!(store.current_revision(), 8);

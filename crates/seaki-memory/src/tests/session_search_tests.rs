@@ -17,9 +17,7 @@ fn index_does_not_save_original_transcript() {
     let mut sessions = SessionSearchIndex::new();
 
     let m = manifest("s-1", "user asked about rust");
-    sessions
-        .index_redacted_session(m.clone(), &mut bm25)
-        .unwrap();
+    sessions.index_redacted_session(&m, &mut bm25).unwrap();
 
     // 索引中只存在 summary，不存在 transcript ref
     let doc = bm25
@@ -35,10 +33,10 @@ fn search_returns_session_candidates() {
     let mut sessions = SessionSearchIndex::new();
 
     sessions
-        .index_redacted_session(manifest("s-1", "rust ownership questions"), &mut bm25)
+        .index_redacted_session(&manifest("s-1", "rust ownership questions"), &mut bm25)
         .unwrap();
     sessions
-        .index_redacted_session(manifest("s-2", "python async questions"), &mut bm25)
+        .index_redacted_session(&manifest("s-2", "python async questions"), &mut bm25)
         .unwrap();
 
     let results = sessions
@@ -58,7 +56,7 @@ fn ttl_expired_marked_then_deleted_after_grace_period() {
     let mut m = manifest("s-1", "question");
     m.redacted_at = 0;
     m.ttl_seconds = 10; // 10 秒后过期
-    sessions.index_redacted_session(m, &mut bm25).unwrap();
+    sessions.index_redacted_session(&m, &mut bm25).unwrap();
 
     // 第 1 阶段：TTL 刚到期 -> 标记 expired
     let actions = sessions.cleanup_expired_sessions(15, &mut bm25).unwrap();

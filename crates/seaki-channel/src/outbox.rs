@@ -113,17 +113,17 @@ impl Outbox {
     pub fn transition(
         &self,
         item_id: &str,
-        expected: OutboxStatus,
-        next: OutboxStatus,
+        expected: &OutboxStatus,
+        next: &OutboxStatus,
     ) -> Result<(), &'static str> {
         let key = {
             let mut items = self.items.lock().unwrap();
             let item = items.get_mut(item_id).ok_or("item not found")?;
-            if item.status != expected {
+            if item.status != *expected {
                 return Err("status mismatch");
             }
             item.status = next.clone();
-            if next == OutboxStatus::Sent {
+            if *next == OutboxStatus::Sent {
                 Some(item.idempotency_key.clone())
             } else {
                 None

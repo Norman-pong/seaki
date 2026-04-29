@@ -67,7 +67,7 @@ impl SessionSearchIndex {
     /// 将脱敏后的 session manifest 加入 BM25 索引。
     pub fn index_redacted_session(
         &mut self,
-        manifest: RedactedSessionManifest,
+        manifest: &RedactedSessionManifest,
         index: &mut Bm25CandidateIndex,
     ) -> Result<(), seaki_index::IndexError> {
         let delete_after = manifest.redacted_at.saturating_add(manifest.ttl_seconds);

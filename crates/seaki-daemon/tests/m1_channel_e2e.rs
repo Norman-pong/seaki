@@ -104,10 +104,10 @@ fn m1_channel_bridge_webhook_to_outbox_happy_path() {
 
     // 先标记为 Sent，使 idempotency key 进入已发送集合
     outbox
-        .transition("o1", OutboxStatus::Pending, OutboxStatus::Sending)
+        .transition("o1", &OutboxStatus::Pending, &OutboxStatus::Sending)
         .unwrap();
     outbox
-        .transition("o1", OutboxStatus::Sending, OutboxStatus::Sent)
+        .transition("o1", &OutboxStatus::Sending, &OutboxStatus::Sent)
         .unwrap();
 
     let mut duplicate = item.clone();

@@ -240,7 +240,7 @@ impl WikiPatchStore {
     pub fn commit_patch(
         &mut self,
         proposal: WikiPatchProposal,
-        approval: Option<ApprovalRequest>,
+        approval: Option<&ApprovalRequest>,
         sources: &[SourceManifest],
         frames: &[ParsedFrame],
     ) -> Result<WikiPatchTransaction, WikiPatchError> {
@@ -250,14 +250,14 @@ impl WikiPatchStore {
     pub fn commit_patch_with_wal<E: fmt::Display>(
         &mut self,
         proposal: WikiPatchProposal,
-        approval: Option<ApprovalRequest>,
+        approval: Option<&ApprovalRequest>,
         sources: &[SourceManifest],
         frames: &[ParsedFrame],
         append_wal: impl FnOnce(&WikiPatchWalRecord) -> Result<(), E>,
     ) -> Result<WikiPatchTransaction, WikiPatchError> {
         self.validate_base_revision(&proposal)?;
         validate_proposal_shape(&proposal)?;
-        let approval = validate_approval(&proposal, approval.as_ref())?;
+        let approval = validate_approval(&proposal, approval)?;
         validate_citations(&proposal, sources, frames)?;
 
         let committed_revision = self.current_revision + 1;

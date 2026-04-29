@@ -82,7 +82,7 @@ where
 
     pub fn pipe_list(
         &self,
-        filter: Option<seaki_pipe::SideEffectFilter>,
+        filter: Option<&seaki_pipe::SideEffectFilter>,
     ) -> Vec<seaki_pipe::PipeCommandSummary> {
         self.ledger.pipe_list(filter)
     }
@@ -96,7 +96,7 @@ where
 
     pub fn pipe_dry_run(
         &self,
-        ast: seaki_pipe::PipelineAst,
+        ast: &seaki_pipe::PipelineAst,
         initial_input: serde_json::Value,
     ) -> Result<seaki_pipe::DryRunResult, L::Error> {
         self.ledger.pipe_dry_run(ast, initial_input)
@@ -133,7 +133,7 @@ pub trait CoreLedgerApi {
 
     fn pipe_list(
         &self,
-        filter: Option<seaki_pipe::SideEffectFilter>,
+        filter: Option<&seaki_pipe::SideEffectFilter>,
     ) -> Vec<seaki_pipe::PipeCommandSummary>;
 
     fn pipe_inspect(
@@ -143,7 +143,7 @@ pub trait CoreLedgerApi {
 
     fn pipe_dry_run(
         &self,
-        ast: seaki_pipe::PipelineAst,
+        ast: &seaki_pipe::PipelineAst,
         initial_input: serde_json::Value,
     ) -> Result<seaki_pipe::DryRunResult, Self::Error>;
 
@@ -220,7 +220,7 @@ impl CoreLedgerApi for seaki_core::CoreLedger {
 
     fn pipe_list(
         &self,
-        filter: Option<seaki_pipe::SideEffectFilter>,
+        filter: Option<&seaki_pipe::SideEffectFilter>,
     ) -> Vec<seaki_pipe::PipeCommandSummary> {
         seaki_core::CoreLedger::pipe_list(self, filter)
     }
@@ -234,7 +234,7 @@ impl CoreLedgerApi for seaki_core::CoreLedger {
 
     fn pipe_dry_run(
         &self,
-        ast: seaki_pipe::PipelineAst,
+        ast: &seaki_pipe::PipelineAst,
         initial_input: serde_json::Value,
     ) -> Result<seaki_pipe::DryRunResult, Self::Error> {
         seaki_core::CoreLedger::pipe_dry_run(self, ast, initial_input)

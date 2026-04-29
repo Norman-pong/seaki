@@ -7,7 +7,7 @@ fn scope() -> IndexScope {
 
 fn store_with_note(title: &str, content: &str) -> (NoteStore, ProjectNote) {
     let mut store = NoteStore::new();
-    let note = store.create_note(title.to_string(), content.to_string(), scope());
+    let note = store.create_note(title.to_string(), content, &scope());
     (store, note)
 }
 
@@ -47,8 +47,8 @@ fn note_is_searchable_via_bm25() {
     let mut store = NoteStore::new();
     let note = store.create_note(
         "rust ownership".to_string(),
-        "ownership and borrowing in rust".to_string(),
-        scope(),
+        "ownership and borrowing in rust",
+        &scope(),
     );
 
     let mut bm25 = Bm25CandidateIndex::new();
@@ -106,7 +106,7 @@ fn no_conflict_allows_approval() {
 #[test]
 fn note_has_no_citation_ref() {
     let mut store = NoteStore::new();
-    let note = store.create_note("t".to_string(), "b".to_string(), scope());
+    let note = store.create_note("t".to_string(), "b", &scope());
     let mut bm25 = Bm25CandidateIndex::new();
     store.rebuild_index(&mut bm25, &scope()).unwrap();
 

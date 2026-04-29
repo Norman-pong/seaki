@@ -998,7 +998,7 @@ impl CoreLedger {
         })
     }
 
-    pub fn compose_answer(&self, request: AnswerComposerRequest) -> CoreResult<AnswerDTO> {
+    pub fn compose_answer(&self, request: &AnswerComposerRequest) -> CoreResult<AnswerDTO> {
         self.workspace_revision(&request.workspace_id)?
             .ok_or_else(|| CoreError::WorkspaceMissing(request.workspace_id.clone()))?;
 
@@ -1064,13 +1064,13 @@ impl CoreLedger {
 
     pub fn pipe_list(
         &self,
-        filter: Option<seaki_pipe::SideEffectFilter>,
+        filter: Option<&seaki_pipe::SideEffectFilter>,
     ) -> Vec<seaki_pipe::PipeCommandSummary> {
         let registry = seaki_pipe::CommandRegistry::builtin();
         let manifests = registry.list();
         manifests
             .into_iter()
-            .filter(|m| match &filter {
+            .filter(|m| match filter {
                 Some(seaki_pipe::SideEffectFilter::Level(level)) => m.side_effect_level == *level,
                 _ => true,
             })
@@ -1092,11 +1092,11 @@ impl CoreLedger {
 
     pub fn pipe_dry_run(
         &self,
-        ast: seaki_pipe::PipelineAst,
+        ast: &seaki_pipe::PipelineAst,
         initial_input: serde_json::Value,
     ) -> CoreResult<seaki_pipe::DryRunResult> {
         let registry = seaki_pipe::CommandRegistry::builtin();
-        let composed = seaki_pipe::compose(&ast, &registry)
+        let composed = seaki_pipe::compose(ast, &registry)
             .map_err(|e| CoreError::PipelineCompose(e.to_string()))?;
         Ok(seaki_pipe::dry_run(&composed, initial_input))
     }

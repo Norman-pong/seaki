@@ -283,7 +283,7 @@ fn pipe_dry_run_delegates_to_core() {
         ],
     };
     let result = daemon
-        .pipe_dry_run(ast, serde_json::json!({"keyword": "rust"}))
+        .pipe_dry_run(&ast, serde_json::json!({"keyword": "rust"}))
         .expect("dry run succeeds");
     assert!(
         result.proposal_artifact.is_some(),

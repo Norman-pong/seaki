@@ -672,7 +672,7 @@ impl PolicyEngine {
 
     pub fn authorize_file_read(
         &self,
-        request: FileReadPolicyRequest,
+        request: &FileReadPolicyRequest,
     ) -> PolicyResult<PolicyEvaluation> {
         let now = self.now();
         let workspace_decision = self
@@ -682,7 +682,7 @@ impl PolicyEngine {
             return Ok(PolicyEvaluation::allow(
                 PolicyReason::WorkspaceAllowlist,
                 AuditRecord::policy_decision(
-                    &request,
+                    request,
                     &workspace_decision.canonical_path,
                     now,
                     PolicyDecision::Allow,
@@ -694,7 +694,7 @@ impl PolicyEngine {
             return Ok(PolicyEvaluation::deny(
                 PolicyReason::PathDenied,
                 AuditRecord::policy_decision(
-                    &request,
+                    request,
                     &workspace_decision.canonical_path,
                     now,
                     PolicyDecision::Deny,
@@ -707,7 +707,7 @@ impl PolicyEngine {
             return Ok(PolicyEvaluation::deny(
                 workspace_decision.reason.clone(),
                 AuditRecord::policy_decision(
-                    &request,
+                    request,
                     &workspace_decision.canonical_path,
                     now,
                     PolicyDecision::Deny,
@@ -734,7 +734,7 @@ impl PolicyEngine {
             Ok(consumption) => Ok(PolicyEvaluation::allow(
                 PolicyReason::CapabilityGrant,
                 AuditRecord::capability_consumed(
-                    &request,
+                    request,
                     &workspace_decision.canonical_path,
                     capability_id,
                     Some(consumption.grant_fingerprint),
@@ -748,7 +748,7 @@ impl PolicyEngine {
                 Ok(PolicyEvaluation::deny(
                     reason.clone(),
                     AuditRecord::capability_consumed(
-                        &request,
+                        request,
                         &workspace_decision.canonical_path,
                         capability_id,
                         failure.grant_fingerprint,

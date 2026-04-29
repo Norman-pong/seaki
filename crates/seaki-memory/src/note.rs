@@ -88,18 +88,13 @@ impl NoteStore {
         }
     }
 
-    pub fn create_note(
-        &mut self,
-        title: String,
-        content: String,
-        scope: IndexScope,
-    ) -> ProjectNote {
+    pub fn create_note(&mut self, title: String, content: &str, scope: &IndexScope) -> ProjectNote {
         let note_id = format!("note-{}", next_id());
         let now = current_timestamp();
         let note = ProjectNote {
             note_id: note_id.clone(),
             title,
-            content: content.clone(),
+            content: content.to_string(),
             created_at: now,
             updated_at: now,
             scope: scope.clone(),
@@ -112,13 +107,13 @@ impl NoteStore {
     pub fn update_note(
         &mut self,
         note_id: &str,
-        content: String,
+        content: &str,
     ) -> Result<ProjectNote, NoteStoreError> {
         let note = self
             .notes
             .get_mut(note_id)
             .ok_or_else(|| NoteStoreError::NotFound(note_id.to_string()))?;
-        note.content = content;
+        note.content = content.to_string();
         note.updated_at = current_timestamp();
         Ok(note.clone())
     }

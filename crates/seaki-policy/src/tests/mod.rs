@@ -20,7 +20,7 @@ fn workspace_external_path_is_denied_by_default() {
     let engine = fixture.engine();
 
     let evaluation = engine
-        .authorize_file_read(fixture.request(external_file, None))
+        .authorize_file_read(&fixture.request(external_file, None))
         .expect("policy evaluation");
 
     assert_eq!(evaluation.decision, PolicyDecision::Deny);
@@ -36,7 +36,7 @@ fn symlink_escape_is_denied() {
     let engine = fixture.engine();
 
     let evaluation = engine
-        .authorize_file_read(fixture.request(symlink_path, None))
+        .authorize_file_read(&fixture.request(symlink_path, None))
         .expect("policy evaluation");
 
     assert_eq!(evaluation.decision, PolicyDecision::Deny);
@@ -57,7 +57,7 @@ fn workspace_denylist_overrides_allowlist() {
     let engine = PolicyEngine::new(policy);
 
     let evaluation = engine
-        .authorize_file_read(fixture.request(denied_file, None))
+        .authorize_file_read(&fixture.request(denied_file, None))
         .expect("policy evaluation");
 
     assert_eq!(evaluation.decision, PolicyDecision::Deny);
@@ -84,7 +84,7 @@ fn workspace_denylist_cannot_be_bypassed_by_grant() {
         .expect("approved grant");
 
     let evaluation = engine
-        .authorize_file_read(fixture.request_at(&denied_file, Some("cap-source"), now))
+        .authorize_file_read(&fixture.request_at(&denied_file, Some("cap-source"), now))
         .expect("policy evaluation");
 
     assert_eq!(evaluation.decision, PolicyDecision::Deny);
@@ -108,7 +108,7 @@ fn default_deny_roots_apply_to_directories_created_after_policy_init() {
     fs::write(&denied_file, "secret").expect("write denied file");
 
     let evaluation = engine
-        .authorize_file_read(fixture.request(denied_file, None))
+        .authorize_file_read(&fixture.request(denied_file, None))
         .expect("policy evaluation");
 
     assert_eq!(evaluation.decision, PolicyDecision::Deny);
@@ -128,7 +128,7 @@ fn grant_is_single_use_and_bound_to_audience() {
         .expect("approved grant");
 
     let wrong_audience = engine
-        .authorize_file_read(FileReadPolicyRequest {
+        .authorize_file_read(&FileReadPolicyRequest {
             audience: "seaki-other".to_string(),
             capability_id: Some("cap-source".to_string()),
             ..fixture.request_at(&external_file, None, now)
@@ -148,7 +148,7 @@ fn grant_is_single_use_and_bound_to_audience() {
     );
 
     let allowed = engine
-        .authorize_file_read(fixture.request_at(&external_file, Some("cap-source"), now))
+        .authorize_file_read(&fixture.request_at(&external_file, Some("cap-source"), now))
         .expect("allowed evaluation");
     assert_eq!(allowed.decision, PolicyDecision::Allow);
     assert_eq!(allowed.reason, PolicyReason::CapabilityGrant);
@@ -161,7 +161,7 @@ fn grant_is_single_use_and_bound_to_audience() {
     );
 
     let reused = engine
-        .authorize_file_read(fixture.request_at(&external_file, Some("cap-source"), now))
+        .authorize_file_read(&fixture.request_at(&external_file, Some("cap-source"), now))
         .expect("reuse evaluation");
     assert_eq!(reused.decision, PolicyDecision::Deny);
     assert_eq!(
@@ -183,7 +183,7 @@ fn expired_grant_is_rejected_without_consuming_use() {
         .expect("approved grant");
 
     let evaluation = engine
-        .authorize_file_read(fixture.request_at(&external_file, Some("cap-source"), issued_at))
+        .authorize_file_read(&fixture.request_at(&external_file, Some("cap-source"), issued_at))
         .expect("expired evaluation");
 
     assert_eq!(evaluation.decision, PolicyDecision::Deny);
@@ -257,7 +257,7 @@ fn changed_resource_version_rejects_grant_use_without_consuming_it() {
     fs::write(&external_file, "# replaced source").expect("replace source");
 
     let evaluation = engine
-        .authorize_file_read(fixture.request_at(&external_file, Some("cap-source"), now))
+        .authorize_file_read(&fixture.request_at(&external_file, Some("cap-source"), now))
         .expect("policy evaluation");
 
     assert_eq!(evaluation.decision, PolicyDecision::Deny);
@@ -299,7 +299,7 @@ fn concurrent_grant_reuse_allows_only_one_consumer() {
             thread::spawn(move || {
                 barrier.wait();
                 engine
-                    .authorize_file_read(request)
+                    .authorize_file_read(&request)
                     .expect("policy evaluation")
                     .decision
             })
