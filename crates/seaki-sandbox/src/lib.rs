@@ -193,21 +193,25 @@ impl SourceIngestRequest {
         }
     }
 
+    #[must_use]
     pub fn with_actor(mut self, actor_id: impl Into<String>) -> Self {
         self.actor_id = actor_id.into();
         self
     }
 
+    #[must_use]
     pub fn with_workspace(mut self, workspace_id: impl Into<String>) -> Self {
         self.workspace_id = workspace_id.into();
         self
     }
 
+    #[must_use]
     pub fn with_capability_id(mut self, capability_id: impl Into<String>) -> Self {
         self.capability_id = Some(capability_id.into());
         self
     }
 
+    #[must_use]
     pub fn with_policy_decision_id(mut self, policy_decision_id: impl Into<String>) -> Self {
         self.policy_decision_id = Some(policy_decision_id.into());
         self

@@ -85,6 +85,7 @@ impl FakeWebhookVerifier {
         }
     }
 
+    #[must_use]
     pub fn with_ttl(mut self, ttl: Duration) -> Self {
         self.ttl = ttl;
         self
