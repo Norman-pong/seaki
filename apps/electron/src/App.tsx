@@ -80,6 +80,9 @@ const initialModel: ElectronAppModel = {
   approval: createApprovalDiffModel(),
   ...createMvpScreenModel(),
   importStage: "selected",
+  pipelineStage: "composing",
+  memoryStage: "idle",
+  channelStage: "idle",
   workspaceStage: "initializing",
   workspaceTitle: "ws_local_preview",
 };
@@ -360,6 +363,126 @@ export function App() {
             >
               授权
             </Button>
+          </div>
+        </article>
+
+        <article className="screenPanel wide">
+          <div className="paneHeader compact">
+            <div>
+              <p className="label">PipelineDryRun</p>
+              <h2>{model.pipelineDryRun.commands.length} commands</h2>
+            </div>
+            <Badge variant={model.pipelineDryRun.status === "ready" ? "secondary" : "outline"}>
+              {model.pipelineDryRun.status}
+            </Badge>
+          </div>
+          <div className="queueList">
+            {model.pipelineDryRun.commands.map((cmd) => (
+              <section key={cmd.command_id} className="queueItem">
+                <div>
+                  <strong>{cmd.command_id}</strong>
+                  <p>{cmd.description}</p>
+                </div>
+                <Badge variant="outline">{cmd.side_effect_level}</Badge>
+              </section>
+            ))}
+          </div>
+          <div className="miniActions">
+            <Button variant="outline" size="sm" type="button">
+              Run Dry-Run
+            </Button>
+          </div>
+          <div className="queueList">
+            {model.pipelineDryRun.dryRunEvents.map((evt, index) => (
+              <section key={`evt_${index}`} className="queueItem">
+                <div>
+                  <strong>{evt.event_type}</strong>
+                  <p>step: {evt.step_id ?? "—"}</p>
+                </div>
+              </section>
+            ))}
+          </div>
+          {model.pipelineDryRun.proposalArtifact ? (
+            <p className="screenDetail">
+              Proposal: {model.pipelineDryRun.proposalArtifact.patch_id} · base{" "}
+              {model.pipelineDryRun.proposalArtifact.base_revision}
+            </p>
+          ) : null}
+        </article>
+
+        <article className="screenPanel wide">
+          <div className="paneHeader compact">
+            <div>
+              <p className="label">MemoryBrowser</p>
+              <h2>{model.memoryBrowser.notes.length} notes</h2>
+            </div>
+            <Badge variant={model.memoryBrowser.status === "ready" ? "secondary" : "outline"}>
+              {model.memoryBrowser.status}
+            </Badge>
+          </div>
+          <div className="searchList">
+            {model.memoryBrowser.notes.map((note) => (
+              <section key={note.note_id} className="searchItem">
+                <div>
+                  <strong>{note.title}</strong>
+                  <p>{note.content}</p>
+                </div>
+                <Badge variant="outline">{note.status}</Badge>
+              </section>
+            ))}
+          </div>
+          <p className="screenDetail">Session search: {model.memoryBrowser.sessionSearchQuery}</p>
+          <div className="searchList">
+            {model.memoryBrowser.sessionCandidates.map((candidate) => (
+              <section key={candidate.session_id} className="searchItem">
+                <div>
+                  <strong>{candidate.session_id}</strong>
+                  <p>{candidate.summary}</p>
+                </div>
+              </section>
+            ))}
+          </div>
+          <div className="miniActions">
+            <Button variant="outline" size="sm" type="button">
+              Propose Note
+            </Button>
+          </div>
+        </article>
+
+        <article className="screenPanel">
+          <div className="paneHeader compact">
+            <div>
+              <p className="label">ChannelOutbox</p>
+              <h2>{model.channelOutbox.items.length} items</h2>
+            </div>
+            <Badge variant={model.channelOutbox.status === "ready" ? "secondary" : "outline"}>
+              {model.channelOutbox.status}
+            </Badge>
+          </div>
+          <dl className="compactFacts">
+            <div>
+              <dt>Pending</dt>
+              <dd>{model.channelOutbox.totalPending}</dd>
+            </div>
+            <div>
+              <dt>Unknown</dt>
+              <dd>{model.channelOutbox.totalUnknown}</dd>
+            </div>
+          </dl>
+          <div className="queueList">
+            {model.channelOutbox.items.map((item) => (
+              <section key={item.outbox_id} className="queueItem">
+                <div>
+                  <strong>{item.outbox_id}</strong>
+                  <p>
+                    {item.transaction_id} · attempts {item.attempt_count}
+                  </p>
+                </div>
+                <Badge variant={item.state === "pending" ? "outline" : "destructive"}>
+                  {item.state}
+                </Badge>
+              </section>
+            ))}
           </div>
         </article>
       </section>

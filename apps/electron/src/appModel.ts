@@ -62,6 +62,9 @@ export interface ApprovalDiffModel {
 export interface ElectronAppModel extends MvpScreenModel {
   readonly approval: ApprovalDiffModel;
   readonly importStage: string;
+  readonly pipelineStage: string;
+  readonly memoryStage: string;
+  readonly channelStage: string;
   readonly workspaceStage: string;
   readonly workspaceTitle: string;
 }
@@ -158,6 +161,9 @@ export async function createElectronAppModel(): Promise<ElectronAppModel> {
     approval: createApprovalDiffModel(review),
     ...createMvpScreenModel(snapshot.workspace.dto, snapshot.appBoot.stage),
     importStage: snapshot.imports[0]?.stage ?? "selected",
+    pipelineStage: snapshot.pipelines[0]?.status ?? "composing",
+    memoryStage: snapshot.memories[0]?.status ?? "idle",
+    channelStage: snapshot.channels[0]?.outboxStatus ?? "idle",
     workspaceStage: snapshot.workspace.stage,
     workspaceTitle: snapshot.workspace.dto ? "ws_local_preview" : "ws_local_preview",
   };

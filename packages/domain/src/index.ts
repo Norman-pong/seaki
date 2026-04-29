@@ -3,10 +3,17 @@ import type {
   AnswerDTO,
   ApprovalDecisionResultDTO,
   ApprovalReviewDTO,
+  ChannelOutboxQueryResultDTO,
   CitationResolveResultDTO,
+  DryRunResultDTO,
   FrontendEventEnvelope,
   IndexStatusDTO,
+  MemoryNoteDTO,
+  MemoryProposeInputDTO,
+  PipeCommandSummaryDTO,
+  PipelineDryRunInputDTO,
   SearchResultDTO,
+  SessionSearchCandidateDTO,
   UserSelectedFileDTO,
   WorkspaceDTO,
 } from "@seaki/dto";
@@ -23,9 +30,16 @@ import type { TransportClient } from "@seaki/transport";
 const DOMAIN_METHOD = {
   approvalDecide: M0_DOMAIN_USE_CASE_METHODS.APPROVAL_DECIDE,
   approvalReviewPatch: M0_DOMAIN_USE_CASE_METHODS.APPROVAL_REVIEW_PATCH,
+  channelOutboxQuery: M0_DOMAIN_USE_CASE_METHODS.CHANNEL_OUTBOX_QUERY,
   citationResolve: M0_DOMAIN_USE_CASE_METHODS.CITATION_RESOLVE,
   filesPrepareUserSelected: M0_DOMAIN_USE_CASE_METHODS.FILES_PREPARE_USER_SELECTED,
+  memoryPropose: M0_DOMAIN_USE_CASE_METHODS.MEMORY_PROPOSE,
+  memorySearch: M0_DOMAIN_USE_CASE_METHODS.MEMORY_SEARCH,
+  pipeDryRun: M0_DOMAIN_USE_CASE_METHODS.PIPE_DRY_RUN,
+  pipeInspect: M0_DOMAIN_USE_CASE_METHODS.PIPE_INSPECT,
+  pipeList: M0_DOMAIN_USE_CASE_METHODS.PIPE_LIST,
   searchQuery: M0_DOMAIN_USE_CASE_METHODS.SEARCH_QUERY,
+  sessionSearch: M0_DOMAIN_USE_CASE_METHODS.SESSION_SEARCH,
   sourceIngestSelectedFile: M0_DOMAIN_USE_CASE_METHODS.SOURCE_INGEST_SELECTED_FILE,
   wikiReadPage: M0_DOMAIN_USE_CASE_METHODS.WIKI_READ_PAGE,
   workspaceInit: M0_DOMAIN_USE_CASE_METHODS.WORKSPACE_INIT,
@@ -114,6 +128,30 @@ export interface ComposeAnswerInput {
   readonly workspaceId: string;
 }
 
+export interface PipelineListInput {
+  readonly filter?: {
+    readonly sideEffectLevel?: string;
+  };
+}
+
+export interface PipelineInspectInput {
+  readonly commandId: string;
+}
+
+export interface MemorySearchInput {
+  readonly query: string;
+  readonly workspaceId: string;
+}
+
+export interface SessionSearchInput {
+  readonly query: string;
+  readonly workspaceId: string;
+}
+
+export interface ChannelOutboxQueryInput {
+  readonly workspaceId: string;
+}
+
 export interface DomainClient {
   readonly answer: {
     compose(input: ComposeAnswerInput): Promise<AnswerDTO>;
@@ -122,6 +160,11 @@ export interface DomainClient {
     reviewPatch(input: ReviewPatchInput): Promise<ApprovalReviewDTO>;
     decide(input: DecideApprovalInput): Promise<ApprovalDecisionResultDTO>;
   };
+  readonly channel: {
+    outbox: {
+      query(workspaceId: string): Promise<ChannelOutboxQueryResultDTO>;
+    };
+  };
   readonly citation: {
     resolve(input: ResolveCitationInput): Promise<CitationResolveResultDTO>;
   };
@@ -129,6 +172,19 @@ export interface DomainClient {
     prepareUserSelected(
       input: UserSelectedFileInput | UserSelectedFileDTO,
     ): Promise<UserSelectedFileDTO>;
+  };
+  readonly memory: {
+    propose(input: MemoryProposeInputDTO): Promise<MemoryNoteDTO>;
+    searchNotes(query: string, workspaceId: string): Promise<readonly MemoryNoteDTO[]>;
+    sessionSearch(
+      query: string,
+      workspaceId: string,
+    ): Promise<readonly SessionSearchCandidateDTO[]>;
+  };
+  readonly pipeline: {
+    list(filter?: { sideEffectLevel?: string }): Promise<readonly PipeCommandSummaryDTO[]>;
+    inspect(commandId: string): Promise<PipeCommandSummaryDTO | null>;
+    dryRun(input: PipelineDryRunInputDTO): Promise<DryRunResultDTO>;
   };
   readonly search: {
     query(input: SearchQueryInput): Promise<readonly SearchResultDTO[]>;
@@ -173,6 +229,13 @@ export function createDomainClient(transport: TransportClient): DomainClient {
         return request(transport, DOMAIN_METHOD.approvalReviewPatch, input);
       },
     },
+    channel: {
+      outbox: {
+        query(workspaceId) {
+          return request(transport, DOMAIN_METHOD.channelOutboxQuery, { workspaceId });
+        },
+      },
+    },
     citation: {
       resolve(input) {
         return request(transport, DOMAIN_METHOD.citationResolve, input);
@@ -181,6 +244,28 @@ export function createDomainClient(transport: TransportClient): DomainClient {
     files: {
       prepareUserSelected(input) {
         return request(transport, DOMAIN_METHOD.filesPrepareUserSelected, input);
+      },
+    },
+    memory: {
+      propose(input) {
+        return request(transport, DOMAIN_METHOD.memoryPropose, input);
+      },
+      searchNotes(query, workspaceId) {
+        return request(transport, DOMAIN_METHOD.memorySearch, { query, workspaceId });
+      },
+      sessionSearch(query, workspaceId) {
+        return request(transport, DOMAIN_METHOD.sessionSearch, { query, workspaceId });
+      },
+    },
+    pipeline: {
+      list(filter) {
+        return request(transport, DOMAIN_METHOD.pipeList, { filter });
+      },
+      inspect(commandId) {
+        return request(transport, DOMAIN_METHOD.pipeInspect, { commandId });
+      },
+      dryRun(input) {
+        return request(transport, DOMAIN_METHOD.pipeDryRun, input);
       },
     },
     search: {

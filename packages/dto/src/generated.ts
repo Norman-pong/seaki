@@ -3,7 +3,7 @@
 
 export const SCHEMA_VERSION = 1 as const;
 export const SCHEMA_HASH =
-  "4b1c456e9f187807a017e4806e87289ec7b7352fedd82dc9724cd75a45ff3917" as const;
+  "5289b0c53bf3908148fddbe73043199a77702989d18ac5be9bb6055fcfbabb6f" as const;
 
 export type IndexStatusState = "idle" | "indexing" | "fresh" | "stale" | "error";
 
@@ -263,6 +263,112 @@ export interface OutboxItemDTO {
   next_attempt_at: string | null;
 }
 
+export interface ChannelEvent {
+  event_id: string;
+  event_type: string;
+  provider_tenant_id: string;
+  channel_binding_id: string;
+  provider_user_id: string;
+  payload: unknown;
+  timestamp: string;
+}
+
+export interface ChannelActionGrant {
+  grant_id: string;
+  scope: string;
+  audience: string;
+  ttl: number;
+  uses_remaining: number;
+  idempotency_key: string;
+  allowed_actions: readonly string[];
+  provenance: Provenance;
+}
+
+export interface ChannelResourceGrant {
+  grant_id: string;
+  scope: string;
+  file_key: string;
+  version: string;
+  uses_remaining: number;
+  issued_at: string;
+  expires_at: string;
+}
+
+export interface Provenance {
+  transaction_id: string;
+  source_id: string;
+  citation_ids: readonly string[];
+  thread_scope: string;
+  audit_id: string;
+}
+
+export interface PipeCommandSummaryDTO {
+  command_id: string;
+  description: string;
+  side_effect_level: string;
+}
+
+export interface PipelineDryRunInputDTO {
+  pipeline_id: string;
+  steps: readonly PipelineStepInputDTO[];
+  initial_input: unknown;
+}
+
+export interface PipelineStepInputDTO {
+  step_id: string;
+  command_id: string;
+  input_binding?: string | null;
+  failure_policy?: string | null;
+}
+
+export interface DryRunResultDTO {
+  events: readonly DryRunEventDTO[];
+  expected_read_ranges: readonly string[];
+  expected_permissions: readonly string[];
+  expected_frame_count: number;
+  proposal_artifact?: PatchProposalArtifactDTO | null;
+}
+
+export interface DryRunEventDTO {
+  event_type: string;
+  step_id: string | null;
+  payload?: unknown;
+}
+
+export interface PatchProposalArtifactDTO {
+  patch_id: string;
+  base_revision: string;
+  diff: string;
+  claim_ids: readonly string[];
+}
+
+export interface MemoryNoteDTO {
+  note_id: string;
+  title: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  status: string;
+}
+
+export interface MemoryProposeInputDTO {
+  title: string;
+  content: string;
+  workspace_id: string;
+}
+
+export interface SessionSearchCandidateDTO {
+  session_id: string;
+  summary: string;
+  redacted_at: string;
+}
+
+export interface ChannelOutboxQueryResultDTO {
+  items: readonly OutboxItemDTO[];
+  total_pending: number;
+  total_unknown: number;
+}
+
 export interface FrontendEventEnvelope<TPayload = unknown> {
   event_id: string;
   schema_version: typeof SCHEMA_VERSION;
@@ -292,6 +398,13 @@ export const M0_DOMAIN_USE_CASE_METHODS = {
   WIKI_READ_PAGE: "wiki.readPage",
   SEARCH_QUERY: "search.query",
   CITATION_RESOLVE: "citation.resolve",
+  PIPE_LIST: "pipeline.list",
+  PIPE_INSPECT: "pipeline.inspect",
+  PIPE_DRY_RUN: "pipeline.dryRun",
+  MEMORY_PROPOSE: "memory.propose",
+  MEMORY_SEARCH: "memory.searchNotes",
+  SESSION_SEARCH: "memory.sessionSearch",
+  CHANNEL_OUTBOX_QUERY: "channel.outbox.query",
 } as const;
 
 export type M0DomainUseCaseMethod =

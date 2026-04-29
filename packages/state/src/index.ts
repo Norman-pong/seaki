@@ -6,9 +6,14 @@ import type {
   CitationRefDTO,
   CitationResolveResultDTO,
   DaemonConnectionStatus,
+  DryRunResultDTO,
   FrontendEventEnvelope,
   ImportStage as DTOImportStage,
   IndexStatusDTO,
+  MemoryNoteDTO,
+  OutboxItemDTO,
+  PatchProposalArtifactDTO,
+  SessionSearchCandidateDTO,
   WikiPatchProposalDTO,
   WorkspaceDTO,
 } from "@seaki/dto";
@@ -75,12 +80,36 @@ export interface AnswerState {
   readonly degradedReason?: string;
 }
 
+export interface PipelineState {
+  readonly pipelineId: string;
+  readonly status: "composing" | "dry_run_ready" | "running" | "completed" | "failed";
+  readonly dryRunResult?: DryRunResultDTO;
+  readonly proposalArtifact?: PatchProposalArtifactDTO;
+}
+
+export interface MemoryState {
+  readonly noteId?: string;
+  readonly status: "idle" | "proposing" | "proposed" | "searching" | "ready";
+  readonly notes: readonly MemoryNoteDTO[];
+  readonly sessionCandidates: readonly SessionSearchCandidateDTO[];
+}
+
+export interface ChannelState {
+  readonly outboxStatus: "idle" | "querying" | "ready";
+  readonly outboxItems: readonly OutboxItemDTO[];
+  readonly totalPending: number;
+  readonly totalUnknown: number;
+}
+
 export interface FrontendRuntimeState {
   readonly appBoot: AppBootState;
   readonly approvals: readonly ApprovalState[];
   readonly imports: readonly ImportState[];
   readonly answers: readonly AnswerState[];
   readonly citationResolves: readonly CitationResolveState[];
+  readonly pipelines: readonly PipelineState[];
+  readonly memories: readonly MemoryState[];
+  readonly channels: readonly ChannelState[];
   readonly lastSeq: number;
   readonly tasks: Readonly<Record<string, TaskRuntimeState>>;
   readonly workspace: WorkspaceState;
@@ -143,6 +172,9 @@ export function createInitialRuntimeState(): FrontendRuntimeState {
     imports: [],
     answers: [],
     citationResolves: [],
+    pipelines: [],
+    memories: [],
+    channels: [],
     lastSeq: 0,
     tasks: {},
     workspace: {
@@ -598,6 +630,128 @@ function reduceAnswerEvent(
   };
 }
 
+function reducePipelineEvent(
+  state: FrontendRuntimeState,
+  event: FrontendRuntimeEvent,
+): FrontendRuntimeState {
+  const payload = getPayload(event);
+  const pipelineId = getString(payload.pipeline_id) ?? "";
+  const status = getString(payload.status) ?? "composing";
+  const dryRunResult = payload.dry_run_result as DryRunResultDTO | undefined;
+  const proposalArtifact = payload.proposal_artifact as PatchProposalArtifactDTO | undefined;
+  const existingIndex = state.pipelines.findIndex((item) => item.pipelineId === pipelineId);
+  const current: PipelineState =
+    existingIndex >= 0
+      ? (state.pipelines[existingIndex] ?? {
+          pipelineId,
+          status: "composing",
+        })
+      : { pipelineId, status: "composing" };
+
+  const next: PipelineState = {
+    ...current,
+    pipelineId,
+    status: status as PipelineState["status"],
+    ...(dryRunResult ? { dryRunResult } : {}),
+    ...(proposalArtifact ? { proposalArtifact } : {}),
+  };
+
+  const pipelines =
+    existingIndex >= 0
+      ? state.pipelines.map((item, index) => (index === existingIndex ? next : item))
+      : [...state.pipelines, next];
+
+  return {
+    ...state,
+    pipelines,
+  };
+}
+
+function reduceMemoryEvent(
+  state: FrontendRuntimeState,
+  event: FrontendRuntimeEvent,
+): FrontendRuntimeState {
+  const payload = getPayload(event);
+  const noteId = getString(payload.note_id);
+  const status = getString(payload.status) ?? "idle";
+  const notes = Array.isArray(payload.notes) ? (payload.notes as MemoryNoteDTO[]) : undefined;
+  const sessionCandidates = Array.isArray(payload.session_candidates)
+    ? (payload.session_candidates as SessionSearchCandidateDTO[])
+    : undefined;
+  const existingIndex = state.memories.findIndex((item) => item.noteId === noteId);
+  const current: MemoryState =
+    existingIndex >= 0
+      ? (state.memories[existingIndex] ?? {
+          status: "idle",
+          notes: [],
+          sessionCandidates: [],
+        })
+      : { status: "idle", notes: [], sessionCandidates: [] };
+
+  const next: MemoryState = {
+    ...current,
+    ...(noteId ? { noteId } : {}),
+    status: status as MemoryState["status"],
+    notes: notes ?? current.notes,
+    sessionCandidates: sessionCandidates ?? current.sessionCandidates,
+  };
+
+  const memories =
+    existingIndex >= 0
+      ? state.memories.map((item, index) => (index === existingIndex ? next : item))
+      : [...state.memories, next];
+
+  return {
+    ...state,
+    memories,
+  };
+}
+
+function reduceChannelEvent(
+  state: FrontendRuntimeState,
+  event: FrontendRuntimeEvent,
+): FrontendRuntimeState {
+  const payload = getPayload(event);
+  const outboxStatus = getString(payload.outbox_status) ?? "idle";
+  const outboxItems = Array.isArray(payload.outbox_items)
+    ? (payload.outbox_items as OutboxItemDTO[])
+    : [];
+  const totalPending = typeof payload.total_pending === "number" ? payload.total_pending : 0;
+  const totalUnknown = typeof payload.total_unknown === "number" ? payload.total_unknown : 0;
+  const workspaceId = getString(event.workspace_id) ?? "";
+  const existingIndex = state.channels.findIndex(() => {
+    return workspaceId !== "";
+  });
+
+  const current: ChannelState =
+    existingIndex >= 0
+      ? (state.channels[existingIndex] ?? {
+          outboxStatus: "idle",
+          outboxItems: [],
+          totalPending: 0,
+          totalUnknown: 0,
+        })
+      : { outboxStatus: "idle", outboxItems: [], totalPending: 0, totalUnknown: 0 };
+
+  const next: ChannelState = {
+    ...current,
+    outboxStatus: outboxStatus as ChannelState["outboxStatus"],
+    outboxItems,
+    totalPending,
+    totalUnknown,
+  };
+
+  const channels =
+    existingIndex >= 0
+      ? state.channels.map((item, index) => (index === existingIndex ? next : item))
+      : [...state.channels, next];
+
+  return {
+    ...state,
+    channels,
+  };
+}
+
 export function reduceRuntimeState(
   state: FrontendRuntimeState,
   event: FrontendRuntimeEvent,
@@ -664,6 +818,18 @@ export function reduceRuntimeState(
 
   if (eventType === "answer.composed") {
     return reduceAnswerEvent(nextState, event);
+  }
+
+  if (eventType === "pipeline.dry_run.completed") {
+    return reducePipelineEvent(nextState, event);
+  }
+
+  if (eventType === "memory.proposed" || eventType === "memory.committed") {
+    return reduceMemoryEvent(nextState, event);
+  }
+
+  if (eventType === "channel.outbox.updated") {
+    return reduceChannelEvent(nextState, event);
   }
 
   return nextState;

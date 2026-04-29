@@ -1,9 +1,15 @@
 import type {
   CitationRefDTO,
   DaemonConnectionStatus,
+  DryRunEventDTO,
   ImportStage as DTOImportStage,
   IndexStatusDTO,
+  MemoryNoteDTO,
+  OutboxItemDTO,
+  PatchProposalArtifactDTO,
+  PipeCommandSummaryDTO,
   SearchResultDTO,
+  SessionSearchCandidateDTO,
   SourceCardDTO,
   SourceManifestDTO,
   UserSelectedFileDTO,
@@ -84,11 +90,40 @@ export interface CitationPreviewModel {
     | "no_access";
 }
 
+export interface PipelineDryRunModel {
+  readonly commands: readonly PipeCommandSummaryDTO[];
+  readonly status: "idle" | "dry_running" | "ready" | "failed";
+  readonly dryRunEvents: readonly DryRunEventDTO[];
+  readonly proposalArtifact: PatchProposalArtifactDTO | null;
+}
+
+export interface MemoryBrowserModel {
+  readonly notes: readonly MemoryNoteDTO[];
+  readonly sessionCandidates: readonly SessionSearchCandidateDTO[];
+  readonly searchQuery: string;
+  readonly sessionSearchQuery: string;
+  readonly proposeForm: {
+    readonly title: string;
+    readonly content: string;
+  };
+  readonly status: "idle" | "searching" | "ready";
+}
+
+export interface ChannelOutboxModel {
+  readonly items: readonly OutboxItemDTO[];
+  readonly totalPending: number;
+  readonly totalUnknown: number;
+  readonly status: "idle" | "querying" | "ready";
+}
+
 export interface MvpScreenModel {
   readonly answer: AnswerModel;
+  readonly channelOutbox: ChannelOutboxModel;
   readonly citationPreview: CitationPreviewModel;
   readonly daemonStatus: DaemonStatusModel;
   readonly importQueue: readonly ImportQueueItemModel[];
+  readonly memoryBrowser: MemoryBrowserModel;
+  readonly pipelineDryRun: PipelineDryRunModel;
   readonly searchResults: SearchResultsModel;
   readonly wikiReader: WikiReaderModel;
   readonly workspaceShell: WorkspaceShellModel;
@@ -345,6 +380,129 @@ export function createImportQueueModel(): readonly ImportQueueItemModel[] {
   ];
 }
 
+const mockPipeCommands: readonly PipeCommandSummaryDTO[] = [
+  {
+    command_id: "cmd_source_ingest",
+    description: "Ingest selected file into workspace source index",
+    side_effect_level: "write",
+  },
+  {
+    command_id: "cmd_wiki_patch",
+    description: "Propose wiki patch from parsed claims",
+    side_effect_level: "write",
+  },
+  {
+    command_id: "cmd_search_query",
+    description: "Query indexed claims and sources",
+    side_effect_level: "read",
+  },
+];
+
+const mockDryRunEvents: readonly DryRunEventDTO[] = [
+  {
+    event_type: "step.scheduled",
+    step_id: "step_1",
+    payload: { command_id: "cmd_search_query" },
+  },
+  {
+    event_type: "step.completed",
+    step_id: "step_1",
+    payload: { result_count: 3 },
+  },
+];
+
+const mockProposalArtifact: PatchProposalArtifactDTO = {
+  patch_id: "patch_dry_run_preview",
+  base_revision: "wiki_rev_0",
+  diff: "@@ wiki/preview.md @@\n- status: draft\n+ status: proposed",
+  claim_ids: ["claim_dry_run_1"],
+};
+
+const mockMemoryNotes: readonly MemoryNoteDTO[] = [
+  {
+    note_id: "note_1",
+    title: "M1 Pipeline Design",
+    content: "Pipeline dry-run allows preview before commit.",
+    created_at: "2026-04-28T00:00:00.000Z",
+    updated_at: "2026-04-28T00:00:00.000Z",
+    status: "committed",
+  },
+  {
+    note_id: "note_2",
+    title: "Channel Outbox Rules",
+    content: "Pending items must be retried with idempotency key.",
+    created_at: "2026-04-28T01:00:00.000Z",
+    updated_at: "2026-04-28T01:00:00.000Z",
+    status: "committed",
+  },
+];
+
+const mockSessionCandidates: readonly SessionSearchCandidateDTO[] = [
+  {
+    session_id: "session_1",
+    summary: "Workspace initialization and source ingestion",
+    redacted_at: "2026-04-28T02:00:00.000Z",
+  },
+];
+
+const mockOutboxItems: readonly OutboxItemDTO[] = [
+  {
+    outbox_id: "obx_1",
+    transaction_id: "txn_1",
+    state: "pending",
+    provider_idempotency_key: "idem_1",
+    attempt_count: 1,
+    next_attempt_at: "2026-04-28T03:00:00.000Z",
+  },
+  {
+    outbox_id: "obx_2",
+    transaction_id: "txn_2",
+    state: "failed",
+    provider_idempotency_key: "idem_2",
+    attempt_count: 3,
+    next_attempt_at: null,
+  },
+];
+
+export function createPipelineDryRunModel(
+  commands: readonly PipeCommandSummaryDTO[] = mockPipeCommands,
+): PipelineDryRunModel {
+  return {
+    commands,
+    status: "ready",
+    dryRunEvents: mockDryRunEvents,
+    proposalArtifact: mockProposalArtifact,
+  };
+}
+
+export function createMemoryBrowserModel(
+  notes: readonly MemoryNoteDTO[] = mockMemoryNotes,
+  sessionCandidates: readonly SessionSearchCandidateDTO[] = mockSessionCandidates,
+): MemoryBrowserModel {
+  return {
+    notes,
+    sessionCandidates,
+    searchQuery: "pipeline",
+    sessionSearchQuery: "initialization",
+    proposeForm: {
+      title: "",
+      content: "",
+    },
+    status: "ready",
+  };
+}
+
+export function createChannelOutboxModel(
+  items: readonly OutboxItemDTO[] = mockOutboxItems,
+): ChannelOutboxModel {
+  return {
+    items,
+    totalPending: items.filter((item) => item.state === "pending").length,
+    totalUnknown: items.filter((item) => item.state === "failed").length,
+    status: "ready",
+  };
+}
+
 export function createMvpScreenModel(
   workspace: WorkspaceDTO | undefined = previewWorkspace,
   daemonStage: DaemonConnectionStatus = "daemon.ready",
@@ -367,6 +525,7 @@ export function createMvpScreenModel(
       status: "composed",
       text: "根据本机导入范围限制，当前 workspace 选择文件只能来自已授权路径。",
     }),
+    channelOutbox: createChannelOutboxModel(),
     citationPreview,
     daemonStatus: {
       auditMode: resolvedWorkspace.state === "audit_readonly" ? "readonly" : "writable",
@@ -380,6 +539,8 @@ export function createMvpScreenModel(
       status: resolvedWorkspace.state === "degraded" ? "daemon.degraded" : daemonStage,
     },
     importQueue: createImportQueueModel(),
+    memoryBrowser: createMemoryBrowserModel(),
+    pipelineDryRun: createPipelineDryRunModel(),
     searchResults,
     wikiReader: createWikiReaderModel(resolvedWorkspace, [
       staleSearchResult.citation_refs[0] as CitationRefDTO,
