@@ -213,6 +213,7 @@ fn hex_digest(bytes: &[u8]) -> String {
     output
 }
 
+#[allow(clippy::too_many_lines)]
 fn builtin_commands() -> Vec<PipeCommandManifest> {
     let input_keyword = serde_json::json!({
         "type": "object",

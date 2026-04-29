@@ -5,6 +5,15 @@ pub mod webhook;
 
 pub const SCHEMA_VERSION: u32 = 1;
 
+pub use fake_provider::{
+    BindingEntry, ChannelEvent, ChannelMessagePayload, FakeChannelProvider,
+};
+pub use grant::{ChannelResourceGrant, GrantError};
+pub use outbox::{
+    FakeProviderQueryAPI, Outbox, OutboxItem, OutboxStatus, ProviderQueryResult,
+};
+pub use webhook::{FakeWebhookVerifier, WebhookError};
+
 #[cfg(test)]
 mod tests {
     use super::fake_provider::{BindingEntry, ChannelMessagePayload, FakeChannelProvider};
