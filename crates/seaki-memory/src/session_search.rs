@@ -65,6 +65,10 @@ impl SessionSearchIndex {
     }
 
     /// 将脱敏后的 session manifest 加入 BM25 索引。
+    ///
+    /// # Errors
+    ///
+    /// 当 BM25 索引替换失败时返回 [`seaki_index::IndexError`]。
     pub fn index_redacted_session(
         &mut self,
         manifest: &RedactedSessionManifest,
@@ -84,6 +88,10 @@ impl SessionSearchIndex {
     }
 
     /// 搜索会话。使用与 wiki source 分离的 session scope，避免 `replace_scope` 互相覆盖。
+    ///
+    /// # Errors
+    ///
+    /// 保留 `Result` 以兼容未来索引错误；当前实现始终返回 `Ok`。
     pub fn search_sessions(
         &self,
         query_text: &str,
@@ -118,6 +126,10 @@ impl SessionSearchIndex {
 
     /// TTL 过期条目先标记 `expired`，7 天后物理删除并返回清理动作。
     /// 调用方应在收到 `PhysicallyDelete` 后生成 `AuditEvent`。
+    ///
+    /// # Errors
+    ///
+    /// 当重建 BM25 索引失败时返回 [`seaki_index::IndexError`]。
     pub fn cleanup_expired_sessions(
         &mut self,
         now: u64,

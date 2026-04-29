@@ -299,6 +299,11 @@ impl Bm25CandidateIndex {
         }
     }
 
+    /// 替换指定 scope 下的全部文档，并更新 generation。
+    ///
+    /// # Errors
+    ///
+    /// 当文档的 scope 与 generation 的 scope 不匹配，或 scope 不存在时返回错误。
     pub fn replace_scope(
         &mut self,
         generation: IndexGeneration,
@@ -428,6 +433,11 @@ impl Bm25CandidateIndex {
             .collect()
     }
 
+    /// 修改指定候选的可见性，并更新对应 scope 的索引状态。
+    ///
+    /// # Errors
+    ///
+    /// 当指定的 scope 不存在时返回错误。
     pub fn mark_visibility(
         &mut self,
         scope: &IndexScope,
@@ -448,6 +458,11 @@ impl Bm25CandidateIndex {
         }
     }
 
+    /// 将指定 source 下的所有文档标记为 tombstoned。
+    ///
+    /// # Errors
+    ///
+    /// 当指定的 scope 不存在时返回错误。
     pub fn mark_source_tombstoned(
         &mut self,
         scope: &IndexScope,
@@ -463,6 +478,11 @@ impl Bm25CandidateIndex {
         self.mark_status(scope, IndexStatus::CleanupRequired, None)
     }
 
+    /// 将指定 scope 标记为 stale。
+    ///
+    /// # Errors
+    ///
+    /// 当指定的 scope 不存在时返回错误。
     pub fn mark_stale(&mut self, scope: &IndexScope) -> Result<(), IndexError> {
         self.ensure_scope(scope)?;
         self.mark_status(scope, IndexStatus::Stale, None)
@@ -516,6 +536,11 @@ impl Bm25CandidateIndex {
             .map(|entry| &entry.document)
     }
 
+    /// 将指定 scope 标记为 failed，并记录失败原因。
+    ///
+    /// # Errors
+    ///
+    /// 当指定的 scope 不存在时返回错误。
     pub fn mark_failed(
         &mut self,
         scope: &IndexScope,

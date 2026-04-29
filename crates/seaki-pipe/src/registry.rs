@@ -60,6 +60,9 @@ pub struct PipeCommandManifest {
 
 impl PipeCommandManifest {
     /// Compute the canonical schema hash from `input_schema` and `output_schema`.
+    ///
+    /// # Panics
+    /// Never panics in practice; the hasher is infallible.
     #[must_use]
     pub fn compute_schema_hash(
         input_schema: &serde_json::Value,
@@ -142,6 +145,10 @@ impl CommandRegistry {
         }
     }
 
+    /// Create a registry with all built-in commands pre-registered.
+    ///
+    /// # Panics
+    /// Panics if a built-in command has an invalid manifest (should never happen).
     #[must_use]
     pub fn builtin() -> Self {
         let mut registry = Self::new();
@@ -153,6 +160,10 @@ impl CommandRegistry {
         registry
     }
 
+    /// Register a new command manifest.
+    ///
+    /// # Errors
+    /// Returns `RegistrationError` if the command ID is invalid or already exists.
     pub fn register(&mut self, manifest: PipeCommandManifest) -> Result<(), RegistrationError> {
         if manifest.command_id.trim().is_empty() {
             return Err(RegistrationError::InvalidCommandId(manifest.command_id));
@@ -179,6 +190,10 @@ impl CommandRegistry {
         Ok(())
     }
 
+    /// Look up a command manifest by ID.
+    ///
+    /// # Errors
+    /// Returns `CommandNotFound` if the command ID is not registered.
     pub fn inspect(&self, command_id: &str) -> Result<&PipeCommandManifest, CommandNotFound> {
         self.commands
             .get(command_id)

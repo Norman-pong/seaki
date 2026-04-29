@@ -55,6 +55,11 @@ pub struct SandboxPolicy {
 }
 
 impl SandboxPolicy {
+    /// Create a read-only sandbox policy for the given workspace root.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the workspace root cannot be canonicalized or does not exist.
     pub fn read_only(workspace_root: impl AsRef<Path>) -> SandboxResult<Self> {
         Ok(Self {
             profile: SandboxProfile::ReadOnly,
@@ -65,6 +70,11 @@ impl SandboxPolicy {
         })
     }
 
+    /// Create a sandbox policy that allows writes within the workspace root.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the workspace root cannot be canonicalized or does not exist.
     pub fn workspace_write(workspace_root: impl AsRef<Path>) -> SandboxResult<Self> {
         let workspace_root = canonicalize_existing(workspace_root.as_ref())?;
         Ok(Self {
@@ -76,6 +86,11 @@ impl SandboxPolicy {
         })
     }
 
+    /// Create a sandbox policy for source ingestion based on the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any path in the request cannot be canonicalized or does not exist.
     pub fn source_ingest(request: &SourceIngestRequest) -> SandboxResult<Self> {
         Ok(Self {
             profile: SandboxProfile::SourceIngest,
@@ -86,6 +101,11 @@ impl SandboxPolicy {
         })
     }
 
+    /// Check whether the given path is permitted to be read.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the path is outside allowed read roots or cannot be canonicalized.
     pub fn permits_read(&self, path: impl AsRef<Path>) -> SandboxResult<PathBuf> {
         let canonical_path = canonicalize_existing(path.as_ref())?;
         if self
@@ -103,6 +123,11 @@ impl SandboxPolicy {
         }
     }
 
+    /// Check whether the given path is permitted to be written.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the path is outside allowed write roots or cannot be canonicalized.
     pub fn permits_write(&self, path: impl AsRef<Path>) -> SandboxResult<PathBuf> {
         let canonical_path = canonicalize_write_target(path.as_ref())?;
         if self
@@ -224,6 +249,11 @@ pub struct SourceIngestRun<T> {
     pub audit: Vec<SandboxAuditRecord>,
 }
 
+/// Run a source ingestion with sandboxing.
+///
+/// # Errors
+///
+/// Returns an error if sandbox policy creation fails or the parser returns an error.
 pub fn run_source_ingest<T>(
     request: SourceIngestRequest,
     parser: impl FnOnce(&mut SourceIngestContext) -> SandboxResult<T>,
@@ -264,11 +294,21 @@ impl SourceIngestContext {
         })
     }
 
+    /// Read the input blob for this ingestion.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if reading the input blob is denied by policy or fails.
     pub fn read_input(&mut self) -> SandboxResult<Vec<u8>> {
         let input_blob = self.input_blob.clone();
         self.read_path(input_blob)
     }
 
+    /// Read data from the given path.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the path is outside allowed read roots or reading fails.
     pub fn read_path(&mut self, path: impl AsRef<Path>) -> SandboxResult<Vec<u8>> {
         let target = path.as_ref();
         let result = self.policy.permits_read(target).and_then(|canonical_path| {
@@ -288,6 +328,11 @@ impl SourceIngestContext {
         result
     }
 
+    /// Write bytes to the raw CAS directory.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the relative path is unsafe, writing is denied by policy, or the write fails.
     pub fn write_raw_cas(
         &mut self,
         relative_path: impl AsRef<Path>,
@@ -308,6 +353,11 @@ impl SourceIngestContext {
         self.write_path_inner(&target, bytes, WriteMode::AppendOnly)
     }
 
+    /// Write bytes to the isolated temp directory.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the relative path is unsafe, writing is denied by policy, or the write fails.
     pub fn write_temp(
         &mut self,
         relative_path: impl AsRef<Path>,
@@ -334,6 +384,11 @@ impl SourceIngestContext {
         self.write_path_inner(path.as_ref(), bytes, WriteMode::Replace)
     }
 
+    /// Request network access for the given target.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if network access is not allowed by the sandbox policy.
     pub fn network_request(&mut self, target: impl Into<String>) -> SandboxResult<()> {
         let target = target.into();
         let result = if self.policy.network_allowed {

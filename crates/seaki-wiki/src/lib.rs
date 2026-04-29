@@ -108,6 +108,11 @@ pub struct RawCas {
 }
 
 impl RawCas {
+    /// Create a new raw CAS rooted at the given path.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the workspace key is empty.
     pub fn new(root: impl AsRef<Path>, workspace_key: impl AsRef<[u8]>) -> WikiResult<Self> {
         let workspace_key = workspace_key.as_ref().to_vec();
         if workspace_key.is_empty() {
@@ -120,6 +125,11 @@ impl RawCas {
         })
     }
 
+    /// Append content to the raw CAS.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error on I/O failures or if a CAS collision is detected.
     pub fn append(&self, content: &[u8]) -> WikiResult<RawBlob> {
         let content_hash = sha256_hex(content);
         let raw_key = workspace_keyed_digest(&self.workspace_key, &content_hash);
@@ -389,6 +399,11 @@ impl Default for ParserConfig {
     }
 }
 
+/// Ingest a source through the sandbox with default parser config.
+///
+/// # Errors
+///
+/// Returns an error if metadata validation fails, sandbox execution fails, or parsing fails.
 pub fn ingest_source_via_sandbox(
     cas: &RawCas,
     request: SourceIngestRequest,
@@ -397,6 +412,11 @@ pub fn ingest_source_via_sandbox(
     ingest_source_via_sandbox_with_config(cas, request, metadata, ParserConfig::default())
 }
 
+/// Ingest a source through the sandbox with the given parser config.
+///
+/// # Errors
+///
+/// Returns an error if metadata validation fails, sandbox execution fails, or parsing fails.
 pub fn ingest_source_via_sandbox_with_config(
     cas: &RawCas,
     request: SourceIngestRequest,

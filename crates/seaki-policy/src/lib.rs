@@ -99,6 +99,11 @@ pub struct WorkspacePathPolicy {
 }
 
 impl WorkspacePathPolicy {
+    /// 创建新的工作区路径策略。
+    ///
+    /// # Errors
+    ///
+    /// 当工作区根目录无法 canonicalize 时返回错误。
     pub fn new(workspace_root: impl AsRef<Path>) -> PolicyResult<Self> {
         let workspace_root = canonicalize_existing(workspace_root.as_ref())?;
         Ok(Self {
@@ -108,6 +113,11 @@ impl WorkspacePathPolicy {
         })
     }
 
+    /// 设置额外的允许根目录。
+    ///
+    /// # Errors
+    ///
+    /// 当任一允许根目录无法 canonicalize 时返回错误。
     pub fn with_allow_roots(
         mut self,
         allow_roots: impl IntoIterator<Item = impl AsRef<Path>>,
@@ -116,6 +126,11 @@ impl WorkspacePathPolicy {
         Ok(self)
     }
 
+    /// 设置拒绝根目录。
+    ///
+    /// # Errors
+    ///
+    /// 当任一拒绝根目录无法 canonicalize 时返回错误。
     pub fn with_deny_roots(
         mut self,
         deny_roots: impl IntoIterator<Item = impl AsRef<Path>>,
@@ -129,6 +144,11 @@ impl WorkspacePathPolicy {
         &self.workspace_root
     }
 
+    /// 对给定路径进行 canonicalize。
+    ///
+    /// # Errors
+    ///
+    /// 当路径无法 canonicalize 时返回错误。
     pub fn canonicalize_path(&self, path: impl AsRef<Path>) -> PolicyResult<PathBuf> {
         canonicalize_existing(path.as_ref())
     }
@@ -138,6 +158,11 @@ impl WorkspacePathPolicy {
         self.is_allowlisted(canonical_path) && !self.is_denied(canonical_path)
     }
 
+    /// 判断对工作区内给定路径的读取请求应被允许还是拒绝。
+    ///
+    /// # Errors
+    ///
+    /// 当路径无法 canonicalize 时返回错误。
     pub fn classify_workspace_read(
         &self,
         path: impl AsRef<Path>,
@@ -393,6 +418,11 @@ impl CapabilityStore {
         Self::default()
     }
 
+    /// 签发文件读取能力授权。
+    ///
+    /// # Errors
+    ///
+    /// 当路径 canonicalize 失败、文件快照失败，或能力存储锁中毒/重复 ID/不支持的能力时返回错误。
     pub fn issue_file_read_grant(
         &self,
         input: FileReadGrantInput,
@@ -473,6 +503,11 @@ impl CapabilityStore {
         Ok(())
     }
 
+    /// 消耗文件读取能力授权。
+    ///
+    /// # Errors
+    ///
+    /// 当能力存储锁中毒时返回错误。
     pub fn consume_file_read_grant(
         &self,
         request: &UseCapabilityRequest,
@@ -536,6 +571,11 @@ impl CapabilityStore {
         Ok(Ok(CapabilityConsumption { grant_fingerprint }))
     }
 
+    /// 查询指定能力授权的剩余使用次数。
+    ///
+    /// # Errors
+    ///
+    /// 当能力存储锁中毒时返回错误。
     pub fn uses_remaining(&self, capability_id: &str) -> PolicyResult<Option<u32>> {
         let grants = self
             .grants
@@ -544,6 +584,11 @@ impl CapabilityStore {
         Ok(grants.get(capability_id).map(|grant| grant.uses_remaining))
     }
 
+    /// 签发 channel 动作授权。
+    ///
+    /// # Errors
+    ///
+    /// 当 channel action 授权存储锁中毒时返回错误。
     pub fn issue_channel_action_grant(
         &self,
         input: IssueChannelActionGrantInput,
@@ -570,6 +615,11 @@ impl CapabilityStore {
         Ok(Ok(grant))
     }
 
+    /// 消耗 channel 动作授权。
+    ///
+    /// # Errors
+    ///
+    /// 当 channel action 授权存储锁中毒时返回错误。
     pub fn consume_channel_action_grant(
         &self,
         grant_id: &str,
@@ -594,6 +644,11 @@ impl CapabilityStore {
         }))
     }
 
+    /// 查询指定 channel 动作授权的剩余使用次数。
+    ///
+    /// # Errors
+    ///
+    /// 当 channel action 授权存储锁中毒时返回错误。
     pub fn channel_action_uses_remaining(&self, grant_id: &str) -> PolicyResult<Option<u32>> {
         let grants = self
             .channel_action_grants
@@ -670,6 +725,11 @@ impl PolicyEngine {
         self.fixed_now.unwrap_or_else(SystemTime::now)
     }
 
+    /// 根据工作区路径策略和能力授权评估文件读取请求。
+    ///
+    /// # Errors
+    ///
+    /// 当路径 canonicalize 失败或能力存储操作失败时返回错误。
     pub fn authorize_file_read(
         &self,
         request: &FileReadPolicyRequest,

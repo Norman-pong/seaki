@@ -185,6 +185,10 @@ fn dfs<'a>(
     Ok(())
 }
 
+/// Compose a pipeline AST into a validated `ComposedPipeline`.
+///
+/// # Errors
+/// Returns `ComposeError` if the pipeline is empty, contains cycles, or has type mismatches.
 pub fn compose(
     ast: &PipelineAst,
     registry: &CommandRegistry,

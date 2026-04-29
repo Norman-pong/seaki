@@ -104,6 +104,11 @@ impl NoteStore {
         note
     }
 
+    /// 更新指定 note 的内容。
+    ///
+    /// # Errors
+    ///
+    /// 当 note 不存在时返回 [`NoteStoreError::NotFound`]。
     pub fn update_note(
         &mut self,
         note_id: &str,
@@ -118,6 +123,11 @@ impl NoteStore {
         Ok(note.clone())
     }
 
+    /// 删除指定 note。
+    ///
+    /// # Errors
+    ///
+    /// 当 note 不存在时返回 [`NoteStoreError::NotFound`]。
     pub fn delete_note(&mut self, note_id: &str) -> Result<(), NoteStoreError> {
         self.notes
             .remove(note_id)
@@ -130,6 +140,12 @@ impl NoteStore {
         self.notes.get(note_id)
     }
 
+    /// 将 note 的状态转换为目标状态。
+    ///
+    /// # Errors
+    ///
+    /// 当 note 不存在时返回 [`NoteStoreError::NotFound`]；
+    /// 当状态转换不被允许时返回 [`NoteStoreError::InvalidStatusTransition`]。
     pub fn transition_status(
         &mut self,
         note_id: &str,
@@ -151,6 +167,10 @@ impl NoteStore {
     }
 
     /// 将当前 scope 下的所有 note 重建到 BM25 索引（memory scope）。
+    ///
+    /// # Errors
+    ///
+    /// 当索引替换失败时返回 [`seaki_index::IndexError`]。
     pub fn rebuild_index(
         &mut self,
         index: &mut Bm25CandidateIndex,
@@ -210,6 +230,14 @@ impl NoteStore {
     /// 最小 `source_checking：检测` note 内容与 wiki claim 关键词/引用重叠。
     /// 冲突则标记 `NoteStatus::Conflict` 并阻止进入 `Approved`。
     /// 返回 true 表示检测到冲突。
+    ///
+    /// # Errors
+    ///
+    /// 当 note 不存在时返回 [`NoteStoreError::NotFound`]。
+    ///
+    /// # Panics
+    ///
+    /// 当 note 在获取后意外从存储中消失时可能 panic（理论上不应发生）。
     pub fn check_source_conflicts(
         &mut self,
         note_id: &str,
