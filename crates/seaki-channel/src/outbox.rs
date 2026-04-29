@@ -66,6 +66,14 @@ impl Outbox {
     }
 
     /// Enqueue an item.  Rejects duplicate `id` or already-sent `idempotency_key`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the idempotency key was already sent or the item ID is duplicate.
     pub fn enqueue(&self, item: OutboxItem) -> Result<(), &'static str> {
         let sent = self.sent_idempotency_keys.lock().unwrap();
         if sent.contains_key(&item.idempotency_key) {
@@ -81,6 +89,10 @@ impl Outbox {
     }
 
     /// Try to lease a `Pending` or `Retry` item.  Only one worker succeeds.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
     pub fn lease(
         &self,
         item_id: &str,
@@ -110,6 +122,14 @@ impl Outbox {
     }
 
     /// Transition item status after validating current state.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the item is not found or the status does not match the expected state.
     pub fn transition(
         &self,
         item_id: &str,
@@ -137,6 +157,14 @@ impl Outbox {
     }
 
     /// Record a send attempt.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
+    ///
+    /// # Errors
+    ///
+    /// Currently infallible; returns `Ok(())`.
     pub fn record_attempt(&self, attempt: ChannelSendAttempt) -> Result<(), &'static str> {
         let mut attempts = self.attempts.lock().unwrap();
         attempts.push(attempt);
@@ -145,6 +173,14 @@ impl Outbox {
 
     /// Resolve an `Unknown` item by querying the provider API.
     /// The returned status is applied to the item.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the item is not found or not in `Unknown` state.
     pub fn resolve_unknown(
         &self,
         item_id: &str,
@@ -176,11 +212,21 @@ impl Outbox {
         Ok(new_status)
     }
 
+    /// Retrieve an item by ID.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
     pub fn get_item(&self, item_id: &str) -> Option<OutboxItem> {
         let items = self.items.lock().unwrap();
         items.get(item_id).cloned()
     }
 
+    /// Check whether an idempotency key has already been marked as sent.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
     pub fn is_idempotency_key_sent(&self, key: &str) -> bool {
         let sent = self.sent_idempotency_keys.lock().unwrap();
         sent.contains_key(key)

@@ -127,6 +127,11 @@ pub fn generate_typescript() -> String {
     output
 }
 
+/// Write the generated TypeScript DTO file to the given path.
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be created or written.
 pub fn write_generated_file(path: impl AsRef<Path>) -> CodegenResult<()> {
     let path = path.as_ref();
     if let Some(parent) = path.parent() {
@@ -136,6 +141,11 @@ pub fn write_generated_file(path: impl AsRef<Path>) -> CodegenResult<()> {
     Ok(())
 }
 
+/// Check whether the generated file at the given path is up to date.
+///
+/// # Errors
+///
+/// Returns an error if the file cannot be read or its contents differ from the expected output.
 pub fn check_generated_file(path: impl AsRef<Path>) -> CodegenResult<()> {
     let path = path.as_ref();
     let expected = generate_typescript();

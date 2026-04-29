@@ -237,6 +237,11 @@ impl WikiPatchStore {
         self.index_status
     }
 
+    /// Commit a patch proposal to the store.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the base revision conflicts, proposal validation fails, or approval is missing or invalid.
     pub fn commit_patch(
         &mut self,
         proposal: WikiPatchProposal,
@@ -247,6 +252,11 @@ impl WikiPatchStore {
         self.commit_patch_with_wal(proposal, approval, sources, frames, |_| Ok::<_, String>(()))
     }
 
+    /// Commit a patch proposal with an external WAL append.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the base revision conflicts, proposal validation fails, approval is missing or invalid, or the WAL append fails.
     pub fn commit_patch_with_wal<E: fmt::Display>(
         &mut self,
         proposal: WikiPatchProposal,

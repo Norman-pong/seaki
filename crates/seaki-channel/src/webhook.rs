@@ -93,6 +93,14 @@ impl FakeWebhookVerifier {
 
     /// Verify signature, timestamp and replay.
     /// On success the `event_id` is recorded to prevent replays.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
+    ///
+    /// # Errors
+    ///
+    /// Returns `WebhookError` if the event is replayed, timestamp expired, or signature invalid.
     pub fn verify(
         &self,
         event_id: &str,

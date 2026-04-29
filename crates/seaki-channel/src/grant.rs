@@ -112,6 +112,14 @@ impl ChannelResourceGrantStore {
     }
 
     /// Issue a grant.  Guests are rejected with `POLICY_DENIED_INSUFFICIENT_ROLE`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
+    ///
+    /// # Errors
+    ///
+    /// Returns `GrantError::PolicyDeniedInsufficientRole` for guest roles.
     pub fn issue(
         &self,
         workspace_role: &str,
@@ -126,6 +134,14 @@ impl ChannelResourceGrantStore {
     }
 
     /// Consume one use of a grant after validating scope, `file_key` and version.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
+    ///
+    /// # Errors
+    ///
+    /// Returns `GrantError` if the grant is missing, expired, exhausted, or mismatched.
     pub fn consume(
         &self,
         grant_id: &str,
@@ -157,6 +173,11 @@ impl ChannelResourceGrantStore {
         Ok(())
     }
 
+    /// Retrieve a grant by ID.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
     pub fn get(&self, grant_id: &str) -> Option<ChannelResourceGrant> {
         let grants = self.grants.lock().unwrap();
         grants.get(grant_id).cloned()

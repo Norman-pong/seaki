@@ -59,6 +59,10 @@ impl FakeChannelProvider {
     }
 
     /// Add or overwrite a binding entry.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
     pub fn upsert_binding(&self, entry: BindingEntry) {
         let mut bindings = self.bindings.lock().unwrap();
         bindings.insert(
@@ -72,6 +76,10 @@ impl FakeChannelProvider {
     }
 
     /// Remove a binding entry.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
     pub fn remove_binding(
         &self,
         provider_tenant_id: &str,
@@ -87,6 +95,10 @@ impl FakeChannelProvider {
     }
 
     /// Resolve provider identity to Seaki actor via binding table.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
     pub fn resolve_actor(
         &self,
         provider_tenant_id: &str,
@@ -107,6 +119,10 @@ impl FakeChannelProvider {
     ///
     /// The `seaki_actor_id` is **not** accepted as an argument; it is derived
     /// from the binding table.  If no binding exists the submission fails.
+    ///
+    /// # Errors
+    ///
+    /// Returns `WebhookError` if signature verification fails or no binding is found.
     #[allow(clippy::too_many_arguments)]
     pub fn submit_event(
         &self,

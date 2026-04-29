@@ -745,16 +745,28 @@ pub struct CoreLedger {
 }
 
 impl CoreLedger {
+    /// 打开指定路径的数据库并初始化 ledger。
+    ///
+    /// # Errors
+    /// 当数据库打开或初始化失败时返回 `CoreError`。
     pub fn open(path: impl AsRef<Path>) -> CoreResult<Self> {
         let conn = Connection::open(path)?;
         Self::from_connection(conn)
     }
 
+    /// 在内存中创建并初始化 ledger。
+    ///
+    /// # Errors
+    /// 当内存数据库创建或初始化失败时返回 `CoreError`。
     pub fn open_in_memory() -> CoreResult<Self> {
         let conn = Connection::open_in_memory()?;
         Self::from_connection(conn)
     }
 
+    /// 从已有连接创建 ledger 并初始化。
+    ///
+    /// # Errors
+    /// 当初始化 schema 或索引失败时返回 `CoreError`。
     pub fn from_connection(conn: Connection) -> CoreResult<Self> {
         let mut ledger = Self {
             conn,
@@ -826,12 +838,20 @@ impl CoreLedger {
         Ok(())
     }
 
+    /// 查询当前数据库的 journal 模式。
+    ///
+    /// # Errors
+    /// 当数据库查询失败时返回 `CoreError`。
     pub fn journal_mode(&self) -> CoreResult<String> {
         Ok(self
             .conn
             .query_row("PRAGMA journal_mode", [], |row| row.get::<_, String>(0))?)
     }
 
+    /// 初始化一个新的工作区。
+    ///
+    /// # Errors
+    /// 当事件校验失败、键重复或数据库操作失败时返回 `CoreError`。
     pub fn workspace_init(
         &mut self,
         request: WorkspaceInitRequest,
@@ -858,6 +878,10 @@ impl CoreLedger {
         })
     }
 
+    /// 替换指定范围的搜索索引文档。
+    ///
+    /// # Errors
+    /// 当工作区不存在或索引操作失败时返回 `CoreError`。
     pub fn replace_search_scope(
         &mut self,
         generation: IndexGeneration,
@@ -870,6 +894,10 @@ impl CoreLedger {
         Ok(())
     }
 
+    /// 执行搜索查询并返回结果。
+    ///
+    /// # Errors
+    /// 当工作区不存在或索引查询失败时返回 `CoreError`。
     pub fn search_query(&self, request: SearchQueryRequest) -> CoreResult<Vec<SearchResultDTO>> {
         self.workspace_revision(&request.workspace_id)?
             .ok_or_else(|| CoreError::WorkspaceMissing(request.workspace_id.clone()))?;
@@ -904,6 +932,10 @@ impl CoreLedger {
             .collect())
     }
 
+    /// 根据请求解析引用并返回结果。
+    ///
+    /// # Errors
+    /// 当工作区不存在时返回 `CoreError`。
     pub fn citation_resolve(
         &self,
         request: CitationResolveRequest,
@@ -998,6 +1030,10 @@ impl CoreLedger {
         })
     }
 
+    /// 根据请求组合答案。
+    ///
+    /// # Errors
+    /// 当工作区不存在或索引查询失败时返回 `CoreError`。
     pub fn compose_answer(&self, request: &AnswerComposerRequest) -> CoreResult<AnswerDTO> {
         self.workspace_revision(&request.workspace_id)?
             .ok_or_else(|| CoreError::WorkspaceMissing(request.workspace_id.clone()))?;
@@ -1082,6 +1118,10 @@ impl CoreLedger {
             .collect()
     }
 
+    /// 检查内置管道命令的元数据。
+    ///
+    /// # Errors
+    /// 当命令不存在时返回 `CommandNotFound`。
     pub fn pipe_inspect(
         &self,
         command_id: &str,
@@ -1090,6 +1130,10 @@ impl CoreLedger {
         registry.inspect(command_id).cloned()
     }
 
+    /// 对管道 AST 进行 dry-run 并返回结果。
+    ///
+    /// # Errors
+    /// 当管道组合失败时返回 `CoreError`。
     pub fn pipe_dry_run(
         &self,
         ast: &seaki_pipe::PipelineAst,
@@ -1101,6 +1145,10 @@ impl CoreLedger {
         Ok(seaki_pipe::dry_run(&composed, initial_input))
     }
 
+    /// 追加一个惰性事件。
+    ///
+    /// # Errors
+    /// 当事件校验失败、键重复、工作区不存在或数据库操作失败时返回 `CoreError`。
     pub fn append_inert_event(&mut self, event: InertEvent) -> CoreResult<EventEnvelope> {
         validate_event(&event)?;
         self.ensure_unique_idempotency_key(&event.idempotency_key)?;
@@ -1119,6 +1167,10 @@ impl CoreLedger {
         Ok(envelope)
     }
 
+    /// 追加一个记忆提案事件。
+    ///
+    /// # Errors
+    /// 当事件校验失败、键重复、工作区不存在或数据库操作失败时返回 `CoreError`。
     pub fn append_memory_propose(
         &mut self,
         request: MemoryProposeRequest,
@@ -1146,6 +1198,10 @@ impl CoreLedger {
         Ok(envelope)
     }
 
+    /// 追加一个记忆提交事件。
+    ///
+    /// # Errors
+    /// 当事件校验失败、键重复、工作区不存在、版本不匹配或审批决定无效时返回 `CoreError`。
     pub fn append_memory_commit(
         &mut self,
         request: MemoryCommitRequest,
@@ -1179,6 +1235,10 @@ impl CoreLedger {
         Ok(envelope)
     }
 
+    /// 查询指定 ID 的记忆笔记。
+    ///
+    /// # Errors
+    /// 当数据库查询失败或序列号越界时返回 `CoreError`。
     pub fn memory_note(&self, note_id: &str) -> CoreResult<Option<MemoryNoteRecord>> {
         self.conn
             .query_row(
@@ -1201,6 +1261,10 @@ impl CoreLedger {
             .map_err(CoreError::from)
     }
 
+    /// 对记忆笔记进行来源检查并更新状态。
+    ///
+    /// # Errors
+    /// 当笔记不存在或数据库操作失败时返回 `CoreError`。
     pub fn memory_source_check(
         &mut self,
         note_id: &str,
@@ -1230,6 +1294,10 @@ impl CoreLedger {
             .ok_or_else(|| CoreError::WorkspaceMissing(format!("note not found: {note_id}")))
     }
 
+    /// 追加一个 wiki 补丁提交事件。
+    ///
+    /// # Errors
+    /// 当事件校验失败、键重复、工作区不存在、版本不匹配或审批决定无效时返回 `CoreError`。
     pub fn append_wiki_patch_commit(
         &mut self,
         request: WikiPatchCommitRequest,
@@ -1262,6 +1330,10 @@ impl CoreLedger {
         Ok(envelope)
     }
 
+    /// 追加一个审批决定事件。
+    ///
+    /// # Errors
+    /// 当事件校验失败、键重复、审批决定已存在、工作区不存在或数据库操作失败时返回 `CoreError`。
     pub fn append_approval_decision(
         &mut self,
         request: ApprovalDecisionRequest,
@@ -1286,6 +1358,10 @@ impl CoreLedger {
         Ok(envelope)
     }
 
+    /// 重放指定序列号之后的所有事件。
+    ///
+    /// # Errors
+    /// 当序列号越界或数据库查询失败时返回 `CoreError`。
     pub fn replay_events_after(&self, seq: u64) -> CoreResult<Vec<EventEnvelope>> {
         let seq = checked_i64(seq)?;
         let mut stmt = self.conn.prepare(
@@ -1311,6 +1387,10 @@ impl CoreLedger {
         rows.map(|row| row.map_err(CoreError::from)).collect()
     }
 
+    /// 查询所有审计条目。
+    ///
+    /// # Errors
+    /// 当数据库查询失败或序列号越界时返回 `CoreError`。
     pub fn audit_entries(&self) -> CoreResult<Vec<AuditEntry>> {
         let mut stmt = self.conn.prepare(
             "
@@ -1332,6 +1412,10 @@ impl CoreLedger {
         rows.map(|row| row.map_err(CoreError::from)).collect()
     }
 
+    /// 验证审计链的完整性。
+    ///
+    /// # Errors
+    /// 当数据库查询失败或序列号越界时返回 `CoreError`。
     pub fn verify_audit_chain(&self) -> CoreResult<bool> {
         let events = self.replay_events_after(0)?;
         let audit_entries = self.audit_entries()?;
@@ -1359,6 +1443,10 @@ impl CoreLedger {
         Ok(true)
     }
 
+    /// 返回事件总数。
+    ///
+    /// # Errors
+    /// 当数据库查询失败或序列号越界时返回 `CoreError`。
     pub fn event_count(&self) -> CoreResult<u64> {
         let count = self
             .conn
@@ -1368,6 +1456,10 @@ impl CoreLedger {
         checked_u64(count).map_err(CoreError::from)
     }
 
+    /// 返回审计条目总数。
+    ///
+    /// # Errors
+    /// 当数据库查询失败或序列号越界时返回 `CoreError`。
     pub fn audit_count(&self) -> CoreResult<u64> {
         let count = self
             .conn
@@ -1375,6 +1467,10 @@ impl CoreLedger {
         checked_u64(count).map_err(CoreError::from)
     }
 
+    /// 查询指定工作区的版本号。
+    ///
+    /// # Errors
+    /// 当数据库查询失败或序列号越界时返回 `CoreError`。
     pub fn workspace_revision(&self, workspace_id: &str) -> CoreResult<Option<u64>> {
         let revision = self
             .conn
@@ -1391,6 +1487,10 @@ impl CoreLedger {
             .map_err(CoreError::from)
     }
 
+    /// 查询指定工作区的审计头哈希。
+    ///
+    /// # Errors
+    /// 当数据库查询失败时返回 `CoreError`。
     pub fn audit_head(&self, workspace_id: &str) -> CoreResult<Option<String>> {
         Ok(self
             .conn
@@ -1402,6 +1502,10 @@ impl CoreLedger {
             .optional()?)
     }
 
+    /// 查询指定工作区的索引状态。
+    ///
+    /// # Errors
+    /// 当数据库查询失败时返回 `CoreError`。
     pub fn index_status(&self, workspace_id: &str) -> CoreResult<Option<String>> {
         Ok(self
             .conn
@@ -1413,6 +1517,10 @@ impl CoreLedger {
             .optional()?)
     }
 
+    /// 查询指定审批决定的记录。
+    ///
+    /// # Errors
+    /// 当数据库查询失败时返回 `CoreError`。
     pub fn approval_decision(
         &self,
         approval_id: &str,
