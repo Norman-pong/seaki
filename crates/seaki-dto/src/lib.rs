@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 pub const SCHEMA_VERSION: u32 = 1;
 
 pub const INDEX_STATUS_STATE_VARIANTS: &[&str] = &["idle", "indexing", "fresh", "stale", "error"];
@@ -771,7 +773,7 @@ pub const M0_DOMAIN_USE_CASE_METHODS: &[MethodName] = &[
 #[must_use]
 pub fn canonical_schema() -> String {
     let mut schema = String::new();
-    schema.push_str(&format!("schema_version:{SCHEMA_VERSION}\n"));
+    writeln!(schema, "schema_version:{SCHEMA_VERSION}").unwrap();
     schema.push_str("[string_unions]\n");
     for string_union in STRING_UNIONS {
         schema.push_str(string_union.name);

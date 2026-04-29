@@ -175,9 +175,9 @@ impl RawCas {
     fn append_with_sandbox(
         &self,
         context: &mut SourceIngestContext,
-        content: &[u8],
+        bytes: &[u8],
     ) -> WikiResult<RawBlob> {
-        let content_hash = sha256_hex(content);
+        let content_hash = sha256_hex(bytes);
         let raw_key = workspace_keyed_digest(&self.workspace_key, &content_hash);
         let path = self.path_for_key(&raw_key);
 
@@ -190,13 +190,13 @@ impl RawCas {
             return Ok(RawBlob {
                 raw_key,
                 content_hash,
-                len: content.len() as u64,
+                len: bytes.len() as u64,
                 path,
                 newly_written: false,
             });
         }
 
-        let written_path = match context.write_raw_cas(raw_relative_path(&raw_key), content) {
+        let written_path = match context.write_raw_cas(raw_relative_path(&raw_key), bytes) {
             Ok(path) => path,
             Err(SandboxError::Io(error)) if error.kind() == io::ErrorKind::AlreadyExists => {
                 let existing = fs::read(&path)?;
@@ -207,7 +207,7 @@ impl RawCas {
                 return Ok(RawBlob {
                     raw_key,
                     content_hash,
-                    len: content.len() as u64,
+                    len: bytes.len() as u64,
                     path,
                     newly_written: false,
                 });
@@ -218,7 +218,7 @@ impl RawCas {
         Ok(RawBlob {
             raw_key,
             content_hash,
-            len: content.len() as u64,
+            len: bytes.len() as u64,
             path: written_path,
             newly_written: true,
         })
@@ -487,7 +487,7 @@ fn ingest_committed_source(
 
     manifest.parse_status = artifact.status;
     manifest.state_history.push(artifact.status);
-    manifest.error_summary = artifact.error_summary.clone();
+    manifest.error_summary.clone_from(&artifact.error_summary);
 
     SourceIngestResult {
         manifest,

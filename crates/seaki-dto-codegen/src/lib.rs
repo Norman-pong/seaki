@@ -1,7 +1,7 @@
 pub use seaki_dto::SCHEMA_VERSION;
 use seaki_dto::{canonical_schema, INTERFACES, M0_DOMAIN_USE_CASE_METHODS, STRING_UNIONS};
 use sha2::{Digest, Sha256};
-use std::fmt;
+use std::fmt::{self, Write};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -49,13 +49,17 @@ pub fn generate_typescript() -> String {
     let mut output = String::new();
     output.push_str(HEADER);
     output.push('\n');
-    output.push_str(&format!(
-        "export const SCHEMA_VERSION = {SCHEMA_VERSION} as const;\n"
-    ));
-    output.push_str(&format!(
+    writeln!(
+        output,
+        "export const SCHEMA_VERSION = {SCHEMA_VERSION} as const;"
+    )
+    .unwrap();
+    write!(
+        output,
         "export const SCHEMA_HASH =\n  \"{}\" as const;\n\n",
         schema_hash()
-    ));
+    )
+    .unwrap();
 
     for string_union in STRING_UNIONS {
         let variants = string_union
@@ -73,7 +77,7 @@ pub fn generate_typescript() -> String {
             output.push_str(&single_line);
             output.push_str("\n\n");
         } else {
-            output.push_str(&format!("export type {} =\n", string_union.name));
+            writeln!(output, "export type {} =", string_union.name).unwrap();
             for (index, variant) in variants.iter().enumerate() {
                 output.push_str("  | ");
                 output.push_str(variant);

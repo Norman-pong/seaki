@@ -289,7 +289,7 @@ impl SourceIngestContext {
         relative_path: impl AsRef<Path>,
         bytes: &[u8],
     ) -> SandboxResult<PathBuf> {
-        let target = match self.join_sandbox_relative(&self.raw_cas_dir, relative_path.as_ref()) {
+        let target = match Self::join_sandbox_relative(&self.raw_cas_dir, relative_path.as_ref()) {
             Ok(target) => target,
             Err(error) => {
                 let result = Err(error);
@@ -310,7 +310,7 @@ impl SourceIngestContext {
         bytes: &[u8],
     ) -> SandboxResult<PathBuf> {
         let target =
-            match self.join_sandbox_relative(&self.isolated_temp_dir, relative_path.as_ref()) {
+            match Self::join_sandbox_relative(&self.isolated_temp_dir, relative_path.as_ref()) {
                 Ok(target) => target,
                 Err(error) => {
                     let result = Err(error);
@@ -411,7 +411,7 @@ impl SourceIngestContext {
         result
     }
 
-    fn join_sandbox_relative(&self, root: &Path, relative_path: &Path) -> SandboxResult<PathBuf> {
+    fn join_sandbox_relative(root: &Path, relative_path: &Path) -> SandboxResult<PathBuf> {
         if relative_path.is_absolute()
             || relative_path
                 .components()

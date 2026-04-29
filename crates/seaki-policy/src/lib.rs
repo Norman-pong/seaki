@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::ffi::OsStr;
-use std::fmt;
+use std::fmt::{self, Write};
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -967,7 +967,7 @@ fn hash_bytes(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
     let mut output = String::with_capacity(digest.len() * 2);
     for byte in digest {
-        output.push_str(&format!("{byte:02x}"));
+        write!(output, "{byte:02x}").unwrap();
     }
     output
 }

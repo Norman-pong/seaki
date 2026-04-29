@@ -143,8 +143,7 @@ fn command_typed_frame(command_id: &str) -> Option<TypedFrame> {
         "wiki.search" => Some((FrameType::ParagraphFrame, Cardinality::Many)),
         "citation.resolve" => Some((FrameType::CitedParagraph, Cardinality::Many)),
         "adr.summarize" => Some((FrameType::TextAnswer, Cardinality::One)),
-        "filter" => Some((FrameType::JsonValue, Cardinality::Many)),
-        "map" => Some((FrameType::JsonValue, Cardinality::Many)),
+        "filter" | "map" => Some((FrameType::JsonValue, Cardinality::Many)),
         "wiki.patch.propose" => Some((FrameType::PatchProposalArtifact, Cardinality::One)),
         _ => None,
     }
@@ -155,12 +154,33 @@ fn command_input_frame(command_id: &str) -> Option<TypedFrame> {
     match command_id {
         "wiki.search" => Some((FrameType::JsonValue, Cardinality::One)),
         "citation.resolve" => Some((FrameType::ParagraphFrame, Cardinality::Many)),
-        "adr.summarize" => Some((FrameType::CitedParagraph, Cardinality::Many)),
-        "filter" => Some((FrameType::JsonValue, Cardinality::Many)),
-        "map" => Some((FrameType::JsonValue, Cardinality::Many)),
-        "wiki.patch.propose" => Some((FrameType::CitedParagraph, Cardinality::Many)),
+        "adr.summarize" | "wiki.patch.propose" => Some((FrameType::CitedParagraph, Cardinality::Many)),
+        "filter" | "map" => Some((FrameType::JsonValue, Cardinality::Many)),
         _ => None,
     }
+}
+
+fn dfs<'a>(
+    node: &'a str,
+    graph: &HashMap<&'a str, Vec<&'a str>>,
+    visited: &mut HashSet<&'a str>,
+    stack: &mut HashSet<&'a str>,
+) -> Result<(), ComposeError> {
+    visited.insert(node);
+    stack.insert(node);
+
+    if let Some(neighbors) = graph.get(node) {
+        for neighbor in neighbors {
+            if !visited.contains(neighbor) {
+                dfs(neighbor, graph, visited, stack)?;
+            } else if stack.contains(neighbor) {
+                return Err(ComposeError::CycleDetected);
+            }
+        }
+    }
+
+    stack.remove(node);
+    Ok(())
 }
 
 pub fn compose(
@@ -264,29 +284,6 @@ fn detect_cycle(ast: &PipelineAst) -> Result<(), ComposeError> {
 
     let mut visited = HashSet::new();
     let mut stack = HashSet::new();
-
-    fn dfs<'a>(
-        node: &'a str,
-        graph: &HashMap<&'a str, Vec<&'a str>>,
-        visited: &mut HashSet<&'a str>,
-        stack: &mut HashSet<&'a str>,
-    ) -> Result<(), ComposeError> {
-        visited.insert(node);
-        stack.insert(node);
-
-        if let Some(neighbors) = graph.get(node) {
-            for neighbor in neighbors {
-                if !visited.contains(neighbor) {
-                    dfs(neighbor, graph, visited, stack)?;
-                } else if stack.contains(neighbor) {
-                    return Err(ComposeError::CycleDetected);
-                }
-            }
-        }
-
-        stack.remove(node);
-        Ok(())
-    }
 
     for step_id in &step_ids {
         if !visited.contains(step_id) {

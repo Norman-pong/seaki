@@ -370,8 +370,8 @@ impl Bm25CandidateIndex {
         let mut scored = documents
             .into_iter()
             .filter_map(|entry| {
-                let score = bm25_score(entry, &terms, &document_frequency, avg_doc_len);
-                (score > 0.0).then(|| (entry.document.candidate_id.clone(), score))
+                let doc_score = bm25_score(entry, &terms, &document_frequency, avg_doc_len);
+                (doc_score > 0.0).then(|| (entry.document.candidate_id.clone(), doc_score))
             })
             .collect::<Vec<_>>();
 
@@ -440,8 +440,9 @@ impl Bm25CandidateIndex {
         }
 
         match visibility {
-            Visibility::Visible => self.mark_status(scope, IndexStatus::Stale, None),
-            Visibility::Restricted => self.mark_status(scope, IndexStatus::Stale, None),
+            Visibility::Visible | Visibility::Restricted => {
+                self.mark_status(scope, IndexStatus::Stale, None)
+            }
             Visibility::Tombstoned => self.mark_status(scope, IndexStatus::CleanupRequired, None),
         }
     }

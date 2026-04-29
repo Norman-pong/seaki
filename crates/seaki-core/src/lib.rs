@@ -1071,9 +1071,10 @@ impl CoreLedger {
         manifests
             .into_iter()
             .filter(|m| match &filter {
-                Some(seaki_pipe::SideEffectFilter::All) => true,
-                Some(seaki_pipe::SideEffectFilter::Level(level)) => m.side_effect_level == *level,
-                None => true,
+                Some(seaki_pipe::SideEffectFilter::Level(level)) => {
+                    m.side_effect_level == *level
+                }
+                _ => true,
             })
             .map(|m| seaki_pipe::PipeCommandSummary {
                 command_id: m.command_id.clone(),
@@ -1354,7 +1355,7 @@ impl CoreLedger {
                 return Ok(false);
             }
 
-            previous_hash = audit_entry.hash.clone();
+            previous_hash.clone_from(&audit_entry.hash);
         }
 
         Ok(true)
