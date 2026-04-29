@@ -1,6 +1,6 @@
 use std::time::SystemTime;
 
-use seaki_wiki::{
+use crate::{
     ApprovalRequest, ApprovalStatus, ByteRange, Citation, Claim, ClaimConfidence, ClaimStatus,
     ConceptPage, LineRange, MimeSniff, ParsedFrame, SecurityFlag, SourceIngestState,
     SourceManifest, SourceVisibility, Taint, TrustLevel, TypedPage, WikiIndexStatus,
