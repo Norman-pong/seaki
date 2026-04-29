@@ -39,3 +39,24 @@
 - 新增 [ADR-0001](../decisions/0001-main-platform-sandbox-backend.md)，确定 M0 主平台 sandbox 后端为 macOS Seatbelt；执行环境变化时必须更新该决策和相关文档。
 - 新增 [ADR-0002](../decisions/0002-frontend-toolchain-vite8-oxc.md)，确定 M0 前端工具链采用 Vite 8、`@vitejs/plugin-react` 6、TypeScript 6、Vitest 4 和 Oxc lint/format。
 - 更新 [第一阶段任务计划](../plans/phase-1-task-plan.md) 的 M0-00 行，补齐 CI、开发文档和决策记录交付链接。
+
+## 2026-04-29 M1 任务计划（初稿）
+
+- 新增 `docs/plans/m1-task-plan.md`，把 M1 范围（pipeline inspect/dry-run/compose、session_search + 手动 project note、fake/local channel provider）拆解为可执行任务、验收标准、质量门禁和风险缓解。
+- 基于当前代码库状态评估：M0 Rust 后端基本完成，前端 domain/state/dto 基本完成，transport 仅 mock，Electron 为预览级 UI；M1 三大线（pipeline、memory、channel）均无实质代码，需从 crate 骨架开始。
+- 保持 `run`、Pipeline Designer 完整功能、自动 memory、复习调度、真实 IM provider 后置到 M2。
+
+## 2026-04-29 M1 任务计划（虚拟需求推演修订版）
+
+- 安排 3 个子代理分别对 Pipeline、Memory、Channel Bridge 线进行虚拟需求链条推演，发现以下关键缺口并修订计划：
+  1. **Pipeline 线**：原 M1-01 缺少命令发现能力（`pipe.list`），M1-03 缺少 `PipelineError`/`step.failed` 事件和 `PatchProposalArtifact` 产出，导致 Pipeline 线成为断头路。修订：M1-01 增加 `list` 和 `ParagraphFrame` DTO；M1-03 增加 `PipelineError`、`step.failed`、dry-run 产出 `PatchProposalArtifact` 并接入最小审批链路。
+  2. **Memory 线**：M1-04 缺少会话索引触发机制和 redaction 策略；M1-05 的 MemoryItem 生命周期遗漏 `source_checking` 阶段，与 [memory.md](memory.md) 冲突；低信任 data block 注入机制无验证场景。修订：M1-04 明确 daemon 自动触发 redaction pipeline、TTL 清理策略（expired -> 7 天后删除 + audit）；M1-05 恢复 `source_checking` 阶段、增加 note 与 ConceptPage 边界；M1-08 增加"引用历史会话"手动操作以验证注入边界。
+  3. **Channel 线**：M1-06 缺少 webhook 验证、`ChannelResourceGrant`、binding 表初始化；M1-07 缺少 `uses_remaining`、FakeProviderQueryAPI、并发 lease 抢占。修订：M1-06 扩展 FakeWebhookVerifier、binding 表 fixture、`ChannelResourceGrant` 与 fake broker quarantine 下载；M1-07 增加 `uses_remaining`、FakeProviderQueryAPI、并发测试；风险缓解声明修改为"M2 替换 provider 并补全真实网络/scale/错误码"，不再过度承诺"只替换实现层"。
+- 质量门禁补充：`source_checking` 回归、webhook verify 回归、并发 lease 抢占回归、`ChannelResourceGrant` 签发/消费测试。
+
+## 2026-04-29 M1 任务计划（第二轮虚拟需求推演修订版）
+
+- 安排 3 个子代理进行**第二轮**虚拟需求链条推演，验证第一轮修订是否充分，并发现新问题：
+  1. **Pipeline 线**：第一轮 4/5 问题已解决，但修订引入了**结构性矛盾**——M1-01 注册的命令全为 `side_effect_level="none"`，而 M1-03 产出 `PatchProposalArtifact` 要求最后一步为 `proposal_only`，导致 artifact 永远无法触发。此外 `adr.summarize` 语义在架构文档与任务计划间不一致，`wiki.patch.propose` 审批链路后端归属不明确。修订：M1-01 增加 `proposal_only` 命令（`wiki.patch.propose`）；M1-02 区分无副作用链条和 `proposal_only` 链条的验收标准；M1-03 明确 `PatchProposalArtifact` 通过 `wiki.patch.propose` 进入审批链路，复用 M0 已实现的 `WikiPatchTransaction`。
+  2. **Memory 线**：第一轮 5/6 问题已解决，但 revision 引入新问题：project note 只有写没有读，"聚合零散笔记"场景存在结构性断点；M1-04 "会话结束时自动触发"在 Electron+mock transport 条件下缺乏真实 session 基础设施；M1-09 低信任注入 e2e 在 mock transport 下不可信；M1-05 对 M0 wiki claim 存在隐式依赖。修订：M1-05 增加 project note 标题+内容关键词 BM25 搜索；M1-04 将触发机制改为"用户手动触发 + daemon 支持手动触发 API"；M1-09 将低信任注入从 e2e 降级为"前端状态测试 + daemon 单元测试"；M1-05 依赖列显式声明 M0-06。
+  3. **Channel 线**：第一轮 4/4 问题已解决，但 revision 引入新问题：M1-06 单任务塞入 8 个产出，范围过度膨胀；role-based policy 决策（guest 被拒绝）完全缺失验收；Channel 附件到 wiki 的跨线链路存在结构性缺口（quarantine 为 mock，不进入 `source.ingest`）；IM provenance 未纳入验收。修订：M1-06 拆分为 M1-06a（入站验证 + actor 解析 + role policy）和 M1-06b（附件授权 + quarantine mock）；M1-06a 增加 guest 角色 policy 拒绝验收；M1-07 增加 provenance 字段要求；风险缓解声明补充"M2 补全 Channel 附件从 quarantine 到 `source.ingest` 的真实 sandbox 链路"；M1-06b 诚实声明 quarantine 为契约模拟。

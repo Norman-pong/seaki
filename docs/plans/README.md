@@ -7,3 +7,4 @@
 | 计划 | 范围 |
 | --- | --- |
 | [第一阶段任务计划：M0 本机纵切](phase-1-task-plan.md) | M0 工程任务拆解、验收标准、质量门禁和风险缓解 |
+| [M1 任务计划：Pipeline · Memory · Fake Channel Bridge](m1-task-plan.md) | M1 pipeline inspect/dry-run/compose、session_search + 手动 project note、fake/local channel provider 任务拆解、验收标准和风险缓解 |
