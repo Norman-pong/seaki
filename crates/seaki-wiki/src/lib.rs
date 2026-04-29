@@ -644,7 +644,7 @@ fn parse_pdf_stub(
             line_range: LineRange { start: 0, end: 0 },
             byte_range: span.byte_range,
             mime_sniff: MimeSniff {
-                declared: declared_mime.map(|s| s.to_string()),
+                declared: declared_mime.map(str::to_string),
                 sniffed: sniffed_mime.to_string(),
             },
             text_hash: sha256_hex(span.text.as_bytes()),
