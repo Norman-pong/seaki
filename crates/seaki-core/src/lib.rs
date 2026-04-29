@@ -28,6 +28,7 @@ pub enum CoreRecordKind {
     ApprovalDecision,
 }
 
+#[must_use]
 pub fn owns_record_kind(kind: CoreRecordKind) -> bool {
     matches!(
         kind,
@@ -238,6 +239,7 @@ pub enum ApprovalDecisionStatus {
 }
 
 impl ApprovalDecisionStatus {
+    #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Approved => APPROVAL_DECISION_APPROVED,
@@ -967,22 +969,22 @@ impl CoreLedger {
         }
         .to_string();
 
-        let citation_ref =
-            citation_ref
-                .map(CitationRefDTO::from)
-                .unwrap_or_else(|| CitationRefDTO {
-                    citation_id: request.citation_id.clone(),
-                    source_id: result.source_id.clone(),
-                    range: SourceRangeDTO {
-                        unit: "line".to_string(),
-                        start: 0,
-                        end: 0,
-                        label: None,
-                    },
-                    wiki_page_id: String::new(),
-                    claim_id: String::new(),
-                    degraded_reason: degraded.clone(),
-                });
+        let citation_ref = citation_ref.map_or_else(
+            || CitationRefDTO {
+                citation_id: request.citation_id.clone(),
+                source_id: result.source_id.clone(),
+                range: SourceRangeDTO {
+                    unit: "line".to_string(),
+                    start: 0,
+                    end: 0,
+                    label: None,
+                },
+                wiki_page_id: String::new(),
+                claim_id: String::new(),
+                degraded_reason: degraded.clone(),
+            },
+            CitationRefDTO::from,
+        );
 
         Ok(CitationResolveResult {
             citation_id: citation_ref.citation_id.clone(),
@@ -1475,6 +1477,7 @@ impl CoreLedger {
     }
 }
 
+#[must_use]
 pub fn workspace_scope(workspace_id: &str) -> String {
     format!("workspace:{workspace_id}")
 }
@@ -1570,6 +1573,7 @@ fn validate_event(event: &InertEvent) -> CoreResult<()> {
     Ok(())
 }
 
+#[must_use]
 pub fn expected_payload_schema_hash(event_type: &str) -> String {
     format!("{event_type}.v1")
 }
@@ -1608,6 +1612,7 @@ fn sanitized_event(mut event: InertEvent) -> InertEvent {
     event
 }
 
+#[must_use]
 pub fn sanitize_payload_summary(summary: &str) -> String {
     let mut redact_next = false;
     let mut sanitized = Vec::new();
@@ -1887,7 +1892,7 @@ fn insert_approval_decision(
             &record.patch_id,
             record.decision.as_str(),
             &record.decided_by,
-            if record.reason_present { 1_i64 } else { 0_i64 },
+            i64::from(record.reason_present),
             &record.reason_summary,
             checked_i64(event_seq)?
         ],

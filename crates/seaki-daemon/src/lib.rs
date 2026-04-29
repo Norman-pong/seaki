@@ -10,6 +10,7 @@ pub struct DaemonIngressContract {
 }
 
 impl DaemonIngressContract {
+    #[must_use]
     pub const fn m0() -> Self {
         Self {
             accepts_inert_events: true,

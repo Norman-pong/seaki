@@ -22,6 +22,7 @@ pub enum TypedPage {
 }
 
 impl TypedPage {
+    #[must_use]
     pub fn page_id(&self) -> &str {
         match self {
             Self::Concept(page) => &page.page_id,
@@ -176,6 +177,7 @@ pub struct WikiPatchStore {
 }
 
 impl WikiPatchStore {
+    #[must_use]
     pub fn new(current_revision: u64) -> Self {
         Self {
             current_revision,
@@ -190,38 +192,47 @@ impl WikiPatchStore {
         }
     }
 
+    #[must_use]
     pub fn current_revision(&self) -> u64 {
         self.current_revision
     }
 
+    #[must_use]
     pub fn page(&self, page_id: &str) -> Option<&TypedPage> {
         self.pages.get(page_id)
     }
 
+    #[must_use]
     pub fn claim(&self, claim_id: &str) -> Option<&Claim> {
         self.claims.get(claim_id)
     }
 
+    #[must_use]
     pub fn citation(&self, citation_id: &str) -> Option<&Citation> {
         self.citations.get(citation_id)
     }
 
+    #[must_use]
     pub fn citation_registry(&self) -> &BTreeMap<String, CitationRegistryEntry> {
         &self.citation_registry
     }
 
+    #[must_use]
     pub fn transaction(&self, patch_id: &str) -> Option<&WikiPatchTransaction> {
         self.transactions.get(patch_id)
     }
 
+    #[must_use]
     pub fn rollback_marker(&self, patch_id: &str) -> Option<&RollbackMarker> {
         self.rollback_markers.get(patch_id)
     }
 
+    #[must_use]
     pub fn audit_records(&self) -> &[AuditRecord] {
         &self.audit_records
     }
 
+    #[must_use]
     pub fn index_status(&self) -> WikiIndexStatus {
         self.index_status
     }

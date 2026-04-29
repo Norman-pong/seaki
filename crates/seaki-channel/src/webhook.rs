@@ -28,6 +28,7 @@ impl std::fmt::Display for WebhookError {
 impl std::error::Error for WebhookError {}
 
 /// Simple in-memory HMAC-SHA256 (RFC 2104) using only `sha2`.
+#[must_use]
 pub fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
     let block_size = 64usize;
     let mut k = key.to_vec();
@@ -56,6 +57,7 @@ pub fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {
     outer.finalize().into()
 }
 
+#[must_use]
 pub fn hex_encode(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut output = String::with_capacity(bytes.len() * 2);
@@ -79,7 +81,7 @@ impl FakeWebhookVerifier {
         Self {
             secret: secret.into().into_bytes(),
             seen_event_ids: Mutex::new(HashMap::new()),
-            ttl: Duration::from_secs(300), // 5 minutes
+            ttl: Duration::from_mins(5), // 5 minutes
         }
     }
 
@@ -89,7 +91,7 @@ impl FakeWebhookVerifier {
     }
 
     /// Verify signature, timestamp and replay.
-    /// On success the event_id is recorded to prevent replays.
+    /// On success the `event_id` is recorded to prevent replays.
     pub fn verify(
         &self,
         event_id: &str,

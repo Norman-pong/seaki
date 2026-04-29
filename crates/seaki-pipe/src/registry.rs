@@ -18,6 +18,7 @@ pub enum SideEffectLevel {
 }
 
 impl SideEffectLevel {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::None => "none",
@@ -58,7 +59,8 @@ pub struct PipeCommandManifest {
 }
 
 impl PipeCommandManifest {
-    /// Compute the canonical schema hash from input_schema and output_schema.
+    /// Compute the canonical schema hash from `input_schema` and `output_schema`.
+    #[must_use]
     pub fn compute_schema_hash(
         input_schema: &serde_json::Value,
         output_schema: &serde_json::Value,
@@ -79,6 +81,7 @@ impl PipeCommandManifest {
         hex_digest(hasher.finalize().as_slice())
     }
 
+    #[must_use]
     pub fn validate_schema_hash(&self) -> bool {
         let expected = Self::compute_schema_hash(&self.input_schema, &self.output_schema);
         self.schema_hash == expected
@@ -132,12 +135,14 @@ impl Default for CommandRegistry {
 }
 
 impl CommandRegistry {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             commands: HashMap::new(),
         }
     }
 
+    #[must_use]
     pub fn builtin() -> Self {
         let mut registry = Self::new();
         for manifest in builtin_commands() {
@@ -180,12 +185,14 @@ impl CommandRegistry {
             .ok_or_else(|| CommandNotFound(command_id.to_string()))
     }
 
+    #[must_use]
     pub fn list(&self) -> Vec<&PipeCommandManifest> {
         let mut manifests: Vec<_> = self.commands.values().collect();
         manifests.sort_by_key(|m| &m.command_id);
         manifests
     }
 
+    #[must_use]
     pub fn list_by_side_effect(&self, level: SideEffectLevel) -> Vec<&PipeCommandManifest> {
         self.commands
             .values()

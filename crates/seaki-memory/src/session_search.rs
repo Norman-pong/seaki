@@ -37,7 +37,7 @@ pub struct SessionManifestEntry {
     pub delete_after: Option<u64>,
 }
 
-/// 后台清理动作，由调用方（如 CoreLedger）执行物理删除并生成 AuditEvent。
+/// 后台清理动作，由调用方（如 CoreLedger）执行物理删除并生成 `AuditEvent`。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SessionCleanupAction {
     MarkExpired {
@@ -56,6 +56,7 @@ pub struct SessionSearchIndex {
 }
 
 impl SessionSearchIndex {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             entries: HashMap::new(),
@@ -82,7 +83,7 @@ impl SessionSearchIndex {
         self.rebuild_scope(index, &manifest.scope)
     }
 
-    /// 搜索会话。使用与 wiki source 分离的 session scope，避免 replace_scope 互相覆盖。
+    /// 搜索会话。使用与 wiki source 分离的 session scope，避免 `replace_scope` 互相覆盖。
     pub fn search_sessions(
         &self,
         query_text: &str,
@@ -116,7 +117,7 @@ impl SessionSearchIndex {
     }
 
     /// TTL 过期条目先标记 `expired`，7 天后物理删除并返回清理动作。
-    /// 调用方应在收到 `PhysicallyDelete` 后生成 AuditEvent。
+    /// 调用方应在收到 `PhysicallyDelete` 后生成 `AuditEvent`。
     pub fn cleanup_expired_sessions(
         &mut self,
         now: u64,
@@ -128,7 +129,7 @@ impl SessionSearchIndex {
         let mut scopes_to_rebuild = std::collections::HashSet::new();
 
         // 第一轮扫描：标记过期
-        for (session_id, entry) in self.entries.iter_mut() {
+        for (session_id, entry) in &mut self.entries {
             if entry.status == SessionIndexStatus::Active {
                 if let Some(delete_after) = entry.delete_after {
                     if now >= delete_after {
@@ -172,10 +173,12 @@ impl SessionSearchIndex {
         Ok(actions)
     }
 
+    #[must_use]
     pub fn get_entry(&self, session_id: &str) -> Option<&SessionManifestEntry> {
         self.entries.get(session_id)
     }
 
+    #[must_use]
     pub fn entry_count(&self) -> usize {
         self.entries.len()
     }
@@ -206,7 +209,8 @@ impl Default for SessionSearchIndex {
     }
 }
 
-/// session scope 与 wiki source scope 分离，减小 replace_scope 粒度。
+/// session scope 与 wiki source scope 分离，减小 `replace_scope` 粒度。
+#[must_use]
 pub fn session_scope(base: &IndexScope) -> IndexScope {
     IndexScope::new(
         base.workspace_id.clone(),

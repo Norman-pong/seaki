@@ -38,6 +38,7 @@ pub enum RedactionStatus {
 }
 
 /// 最小脱敏 pipeline：正则（字符串模式）扫描常见 secret，提取摘要。
+#[must_use]
 pub fn redact_and_summarize(transcript: &str) -> (String, RedactionStatus) {
     let (redacted, status) = redact_transcript(transcript);
     let summary = extract_summary(&redacted);
@@ -88,7 +89,7 @@ fn redact_line(line: &str) -> String {
     if let Some(pos) = lower.find("bearer ") {
         // 保留原始大小写中的 "Bearer" 前缀
         let prefix = &line[..pos];
-        return format!("{}Bearer [REDACTED]", prefix);
+        return format!("{prefix}Bearer [REDACTED]");
     }
 
     // key=value 或 key: value 模式
@@ -110,7 +111,7 @@ fn extract_summary(redacted: &str) -> String {
     } else {
         ""
     };
-    format!("{}{}", prefix, suffix)
+    format!("{prefix}{suffix}")
 }
 
 fn current_timestamp() -> u64 {

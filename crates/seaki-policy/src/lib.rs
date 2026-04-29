@@ -21,6 +21,7 @@ pub enum PolicyDecision {
 }
 
 impl PolicyDecision {
+    #[must_use]
     pub const fn permits_side_effect(self) -> bool {
         matches!(self, Self::Allow)
     }
@@ -123,6 +124,7 @@ impl WorkspacePathPolicy {
         Ok(self)
     }
 
+    #[must_use]
     pub fn workspace_root(&self) -> &Path {
         &self.workspace_root
     }
@@ -131,6 +133,7 @@ impl WorkspacePathPolicy {
         canonicalize_existing(path.as_ref())
     }
 
+    #[must_use]
     pub fn is_workspace_read_allowed(&self, canonical_path: &Path) -> bool {
         self.is_allowlisted(canonical_path) && !self.is_denied(canonical_path)
     }
@@ -385,6 +388,7 @@ pub struct CapabilityUseFailure {
 }
 
 impl CapabilityStore {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -617,6 +621,7 @@ pub struct PolicyEngine {
 }
 
 impl PolicyEngine {
+    #[must_use]
     pub fn new(workspace_policy: WorkspacePathPolicy) -> Self {
         Self {
             workspace_policy,
@@ -625,6 +630,7 @@ impl PolicyEngine {
         }
     }
 
+    #[must_use]
     pub fn with_fixed_now(workspace_policy: WorkspacePathPolicy, now: SystemTime) -> Self {
         Self {
             workspace_policy,

@@ -43,6 +43,7 @@ pub struct FakeChannelProvider {
 }
 
 impl FakeChannelProvider {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             verifier: FakeWebhookVerifier::new(super::webhook::WEBHOOK_SECRET),

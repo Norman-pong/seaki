@@ -16,10 +16,12 @@ pub enum SandboxProfile {
 }
 
 impl SandboxProfile {
+    #[must_use]
     pub const fn allows_network(self) -> bool {
         false
     }
 
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::ReadOnly => "read-only",
@@ -35,6 +37,7 @@ pub enum SandboxBackendKind {
 }
 
 impl SandboxBackendKind {
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::MacosSeatbelt => PRIMARY_M0_BACKEND,
@@ -147,6 +150,7 @@ pub struct SandboxCommandPlan {
 pub struct MacosSeatbeltBackend;
 
 impl MacosSeatbeltBackend {
+    #[must_use]
     pub fn command_plan(policy: &SandboxPolicy, command: &[String]) -> SandboxCommandPlan {
         let profile_source = build_seatbelt_profile(policy);
         let mut args = vec!["-p".to_string(), profile_source.clone()];
@@ -348,6 +352,7 @@ impl SourceIngestContext {
         result
     }
 
+    #[must_use]
     pub fn audit(&self) -> &[SandboxAuditRecord] {
         &self.audit
     }

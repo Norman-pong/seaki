@@ -89,6 +89,7 @@ pub struct DryRunResult {
 }
 
 /// Simulate a dry-run of a composed pipeline without executing actual side effects.
+#[must_use]
 pub fn dry_run(pipeline: &ComposedPipeline, initial_input: serde_json::Value) -> DryRunResult {
     let mut events = Vec::new();
     let mut expected_read_ranges = Vec::new();

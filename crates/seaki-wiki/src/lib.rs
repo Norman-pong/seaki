@@ -224,6 +224,7 @@ impl RawCas {
         })
     }
 
+    #[must_use]
     pub fn path_for_key(&self, raw_key: &str) -> PathBuf {
         self.root.join(raw_relative_path(raw_key))
     }
@@ -270,6 +271,7 @@ pub struct SourceManifest {
 }
 
 impl SourceManifest {
+    #[must_use]
     pub fn audit_summary(&self) -> String {
         format!(
             "source_id={} origin_display={} mime={} size={} parse_status={}",
@@ -887,10 +889,7 @@ fn contains_external_reference(text: &str) -> bool {
 }
 
 fn pdf_contains_any_case_insensitive(bytes: &[u8], lower_needles: &[&[u8]]) -> bool {
-    let lower = bytes
-        .iter()
-        .map(|byte| byte.to_ascii_lowercase())
-        .collect::<Vec<_>>();
+    let lower = bytes.iter().map(u8::to_ascii_lowercase).collect::<Vec<_>>();
 
     lower_needles
         .iter()
@@ -909,10 +908,10 @@ fn token_at(bytes: &[u8], index: usize, token: &[u8]) -> bool {
         && index
             .checked_sub(1)
             .and_then(|previous| bytes.get(previous))
-            .is_none_or(|byte| byte.is_ascii_whitespace())
+            .is_none_or(u8::is_ascii_whitespace)
         && bytes
             .get(index + token.len())
-            .is_none_or(|byte| byte.is_ascii_whitespace())
+            .is_none_or(u8::is_ascii_whitespace)
 }
 
 fn ensure_sandbox_request_matches_metadata(

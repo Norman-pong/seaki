@@ -233,12 +233,10 @@ pub fn compose(
 
     let input_type = composed_steps
         .first()
-        .map(|s| s.input_type)
-        .unwrap_or((FrameType::JsonValue, Cardinality::One));
+        .map_or((FrameType::JsonValue, Cardinality::One), |s| s.input_type);
     let output_type = composed_steps
         .last()
-        .map(|s| s.output_type)
-        .unwrap_or((FrameType::JsonValue, Cardinality::One));
+        .map_or((FrameType::JsonValue, Cardinality::One), |s| s.output_type);
 
     Ok(ComposedPipeline {
         pipeline_id: ast.pipeline_id.clone(),

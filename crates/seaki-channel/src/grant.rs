@@ -1,4 +1,4 @@
-//! ChannelResourceGrant and ChannelActionGrant models.
+//! `ChannelResourceGrant` and `ChannelActionGrant` models.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -43,6 +43,7 @@ impl FakeBroker {
     }
 
     /// Mock download: returns quarantine metadata without real I/O.
+    #[must_use]
     pub fn download(&self, attachment: &ChannelAttachmentRef) -> QuarantinedDownload {
         let quarantine_path = format!(
             "{}/{}_{}",
@@ -103,6 +104,7 @@ pub struct ChannelResourceGrantStore {
 }
 
 impl ChannelResourceGrantStore {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             grants: Mutex::new(HashMap::new()),
@@ -123,7 +125,7 @@ impl ChannelResourceGrantStore {
         Ok(grant)
     }
 
-    /// Consume one use of a grant after validating scope, file_key and version.
+    /// Consume one use of a grant after validating scope, `file_key` and version.
     pub fn consume(
         &self,
         grant_id: &str,

@@ -55,6 +55,7 @@ pub struct IndexGeneration {
 }
 
 impl IndexGeneration {
+    #[must_use]
     pub fn fresh(
         generation_id: u64,
         scope: IndexScope,
@@ -89,22 +90,27 @@ impl IndexGeneration {
         }
     }
 
+    #[must_use]
     pub fn scope(&self) -> IndexScope {
         IndexScope::new(self.workspace_id.clone(), self.account_id.clone())
     }
 
+    #[must_use]
     pub const fn is_fresh(&self) -> bool {
         matches!(self.status, IndexStatus::Fresh)
     }
 
+    #[must_use]
     pub const fn is_stale(&self) -> bool {
         matches!(self.status, IndexStatus::Stale)
     }
 
+    #[must_use]
     pub const fn requires_cleanup(&self) -> bool {
         matches!(self.status, IndexStatus::CleanupRequired)
     }
 
+    #[must_use]
     pub const fn failed(&self) -> bool {
         matches!(self.status, IndexStatus::Failed)
     }
@@ -174,6 +180,7 @@ pub struct IndexedDocument {
 }
 
 impl IndexedDocument {
+    #[must_use]
     pub fn scope(&self) -> IndexScope {
         IndexScope::new(self.workspace_id.clone(), self.account_id.clone())
     }
@@ -206,6 +213,7 @@ impl SearchQuery {
         }
     }
 
+    #[must_use]
     pub fn scope(&self) -> IndexScope {
         IndexScope::new(self.workspace_id.clone(), self.account_id.clone())
     }
@@ -283,6 +291,7 @@ pub struct Bm25CandidateIndex {
 }
 
 impl Bm25CandidateIndex {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             documents: BTreeMap::new(),
@@ -319,17 +328,18 @@ impl Bm25CandidateIndex {
         Ok(())
     }
 
+    #[must_use]
     pub fn generation(&self, scope: &IndexScope) -> Option<&IndexGeneration> {
         self.generations.get(scope)
     }
 
+    #[must_use]
     pub fn search_candidates(&self, query: &SearchQuery) -> CandidateSearch {
         let scope = query.scope();
         let status = self
             .generations
             .get(&scope)
-            .map(|generation| generation.status)
-            .unwrap_or(IndexStatus::Stale);
+            .map_or(IndexStatus::Stale, |generation| generation.status);
 
         if query.limit == 0 {
             return CandidateSearch::empty(status);
@@ -382,6 +392,7 @@ impl Bm25CandidateIndex {
         }
     }
 
+    #[must_use]
     pub fn authorize_candidates(
         &self,
         query: &SearchQuery,
@@ -455,6 +466,7 @@ impl Bm25CandidateIndex {
         self.mark_status(scope, IndexStatus::Stale, None)
     }
 
+    #[must_use]
     pub fn resolve_citation(
         &self,
         scope: &IndexScope,
@@ -488,6 +500,7 @@ impl Bm25CandidateIndex {
         })
     }
 
+    #[must_use]
     pub fn get_document(
         &self,
         scope: &IndexScope,

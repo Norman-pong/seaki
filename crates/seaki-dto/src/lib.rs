@@ -75,6 +75,7 @@ impl ImportStage {
         Self::Selected,
     ];
 
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::ApprovalPending => "approval_pending",
@@ -95,6 +96,7 @@ impl ImportStage {
         }
     }
 
+    #[must_use]
     pub const fn is_terminal(self) -> bool {
         matches!(
             self,
@@ -131,6 +133,7 @@ impl ApprovalStatus {
         Self::Conflict,
     ];
 
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Pending => "pending",
@@ -143,6 +146,7 @@ impl ApprovalStatus {
         }
     }
 
+    #[must_use]
     pub const fn is_terminal(self) -> bool {
         matches!(
             self,
@@ -172,6 +176,7 @@ pub struct Field {
 }
 
 impl Field {
+    #[must_use]
     pub const fn required(name: &'static str, ts_type: &'static str) -> Self {
         Self {
             name,
@@ -180,6 +185,7 @@ impl Field {
         }
     }
 
+    #[must_use]
     pub const fn optional(name: &'static str, ts_type: &'static str) -> Self {
         Self {
             name,
@@ -762,9 +768,10 @@ pub const M0_DOMAIN_USE_CASE_METHODS: &[MethodName] = &[
     },
 ];
 
+#[must_use]
 pub fn canonical_schema() -> String {
     let mut schema = String::new();
-    schema.push_str(&format!("schema_version:{}\n", SCHEMA_VERSION));
+    schema.push_str(&format!("schema_version:{SCHEMA_VERSION}\n"));
     schema.push_str("[string_unions]\n");
     for string_union in STRING_UNIONS {
         schema.push_str(string_union.name);

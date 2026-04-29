@@ -1,4 +1,4 @@
-//! Outbox: ChannelActionGrant, idempotency, lease, retry.
+//! Outbox: `ChannelActionGrant`, idempotency, lease, retry.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -56,6 +56,7 @@ pub struct Outbox {
 }
 
 impl Outbox {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             items: Mutex::new(HashMap::new()),

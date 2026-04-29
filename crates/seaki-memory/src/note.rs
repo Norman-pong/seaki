@@ -1,4 +1,4 @@
-//! Project note: CRUD, BM25 indexing, source_checking.
+//! Project note: CRUD, BM25 indexing, `source_checking`.
 
 use seaki_index::{
     Bm25CandidateIndex, CandidateKind, IndexCandidateId, IndexGeneration, IndexScope,
@@ -30,6 +30,7 @@ pub enum NoteStatus {
 }
 
 impl NoteStatus {
+    #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             NoteStatus::Proposed => "proposed",
@@ -42,16 +43,18 @@ impl NoteStatus {
         }
     }
 
+    #[must_use]
     pub fn can_transition_to(self, target: NoteStatus) -> bool {
         matches!(
             (self, target),
             (NoteStatus::Proposed, NoteStatus::Scanning)
                 | (NoteStatus::Scanning, NoteStatus::SourceChecking)
-                | (NoteStatus::SourceChecking, NoteStatus::Approved)
-                | (NoteStatus::SourceChecking, NoteStatus::Conflict)
+                | (
+                    NoteStatus::SourceChecking,
+                    NoteStatus::Approved | NoteStatus::Conflict
+                )
                 | (NoteStatus::Approved, NoteStatus::Active)
-                | (NoteStatus::Active, NoteStatus::Stale)
-                | (NoteStatus::Conflict, NoteStatus::Stale)
+                | (NoteStatus::Active | NoteStatus::Conflict, NoteStatus::Stale)
         )
     }
 }
@@ -77,6 +80,7 @@ pub struct NoteStore {
 }
 
 impl NoteStore {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             notes: HashMap::new(),
@@ -126,6 +130,7 @@ impl NoteStore {
         Ok(())
     }
 
+    #[must_use]
     pub fn get_note(&self, note_id: &str) -> Option<&ProjectNote> {
         self.notes.get(note_id)
     }
@@ -169,6 +174,7 @@ impl NoteStore {
     }
 
     /// 使用 BM25 搜索 note。note 使用独立的 memory scope，不与 wiki source 冲突。
+    #[must_use]
     pub fn search_notes(
         &self,
         query_text: &str,
@@ -206,7 +212,7 @@ impl NoteStore {
             .collect()
     }
 
-    /// 最小 source_checking：检测 note 内容与 wiki claim 关键词/引用重叠。
+    /// 最小 `source_checking：检测` note 内容与 wiki claim 关键词/引用重叠。
     /// 冲突则标记 `NoteStatus::Conflict` 并阻止进入 `Approved`。
     /// 返回 true 表示检测到冲突。
     pub fn check_source_conflicts(
@@ -234,6 +240,7 @@ impl NoteStore {
         Ok(has_conflict)
     }
 
+    #[must_use]
     pub fn note_count(&self) -> usize {
         self.notes.len()
     }
@@ -246,6 +253,7 @@ impl Default for NoteStore {
 }
 
 /// memory scope 与 wiki source scope 分离。
+#[must_use]
 pub fn memory_scope(base: &IndexScope) -> IndexScope {
     IndexScope::new(
         base.workspace_id.clone(),
