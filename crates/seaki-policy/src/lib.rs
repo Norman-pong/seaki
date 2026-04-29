@@ -405,7 +405,7 @@ impl CapabilityStore {
         let Some(resource) = snapshot_file(&canonical_path, input.max_bytes)? else {
             return Ok(Err(CapabilityGrantRejection::ResourceTooLarge));
         };
-        let expected_scope_hash = file_read_grant_scope_hash(FileReadGrantScope {
+        let expected_scope_hash = file_read_grant_scope_hash(&FileReadGrantScope {
             subject_actor_id: &input.subject_actor_id,
             workspace_id: &input.workspace_id,
             audience: &input.audience,
@@ -928,7 +928,7 @@ struct FileReadGrantScope<'a> {
     resource: &'a FileResourceSnapshot,
 }
 
-fn file_read_grant_scope_hash(scope: FileReadGrantScope<'_>) -> String {
+fn file_read_grant_scope_hash(scope: &FileReadGrantScope<'_>) -> String {
     hash_text(&format!(
         "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
         scope.subject_actor_id,

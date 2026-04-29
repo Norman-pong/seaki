@@ -418,7 +418,7 @@ impl Fixture {
         ApprovalDecision {
             approval_id: "approval-source".to_string(),
             policy_decision_id: "policy-source".to_string(),
-            scope_hash: file_read_grant_scope_hash(FileReadGrantScope {
+            scope_hash: file_read_grant_scope_hash(&FileReadGrantScope {
                 subject_actor_id: "user-1",
                 workspace_id: "ws-1",
                 audience: "seaki-source-ingest",

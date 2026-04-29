@@ -334,6 +334,7 @@ impl Bm25CandidateIndex {
     }
 
     #[must_use]
+    #[allow(clippy::cast_precision_loss)]
     pub fn search_candidates(&self, query: &SearchQuery) -> CandidateSearch {
         let scope = query.scope();
         let status = self
@@ -625,6 +626,7 @@ fn document_frequency(
     frequencies
 }
 
+#[allow(clippy::cast_precision_loss)]
 fn bm25_score(
     entry: &IndexedEntry,
     terms: &[String],

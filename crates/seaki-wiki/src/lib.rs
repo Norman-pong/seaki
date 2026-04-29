@@ -491,14 +491,20 @@ fn parse_raw_source(
     config: ParserConfig,
 ) -> ParsedArtifact {
     if is_markdown_mime(sniffed_mime) {
-        return parse_markdown(source_id, source_hash, declared_mime, sniffed_mime, bytes);
+        return parse_markdown(
+            source_id,
+            source_hash,
+            declared_mime.as_deref(),
+            sniffed_mime,
+            bytes,
+        );
     }
 
     if is_pdf_mime(sniffed_mime) || declared_mime.as_deref() == Some("application/pdf") {
         return parse_pdf_stub(
             source_id,
             source_hash,
-            declared_mime,
+            declared_mime.as_deref(),
             sniffed_mime,
             bytes,
             config,
@@ -520,7 +526,7 @@ fn parse_raw_source(
 fn parse_markdown(
     source_id: &str,
     source_hash: &str,
-    declared_mime: Option<String>,
+    declared_mime: Option<&str>,
     sniffed_mime: &str,
     bytes: &[u8],
 ) -> ParsedArtifact {
@@ -556,7 +562,7 @@ fn parse_markdown(
                 line_range: range.line_range,
                 byte_range: range.byte_range,
                 mime_sniff: MimeSniff {
-                    declared: declared_mime.clone(),
+                    declared: declared_mime.map(|s| s.to_string()),
                     sniffed: sniffed_mime.to_string(),
                 },
                 text_hash: sha256_hex(text.as_bytes()),
@@ -584,7 +590,7 @@ fn parse_markdown(
 fn parse_pdf_stub(
     source_id: &str,
     source_hash: &str,
-    declared_mime: Option<String>,
+    declared_mime: Option<&str>,
     sniffed_mime: &str,
     bytes: &[u8],
     config: ParserConfig,
@@ -644,7 +650,7 @@ fn parse_pdf_stub(
             line_range: LineRange { start: 0, end: 0 },
             byte_range: span.byte_range,
             mime_sniff: MimeSniff {
-                declared: declared_mime.clone(),
+                declared: declared_mime.map(|s| s.to_string()),
                 sniffed: sniffed_mime.to_string(),
             },
             text_hash: sha256_hex(span.text.as_bytes()),
