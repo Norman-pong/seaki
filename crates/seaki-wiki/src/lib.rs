@@ -113,7 +113,7 @@ impl RawCas {
     /// # Errors
     ///
     /// Returns an error if the workspace key is empty.
-    pub fn new(root: impl AsRef<Path>, workspace_key: impl AsRef<[u8]>) -> WikiResult<Self> {
+    pub fn try_new(root: impl AsRef<Path>, workspace_key: impl AsRef<[u8]>) -> WikiResult<Self> {
         let workspace_key = workspace_key.as_ref().to_vec();
         if workspace_key.is_empty() {
             return Err(WikiError::EmptyWorkspaceKey);

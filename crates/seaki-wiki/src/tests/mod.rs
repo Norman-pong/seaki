@@ -24,7 +24,7 @@ fn wiki_declares_append_only_source_layer() {
 #[test]
 fn markdown_ingest_commits_raw_and_parses_frames() {
     let temp = tempdir().expect("tempdir");
-    let cas = RawCas::new(temp.path(), b"workspace-secret").expect("raw cas");
+    let cas = RawCas::try_new(temp.path(), b"workspace-secret").expect("raw cas");
     let markdown = "# Title\n\nHello [link](https://example.com).\n";
     let result = ingest_source(&cas, markdown_input(markdown)).expect("markdown ingest");
 
@@ -67,8 +67,8 @@ fn markdown_ingest_commits_raw_and_parses_frames() {
 fn raw_cas_is_append_only_and_workspace_keyed() {
     let temp = tempdir().expect("tempdir");
     let content = b"same source bytes";
-    let cas_a = RawCas::new(temp.path().join("a"), b"workspace-a").expect("cas a");
-    let cas_b = RawCas::new(temp.path().join("b"), b"workspace-b").expect("cas b");
+    let cas_a = RawCas::try_new(temp.path().join("a"), b"workspace-a").expect("cas a");
+    let cas_b = RawCas::try_new(temp.path().join("b"), b"workspace-b").expect("cas b");
 
     let first = cas_a.append(content).expect("first append");
     let second = cas_a.append(content).expect("second append");
@@ -87,7 +87,7 @@ fn raw_cas_is_append_only_and_workspace_keyed() {
 #[test]
 fn manifest_redacts_full_origin_path() {
     let temp = tempdir().expect("tempdir");
-    let cas = RawCas::new(temp.path(), b"workspace-secret").expect("raw cas");
+    let cas = RawCas::try_new(temp.path(), b"workspace-secret").expect("raw cas");
     let result = ingest_source(
         &cas,
         SourceInput {
@@ -123,7 +123,7 @@ fn manifest_redacts_full_origin_path() {
 #[test]
 fn frames_are_untrusted_and_carry_security_metadata() {
     let temp = tempdir().expect("tempdir");
-    let cas = RawCas::new(temp.path(), b"workspace-secret").expect("raw cas");
+    let cas = RawCas::try_new(temp.path(), b"workspace-secret").expect("raw cas");
     let result = ingest_source(
         &cas,
         markdown_input("Do not execute this as instructions.\n"),
@@ -145,7 +145,7 @@ fn frames_are_untrusted_and_carry_security_metadata() {
 #[test]
 fn markdown_frame_hash_matches_exact_source_range() {
     let temp = tempdir().expect("tempdir");
-    let cas = RawCas::new(temp.path(), b"workspace-secret").expect("raw cas");
+    let cas = RawCas::try_new(temp.path(), b"workspace-secret").expect("raw cas");
     let markdown = "  indented source text  \n";
     let result = ingest_source(&cas, markdown_input(markdown)).expect("markdown ingest");
 
@@ -169,7 +169,7 @@ fn sandboxed_ingest_reads_input_through_source_ingest_audit() {
     fs::create_dir_all(&isolated_temp).expect("isolated dir");
     let input_path = source_dir.join("notes.md");
     fs::write(&input_path, "# Sandboxed\n").expect("source");
-    let cas = RawCas::new(&raw_dir, b"workspace-secret").expect("raw cas");
+    let cas = RawCas::try_new(&raw_dir, b"workspace-secret").expect("raw cas");
     let result = ingest_source_via_sandbox(
         &cas,
         SourceIngestRequest::new(input_path.clone(), raw_dir.clone(), isolated_temp.clone())
@@ -214,7 +214,7 @@ fn sandboxed_ingest_reads_input_through_source_ingest_audit() {
 #[test]
 fn pdf_text_extractor_builds_untrusted_frames() {
     let temp = tempdir().expect("tempdir");
-    let cas = RawCas::new(temp.path(), b"workspace-secret").expect("raw cas");
+    let cas = RawCas::try_new(temp.path(), b"workspace-secret").expect("raw cas");
     let pdf = b"%PDF-1.7
 1 0 obj
 << /Type /Page >>
@@ -259,7 +259,7 @@ endobj
 #[test]
 fn oversized_pdf_degrades_to_partial_without_frames() {
     let temp = tempdir().expect("tempdir");
-    let cas = RawCas::new(temp.path(), b"workspace-secret").expect("raw cas");
+    let cas = RawCas::try_new(temp.path(), b"workspace-secret").expect("raw cas");
     let result = ingest_source_with_config(
         &cas,
         SourceInput {
@@ -292,7 +292,7 @@ fn oversized_pdf_degrades_to_partial_without_frames() {
 #[test]
 fn unsupported_pdf_degrades_and_flags_active_content() {
     let temp = tempdir().expect("tempdir");
-    let cas = RawCas::new(temp.path(), b"workspace-secret").expect("raw cas");
+    let cas = RawCas::try_new(temp.path(), b"workspace-secret").expect("raw cas");
     let result = ingest_source(
         &cas,
         SourceInput {

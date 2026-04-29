@@ -50,7 +50,7 @@ fn workspace_denylist_overrides_allowlist() {
     fs::create_dir(&denied_dir).expect("create denied dir");
     let denied_file = denied_dir.join("note.md");
     fs::write(&denied_file, "secret").expect("write denied file");
-    let policy = WorkspacePathPolicy::new(fixture.workspace.path())
+    let policy = WorkspacePathPolicy::try_new(fixture.workspace.path())
         .expect("workspace policy")
         .with_deny_roots([denied_dir])
         .expect("deny roots");
@@ -72,7 +72,7 @@ fn workspace_denylist_cannot_be_bypassed_by_grant() {
     fs::create_dir(&denied_dir).expect("create denied dir");
     let denied_file = denied_dir.join("note.md");
     fs::write(&denied_file, "secret").expect("write denied file");
-    let policy = WorkspacePathPolicy::new(fixture.workspace.path())
+    let policy = WorkspacePathPolicy::try_new(fixture.workspace.path())
         .expect("workspace policy")
         .with_deny_roots([denied_dir])
         .expect("deny roots");
@@ -279,7 +279,7 @@ fn changed_resource_version_rejects_grant_use_without_consuming_it() {
 fn concurrent_grant_reuse_allows_only_one_consumer() {
     let fixture = Fixture::new();
     let external_file = fixture.write_external_file("source.md", "# source");
-    let policy = WorkspacePathPolicy::new(fixture.workspace.path()).expect("workspace policy");
+    let policy = WorkspacePathPolicy::try_new(fixture.workspace.path()).expect("workspace policy");
     let store = CapabilityStore::new();
     let now = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
     store
@@ -338,13 +338,13 @@ impl Fixture {
 
     fn engine(&self) -> PolicyEngine {
         PolicyEngine::new(
-            WorkspacePathPolicy::new(self.workspace.path()).expect("workspace policy"),
+            WorkspacePathPolicy::try_new(self.workspace.path()).expect("workspace policy"),
         )
     }
 
     fn engine_at(&self, now: SystemTime) -> PolicyEngine {
         PolicyEngine::with_fixed_now(
-            WorkspacePathPolicy::new(self.workspace.path()).expect("workspace policy"),
+            WorkspacePathPolicy::try_new(self.workspace.path()).expect("workspace policy"),
             now,
         )
     }

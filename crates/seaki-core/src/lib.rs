@@ -240,7 +240,7 @@ pub enum ApprovalDecisionStatus {
 
 impl ApprovalDecisionStatus {
     #[must_use]
-    pub fn as_str(self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             Self::Approved => APPROVAL_DECISION_APPROVED,
             Self::Denied => APPROVAL_DECISION_DENIED,

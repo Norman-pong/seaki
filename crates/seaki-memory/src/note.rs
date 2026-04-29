@@ -31,7 +31,7 @@ pub enum NoteStatus {
 
 impl NoteStatus {
     #[must_use]
-    pub fn as_str(self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             NoteStatus::Proposed => "proposed",
             NoteStatus::Scanning => "scanning",

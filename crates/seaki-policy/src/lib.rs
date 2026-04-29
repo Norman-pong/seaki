@@ -104,7 +104,7 @@ impl WorkspacePathPolicy {
     /// # Errors
     ///
     /// 当工作区根目录无法 canonicalize 时返回错误。
-    pub fn new(workspace_root: impl AsRef<Path>) -> PolicyResult<Self> {
+    pub fn try_new(workspace_root: impl AsRef<Path>) -> PolicyResult<Self> {
         let workspace_root = canonicalize_existing(workspace_root.as_ref())?;
         Ok(Self {
             allow_roots: vec![workspace_root.clone()],

@@ -224,7 +224,7 @@ fn sandboxed_ingest_rejects_raw_cas_root_mismatch_before_raw_write() {
     let other_raw_dir = fixture._temp.path().join("other-raw");
     fs::create_dir_all(&other_raw_dir).expect("other raw dir");
     let source_path = fixture.write_source("root.md", b"# Root\n");
-    let cas = RawCas::new(&other_raw_dir, b"workspace-secret").expect("raw cas");
+    let cas = RawCas::try_new(&other_raw_dir, b"workspace-secret").expect("raw cas");
 
     let error = ingest_source_via_sandbox(
         &cas,
@@ -341,7 +341,7 @@ impl IngestFixture {
     }
 
     fn raw_cas(&self) -> RawCas {
-        RawCas::new(&self.raw_dir, b"workspace-secret").expect("raw cas")
+        RawCas::try_new(&self.raw_dir, b"workspace-secret").expect("raw cas")
     }
 }
 
