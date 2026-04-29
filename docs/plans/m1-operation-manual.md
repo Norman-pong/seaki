@@ -139,6 +139,32 @@ let actions = sessions.cleanup_expired_sessions(now, &mut index).unwrap();
 cargo test m1_session_search_indexes_redacted_manifest -- --nocapture
 ```
 
+#### 2c Session Redact（手动触发脱敏并索引）
+
+```rust
+// 代码示例（对应测试 session_redact_indexes_and_audits）
+let result = ledger.session_redact(SessionRedactRequest::new(
+    "event-sr-1", "actor-1", "workspace-1", "idem-sr-1",
+    "session-1", "my api_key=sk-secret\nbearer token abc",
+)).unwrap();
+
+assert_eq!(result.status, "indexed");
+assert_eq!(result.candidate_count, 1);
+
+// 原始 secret 被脱敏后搜索不到
+let search = ledger.session_search(SessionSearchRequest::new(
+    "workspace-1", "actor-1", "sk-secret", 10,
+)).unwrap();
+assert!(search.is_empty());
+```
+
+手动验证命令：
+
+```bash
+cargo test session_redact_indexes_and_audits -- --nocapture
+cargo test session_redact_duplicate_idempotency_rejected -- --nocapture
+```
+
 ### 3. Fake Channel 入站 + Webhook + Outbox
 
 ```rust

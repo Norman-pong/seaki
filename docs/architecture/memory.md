@@ -14,7 +14,7 @@ seaki 的记忆系统参考 [Hermes Persistent Memory](https://github.com/NousRe
 | --- | --- | --- | --- |
 | `user_memory` | 用户偏好、沟通习惯、稳定身份信息 | `memory.propose` -> policy -> audit | 会话开始冻结注入 |
 | `project_memory` | 项目约定、环境事实、长期工作流 | `memory.propose` -> source check -> audit | 会话开始冻结注入 |
-| `session_search` | 经脱敏的会话索引、摘要和引用回查 | 自动建立 redacted session index，按 TTL / scope 保留 | 不默认注入 |
+| `session_search` | 经脱敏的会话索引、摘要和引用回查 | 手动触发 `session_redact` → 脱敏 → 索引 → 按 TTL / scope 保留；M2 接入真实 session 生命周期后改为自动触发 | 不默认注入 |
 | `review_memory` | 学习卡片、复习计划、掌握度 | 用户或 agent 提议，用户可编辑 | 只在学习技能中注入 |
 | `wiki_claims` | 可引用的项目知识事实 | wiki patch transaction | 不作为 memory 直接注入 |
 
