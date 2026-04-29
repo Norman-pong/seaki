@@ -1,0 +1,17 @@
+[package]
+name = "seaki-channel"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+seaki-core = { path = "../seaki-core" }
+seaki-dto = { path = "../seaki-dto" }
+seaki-policy = { path = "../seaki-policy" }
+sha2.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

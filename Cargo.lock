@@ -360,11 +360,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 
 [[package]]
+name = "seaki-channel"
+version = "0.1.0"
+dependencies = [
+ "seaki-core",
+ "seaki-dto",
+ "seaki-policy",
+ "sha2",
+ "tempfile",
+]
+
+[[package]]
 name = "seaki-core"
 version = "0.1.0"
 dependencies = [
  "rusqlite",
  "seaki-index",
+ "seaki-memory",
+ "seaki-pipe",
+ "serde_json",
  "sha2",
  "tempfile",
 ]
@@ -373,8 +387,11 @@ dependencies = [
 name = "seaki-daemon"
 version = "0.1.0"
 dependencies = [
+ "seaki-channel",
  "seaki-core",
  "seaki-index",
+ "seaki-pipe",
+ "serde_json",
 ]
 
 [[package]]
@@ -392,6 +409,25 @@ dependencies = [
 [[package]]
 name = "seaki-index"
 version = "0.1.0"
+
+[[package]]
+name = "seaki-memory"
+version = "0.1.0"
+dependencies = [
+ "seaki-index",
+ "tempfile",
+]
+
+[[package]]
+name = "seaki-pipe"
+version = "0.1.0"
+dependencies = [
+ "seaki-dto",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+]
 
 [[package]]
 name = "seaki-policy"
@@ -431,6 +467,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e"
 dependencies = [
  "serde_core",
+ "serde_derive",
 ]
 
 [[package]]
