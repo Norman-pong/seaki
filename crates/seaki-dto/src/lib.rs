@@ -527,6 +527,154 @@ pub const INTERFACES: &[Interface] = &[
         ],
     },
     Interface {
+        name: "ChannelEvent",
+        generic: None,
+        fields: &[
+            Field::required("event_id", "string"),
+            Field::required("event_type", "string"),
+            Field::required("provider_tenant_id", "string"),
+            Field::required("channel_binding_id", "string"),
+            Field::required("provider_user_id", "string"),
+            Field::required("payload", "unknown"),
+            Field::required("timestamp", "string"),
+        ],
+    },
+    Interface {
+        name: "ChannelActionGrant",
+        generic: None,
+        fields: &[
+            Field::required("grant_id", "string"),
+            Field::required("scope", "string"),
+            Field::required("audience", "string"),
+            Field::required("ttl", "number"),
+            Field::required("uses_remaining", "number"),
+            Field::required("idempotency_key", "string"),
+            Field::required("allowed_actions", "readonly string[]"),
+            Field::required("provenance", "Provenance"),
+        ],
+    },
+    Interface {
+        name: "ChannelResourceGrant",
+        generic: None,
+        fields: &[
+            Field::required("grant_id", "string"),
+            Field::required("scope", "string"),
+            Field::required("file_key", "string"),
+            Field::required("version", "string"),
+            Field::required("uses_remaining", "number"),
+            Field::required("issued_at", "string"),
+            Field::required("expires_at", "string"),
+        ],
+    },
+    Interface {
+        name: "Provenance",
+        generic: None,
+        fields: &[
+            Field::required("transaction_id", "string"),
+            Field::required("source_id", "string"),
+            Field::required("citation_ids", "readonly string[]"),
+            Field::required("thread_scope", "string"),
+            Field::required("audit_id", "string"),
+        ],
+    },
+    Interface {
+        name: "PipeCommandSummaryDTO",
+        generic: None,
+        fields: &[
+            Field::required("command_id", "string"),
+            Field::required("description", "string"),
+            Field::required("side_effect_level", "string"),
+        ],
+    },
+    Interface {
+        name: "PipelineDryRunInputDTO",
+        generic: None,
+        fields: &[
+            Field::required("pipeline_id", "string"),
+            Field::required("steps", "readonly PipelineStepInputDTO[]"),
+            Field::required("initial_input", "unknown"),
+        ],
+    },
+    Interface {
+        name: "PipelineStepInputDTO",
+        generic: None,
+        fields: &[
+            Field::required("step_id", "string"),
+            Field::required("command_id", "string"),
+            Field::optional("input_binding", "string | null"),
+            Field::optional("failure_policy", "string | null"),
+        ],
+    },
+    Interface {
+        name: "DryRunResultDTO",
+        generic: None,
+        fields: &[
+            Field::required("events", "readonly DryRunEventDTO[]"),
+            Field::required("expected_read_ranges", "readonly string[]"),
+            Field::required("expected_permissions", "readonly string[]"),
+            Field::required("expected_frame_count", "number"),
+            Field::optional("proposal_artifact", "PatchProposalArtifactDTO | null"),
+        ],
+    },
+    Interface {
+        name: "DryRunEventDTO",
+        generic: None,
+        fields: &[
+            Field::required("event_type", "string"),
+            Field::required("step_id", "string | null"),
+            Field::optional("payload", "unknown"),
+        ],
+    },
+    Interface {
+        name: "PatchProposalArtifactDTO",
+        generic: None,
+        fields: &[
+            Field::required("patch_id", "string"),
+            Field::required("base_revision", "string"),
+            Field::required("diff", "string"),
+            Field::required("claim_ids", "readonly string[]"),
+        ],
+    },
+    Interface {
+        name: "MemoryNoteDTO",
+        generic: None,
+        fields: &[
+            Field::required("note_id", "string"),
+            Field::required("title", "string"),
+            Field::required("content", "string"),
+            Field::required("created_at", "string"),
+            Field::required("updated_at", "string"),
+            Field::required("status", "string"),
+        ],
+    },
+    Interface {
+        name: "MemoryProposeInputDTO",
+        generic: None,
+        fields: &[
+            Field::required("title", "string"),
+            Field::required("content", "string"),
+            Field::required("workspace_id", "string"),
+        ],
+    },
+    Interface {
+        name: "SessionSearchCandidateDTO",
+        generic: None,
+        fields: &[
+            Field::required("session_id", "string"),
+            Field::required("summary", "string"),
+            Field::required("redacted_at", "string"),
+        ],
+    },
+    Interface {
+        name: "ChannelOutboxQueryResultDTO",
+        generic: None,
+        fields: &[
+            Field::required("items", "readonly OutboxItemDTO[]"),
+            Field::required("total_pending", "number"),
+            Field::required("total_unknown", "number"),
+        ],
+    },
+    Interface {
         name: "FrontendEventEnvelope",
         generic: Some("<TPayload = unknown>"),
         fields: &[
@@ -583,6 +731,34 @@ pub const M0_DOMAIN_USE_CASE_METHODS: &[MethodName] = &[
     MethodName {
         key: "CITATION_RESOLVE",
         value: "citation.resolve",
+    },
+    MethodName {
+        key: "PIPE_LIST",
+        value: "pipeline.list",
+    },
+    MethodName {
+        key: "PIPE_INSPECT",
+        value: "pipeline.inspect",
+    },
+    MethodName {
+        key: "PIPE_DRY_RUN",
+        value: "pipeline.dryRun",
+    },
+    MethodName {
+        key: "MEMORY_PROPOSE",
+        value: "memory.propose",
+    },
+    MethodName {
+        key: "MEMORY_SEARCH",
+        value: "memory.searchNotes",
+    },
+    MethodName {
+        key: "SESSION_SEARCH",
+        value: "memory.sessionSearch",
+    },
+    MethodName {
+        key: "CHANNEL_OUTBOX_QUERY",
+        value: "channel.outbox.query",
     },
 ];
 
@@ -677,6 +853,10 @@ mod tests {
             "CitationResolveResultDTO",
             "ChannelAnswerDTO",
             "OutboxItemDTO",
+            "ChannelEvent",
+            "ChannelActionGrant",
+            "ChannelResourceGrant",
+            "Provenance",
         ] {
             assert!(
                 names.contains(&required),

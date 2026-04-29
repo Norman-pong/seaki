@@ -10,6 +10,9 @@ path = "src/lib.rs"
 [dependencies]
 rusqlite.workspace = true
 seaki-index = { path = "../seaki-index" }
+seaki-memory = { path = "../seaki-memory" }
+seaki-pipe = { path = "../seaki-pipe" }
+serde_json.workspace = true
 sha2.workspace = true
 
 [dev-dependencies]

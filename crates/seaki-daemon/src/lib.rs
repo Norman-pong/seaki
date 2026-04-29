@@ -78,6 +78,42 @@ where
     pub fn search_query(&self, input: SearchQueryInput) -> Result<Vec<SearchResultDTO>, L::Error> {
         self.ledger.search_query(input)
     }
+
+    pub fn pipe_list(
+        &self,
+        filter: Option<seaki_pipe::SideEffectFilter>,
+    ) -> Vec<seaki_pipe::PipeCommandSummary> {
+        self.ledger.pipe_list(filter)
+    }
+
+    pub fn pipe_inspect(
+        &self,
+        command_id: &str,
+    ) -> Result<seaki_pipe::PipeCommandManifest, seaki_pipe::CommandNotFound> {
+        self.ledger.pipe_inspect(command_id)
+    }
+
+    pub fn pipe_dry_run(
+        &self,
+        ast: seaki_pipe::PipelineAst,
+        initial_input: serde_json::Value,
+    ) -> Result<seaki_pipe::DryRunResult, L::Error> {
+        self.ledger.pipe_dry_run(ast, initial_input)
+    }
+
+    pub fn memory_propose(
+        &mut self,
+        input: MemoryProposeInput,
+    ) -> Result<MemoryProposeResult, L::Error> {
+        self.ledger.memory_propose(input)
+    }
+
+    pub fn memory_commit(
+        &mut self,
+        input: MemoryCommitInput,
+    ) -> Result<MemoryCommitResult, L::Error> {
+        self.ledger.memory_commit(input)
+    }
 }
 
 pub trait CoreLedgerApi {
@@ -93,6 +129,32 @@ pub trait CoreLedgerApi {
     fn replay(&self, from_seq: EventSeq) -> Result<Vec<LedgerEvent>, Self::Error>;
 
     fn search_query(&self, input: SearchQueryInput) -> Result<Vec<SearchResultDTO>, Self::Error>;
+
+    fn pipe_list(
+        &self,
+        filter: Option<seaki_pipe::SideEffectFilter>,
+    ) -> Vec<seaki_pipe::PipeCommandSummary>;
+
+    fn pipe_inspect(
+        &self,
+        command_id: &str,
+    ) -> Result<seaki_pipe::PipeCommandManifest, seaki_pipe::CommandNotFound>;
+
+    fn pipe_dry_run(
+        &self,
+        ast: seaki_pipe::PipelineAst,
+        initial_input: serde_json::Value,
+    ) -> Result<seaki_pipe::DryRunResult, Self::Error>;
+
+    fn memory_propose(
+        &mut self,
+        input: MemoryProposeInput,
+    ) -> Result<MemoryProposeResult, Self::Error>;
+
+    fn memory_commit(
+        &mut self,
+        input: MemoryCommitInput,
+    ) -> Result<MemoryCommitResult, Self::Error>;
 }
 
 impl CoreLedgerApi for seaki_core::CoreLedger {
@@ -154,6 +216,108 @@ impl CoreLedgerApi for seaki_core::CoreLedger {
     fn search_query(&self, input: SearchQueryInput) -> Result<Vec<SearchResultDTO>, Self::Error> {
         seaki_core::CoreLedger::search_query(self, input)
     }
+
+    fn pipe_list(
+        &self,
+        filter: Option<seaki_pipe::SideEffectFilter>,
+    ) -> Vec<seaki_pipe::PipeCommandSummary> {
+        seaki_core::CoreLedger::pipe_list(self, filter)
+    }
+
+    fn pipe_inspect(
+        &self,
+        command_id: &str,
+    ) -> Result<seaki_pipe::PipeCommandManifest, seaki_pipe::CommandNotFound> {
+        seaki_core::CoreLedger::pipe_inspect(self, command_id)
+    }
+
+    fn pipe_dry_run(
+        &self,
+        ast: seaki_pipe::PipelineAst,
+        initial_input: serde_json::Value,
+    ) -> Result<seaki_pipe::DryRunResult, Self::Error> {
+        seaki_core::CoreLedger::pipe_dry_run(self, ast, initial_input)
+    }
+
+    fn memory_propose(
+        &mut self,
+        input: MemoryProposeInput,
+    ) -> Result<MemoryProposeResult, Self::Error> {
+        let note_id = input.note_id.clone();
+        let envelope = self.append_memory_propose(seaki_core::MemoryProposeRequest::new(
+            input.event_id,
+            input.actor,
+            input.workspace_id,
+            input.idempotency_key,
+            input.note_id,
+            input.title,
+            input.content,
+        ))?;
+
+        Ok(MemoryProposeResult {
+            note_id,
+            seq: EventSeq(envelope.seq),
+            event_id: envelope.event_id,
+        })
+    }
+
+    fn memory_commit(
+        &mut self,
+        input: MemoryCommitInput,
+    ) -> Result<MemoryCommitResult, Self::Error> {
+        let note_id = input.note_id.clone();
+        let envelope = self.append_memory_commit(seaki_core::MemoryCommitRequest::new(
+            input.event_id,
+            input.actor,
+            input.workspace_id,
+            input.idempotency_key,
+            input.note_id,
+            input.approval_id,
+            input.committed_revision,
+        ))?;
+
+        Ok(MemoryCommitResult {
+            note_id,
+            seq: EventSeq(envelope.seq),
+            event_id: envelope.event_id,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MemoryProposeInput {
+    pub event_id: String,
+    pub workspace_id: String,
+    pub actor: String,
+    pub idempotency_key: String,
+    pub note_id: String,
+    pub title: String,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MemoryProposeResult {
+    pub note_id: String,
+    pub seq: EventSeq,
+    pub event_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MemoryCommitInput {
+    pub event_id: String,
+    pub workspace_id: String,
+    pub actor: String,
+    pub idempotency_key: String,
+    pub note_id: String,
+    pub approval_id: String,
+    pub committed_revision: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MemoryCommitResult {
+    pub note_id: String,
+    pub seq: EventSeq,
+    pub event_id: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -493,5 +657,100 @@ mod tests {
 
     fn workspace_scope() -> String {
         seaki_core::workspace_scope("workspace-alpha")
+    }
+
+    #[test]
+    fn pipe_list_delegates_to_core() {
+        let daemon = initialized_daemon();
+        let results = daemon.pipe_list(None);
+        assert!(!results.is_empty());
+        let ids: Vec<_> = results.iter().map(|r| r.command_id.as_str()).collect();
+        assert!(ids.contains(&"wiki.search"));
+        assert!(ids.contains(&"wiki.patch.propose"));
+    }
+
+    #[test]
+    fn pipe_inspect_delegates_to_core() {
+        let daemon = initialized_daemon();
+        let manifest = daemon
+            .pipe_inspect("wiki.search")
+            .expect("wiki.search exists");
+        assert_eq!(manifest.command_id, "wiki.search");
+    }
+
+    #[test]
+    fn pipe_inspect_unknown_returns_command_not_found() {
+        let daemon = initialized_daemon();
+        let result = daemon.pipe_inspect("unknown.command");
+        assert!(
+            matches!(result, Err(seaki_pipe::CommandNotFound(ref id)) if id == "unknown.command")
+        );
+    }
+
+    #[test]
+    fn pipe_dry_run_delegates_to_core() {
+        let daemon = initialized_daemon();
+        let ast = seaki_pipe::PipelineAst {
+            pipeline_id: "daemon-pipe".to_string(),
+            steps: vec![
+                seaki_pipe::PipelineStep {
+                    step_id: "s1".to_string(),
+                    command_id: "wiki.search".to_string(),
+                    input_binding: seaki_pipe::InputBinding::Constant(
+                        serde_json::json!({"keyword": "rust"}),
+                    ),
+                    failure_policy: seaki_pipe::FailurePolicy::FailFast,
+                },
+                seaki_pipe::PipelineStep {
+                    step_id: "s2".to_string(),
+                    command_id: "citation.resolve".to_string(),
+                    input_binding: seaki_pipe::InputBinding::PreviousStep,
+                    failure_policy: seaki_pipe::FailurePolicy::FailFast,
+                },
+                seaki_pipe::PipelineStep {
+                    step_id: "s3".to_string(),
+                    command_id: "wiki.patch.propose".to_string(),
+                    input_binding: seaki_pipe::InputBinding::PreviousStep,
+                    failure_policy: seaki_pipe::FailurePolicy::FailFast,
+                },
+            ],
+        };
+        let result = daemon
+            .pipe_dry_run(ast, serde_json::json!({"keyword": "rust"}))
+            .expect("dry run succeeds");
+        assert!(
+            result.proposal_artifact.is_some(),
+            "expected proposal artifact"
+        );
+    }
+
+    #[test]
+    fn memory_propose_and_commit_lifecycle() {
+        let mut daemon = initialized_daemon();
+
+        // memory.propose
+        let propose_result = daemon
+            .memory_propose(MemoryProposeInput {
+                event_id: "event-2".to_string(),
+                workspace_id: "workspace-alpha".to_string(),
+                actor: "user:local".to_string(),
+                idempotency_key: "idem-2".to_string(),
+                note_id: "note-1".to_string(),
+                title: "rust tips".to_string(),
+                content: "use borrow checker".to_string(),
+            })
+            .expect("memory propose succeeds");
+
+        assert_eq!(propose_result.note_id, "note-1");
+        assert_eq!(propose_result.seq, EventSeq(2));
+
+        // note 状态应为 proposed
+        let ledger = daemon.into_inner();
+        let note = ledger
+            .memory_note("note-1")
+            .expect("note loads")
+            .expect("note exists");
+        assert_eq!(note.status, "proposed");
+        assert_eq!(note.title, "rust tips");
     }
 }

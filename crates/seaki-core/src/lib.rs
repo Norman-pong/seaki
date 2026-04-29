@@ -17,6 +17,8 @@ pub const APPROVAL_DECISION_APPROVED: &str = "approved";
 pub const APPROVAL_DECISION_DENIED: &str = "denied";
 pub const APPROVAL_DECISION_EVENT_TYPE: &str = "approval.decided";
 pub const WIKI_PATCH_COMMIT_EVENT_TYPE: &str = "wiki.patch.commit";
+pub const MEMORY_PROPOSE_EVENT_TYPE: &str = "memory.proposed";
+pub const MEMORY_COMMIT_EVENT_TYPE: &str = "memory.committed";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreRecordKind {
@@ -344,6 +346,128 @@ pub struct WikiPatchCommitRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MemoryProposeRequest {
+    pub event_id: String,
+    pub schema_version: u32,
+    pub payload_schema_hash: String,
+    pub actor_id: String,
+    pub workspace_id: String,
+    pub scope: String,
+    pub idempotency_key: String,
+    pub note_id: String,
+    pub title: String,
+    pub content: String,
+}
+
+impl MemoryProposeRequest {
+    pub fn new(
+        event_id: impl Into<String>,
+        actor_id: impl Into<String>,
+        workspace_id: impl Into<String>,
+        idempotency_key: impl Into<String>,
+        note_id: impl Into<String>,
+        title: impl Into<String>,
+        content: impl Into<String>,
+    ) -> Self {
+        let workspace_id = workspace_id.into();
+        Self {
+            event_id: event_id.into(),
+            schema_version: CURRENT_EVENT_SCHEMA_VERSION,
+            payload_schema_hash: expected_payload_schema_hash(MEMORY_PROPOSE_EVENT_TYPE),
+            actor_id: actor_id.into(),
+            scope: workspace_scope(&workspace_id),
+            workspace_id,
+            idempotency_key: idempotency_key.into(),
+            note_id: note_id.into(),
+            title: title.into(),
+            content: content.into(),
+        }
+    }
+
+    fn into_event(self) -> InertEvent {
+        InertEvent {
+            event_id: self.event_id,
+            schema_version: self.schema_version,
+            payload_schema_hash: self.payload_schema_hash,
+            actor_id: self.actor_id,
+            scope: self.scope,
+            workspace_id: self.workspace_id,
+            idempotency_key: self.idempotency_key,
+            event_type: MEMORY_PROPOSE_EVENT_TYPE.to_string(),
+            payload_summary: format!("note_id={} title={}", self.note_id, self.title),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MemoryCommitRequest {
+    pub event_id: String,
+    pub schema_version: u32,
+    pub payload_schema_hash: String,
+    pub actor_id: String,
+    pub workspace_id: String,
+    pub scope: String,
+    pub idempotency_key: String,
+    pub note_id: String,
+    pub approval_id: String,
+    pub committed_revision: u64,
+}
+
+impl MemoryCommitRequest {
+    pub fn new(
+        event_id: impl Into<String>,
+        actor_id: impl Into<String>,
+        workspace_id: impl Into<String>,
+        idempotency_key: impl Into<String>,
+        note_id: impl Into<String>,
+        approval_id: impl Into<String>,
+        committed_revision: u64,
+    ) -> Self {
+        let workspace_id = workspace_id.into();
+        Self {
+            event_id: event_id.into(),
+            schema_version: CURRENT_EVENT_SCHEMA_VERSION,
+            payload_schema_hash: expected_payload_schema_hash(MEMORY_COMMIT_EVENT_TYPE),
+            actor_id: actor_id.into(),
+            scope: workspace_scope(&workspace_id),
+            workspace_id,
+            idempotency_key: idempotency_key.into(),
+            note_id: note_id.into(),
+            approval_id: approval_id.into(),
+            committed_revision,
+        }
+    }
+
+    fn into_event(self) -> InertEvent {
+        InertEvent {
+            event_id: self.event_id,
+            schema_version: self.schema_version,
+            payload_schema_hash: self.payload_schema_hash,
+            actor_id: self.actor_id,
+            scope: self.scope,
+            workspace_id: self.workspace_id,
+            idempotency_key: self.idempotency_key,
+            event_type: MEMORY_COMMIT_EVENT_TYPE.to_string(),
+            payload_summary: format!(
+                "note_id={} approval_id={} committed_revision={}",
+                self.note_id, self.approval_id, self.committed_revision
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MemoryNoteRecord {
+    pub note_id: String,
+    pub workspace_id: String,
+    pub title: String,
+    pub content: String,
+    pub created_at: u64,
+    pub updated_at: u64,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WikiPatchCommitRecord {
     pub transaction_id: String,
     pub patch_id: String,
@@ -518,6 +642,7 @@ pub enum CoreError {
     },
     AuditMissingForEvent(u64),
     SequenceOutOfRange(i64),
+    PipelineCompose(String),
 }
 
 impl fmt::Display for CoreError {
@@ -591,6 +716,7 @@ impl fmt::Display for CoreError {
             }
             Self::AuditMissingForEvent(seq) => write!(f, "audit missing for event seq {seq}"),
             Self::SequenceOutOfRange(seq) => write!(f, "sequence out of range: {seq}"),
+            Self::PipelineCompose(reason) => write!(f, "pipeline compose error: {reason}"),
         }
     }
 }
@@ -682,6 +808,17 @@ impl CoreLedger {
 
             CREATE INDEX IF NOT EXISTS idx_approval_decisions_patch_id
                 ON approval_decisions (patch_id);
+
+            CREATE TABLE IF NOT EXISTS memory_notes (
+                note_id TEXT PRIMARY KEY,
+                workspace_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                event_seq INTEGER NOT NULL REFERENCES events(seq)
+            );
             ",
         )?;
         Ok(())
@@ -923,6 +1060,46 @@ impl CoreLedger {
         })
     }
 
+    pub fn pipe_list(
+        &self,
+        filter: Option<seaki_pipe::SideEffectFilter>,
+    ) -> Vec<seaki_pipe::PipeCommandSummary> {
+        let registry = seaki_pipe::CommandRegistry::builtin();
+        let manifests = registry.list();
+        manifests
+            .into_iter()
+            .filter(|m| match &filter {
+                Some(seaki_pipe::SideEffectFilter::All) => true,
+                Some(seaki_pipe::SideEffectFilter::Level(level)) => m.side_effect_level == *level,
+                None => true,
+            })
+            .map(|m| seaki_pipe::PipeCommandSummary {
+                command_id: m.command_id.clone(),
+                description: m.description.clone(),
+                side_effect_level: m.side_effect_level.to_string(),
+            })
+            .collect()
+    }
+
+    pub fn pipe_inspect(
+        &self,
+        command_id: &str,
+    ) -> Result<seaki_pipe::PipeCommandManifest, seaki_pipe::CommandNotFound> {
+        let registry = seaki_pipe::CommandRegistry::builtin();
+        registry.inspect(command_id).cloned()
+    }
+
+    pub fn pipe_dry_run(
+        &self,
+        ast: seaki_pipe::PipelineAst,
+        initial_input: serde_json::Value,
+    ) -> CoreResult<seaki_pipe::DryRunResult> {
+        let registry = seaki_pipe::CommandRegistry::builtin();
+        let composed = seaki_pipe::compose(&ast, &registry)
+            .map_err(|e| CoreError::PipelineCompose(e.to_string()))?;
+        Ok(seaki_pipe::dry_run(&composed, initial_input))
+    }
+
     pub fn append_inert_event(&mut self, event: InertEvent) -> CoreResult<EventEnvelope> {
         validate_event(&event)?;
         self.ensure_unique_idempotency_key(&event.idempotency_key)?;
@@ -939,6 +1116,117 @@ impl CoreLedger {
         tx.commit()?;
 
         Ok(envelope)
+    }
+
+    pub fn append_memory_propose(
+        &mut self,
+        request: MemoryProposeRequest,
+    ) -> CoreResult<EventEnvelope> {
+        let note_id = request.note_id.clone();
+        let workspace_id = request.workspace_id.clone();
+        let title = request.title.clone();
+        let content = request.content.clone();
+        let event = request.into_event();
+        validate_event(&event)?;
+        self.ensure_unique_idempotency_key(&event.idempotency_key)?;
+        self.ensure_unique_event_id(&event.event_id)?;
+        let revision = self
+            .workspace_revision(&event.workspace_id)?
+            .ok_or_else(|| CoreError::WorkspaceMissing(event.workspace_id.clone()))?
+            + 1;
+
+        let tx = self.conn.transaction()?;
+        let envelope = insert_event(&tx, sanitized_event(event))?;
+        insert_memory_note(&tx, &note_id, &workspace_id, &title, &content, envelope.seq)?;
+        let audit_head = append_audit_entry(&tx, &envelope)?;
+        update_workspace_after_event(&tx, &envelope.workspace_id, revision, &audit_head)?;
+        tx.commit()?;
+
+        Ok(envelope)
+    }
+
+    pub fn append_memory_commit(
+        &mut self,
+        request: MemoryCommitRequest,
+    ) -> CoreResult<EventEnvelope> {
+        let approval_id = request.approval_id.clone();
+        let note_id = request.note_id.clone();
+        let committed_revision = request.committed_revision;
+        let event = request.into_event();
+        validate_event(&event)?;
+
+        let tx = self.conn.transaction()?;
+        ensure_unique_idempotency_key_in_tx(&tx, &event.idempotency_key)?;
+        ensure_unique_event_id_in_tx(&tx, &event.event_id)?;
+        let expected_revision = workspace_revision_in_tx(&tx, &event.workspace_id)?
+            .ok_or_else(|| CoreError::WorkspaceMissing(event.workspace_id.clone()))?
+            + 1;
+        ensure_approved_decision_for_target(&tx, &approval_id, &note_id, &event.workspace_id)?;
+        if committed_revision != expected_revision {
+            return Err(CoreError::WorkspaceRevisionMismatch {
+                expected: expected_revision,
+                found: committed_revision,
+            });
+        }
+
+        let envelope = insert_event(&tx, sanitized_event(event))?;
+        update_memory_note_status(&tx, &note_id, "active")?;
+        let audit_head = append_audit_entry(&tx, &envelope)?;
+        update_workspace_after_event(&tx, &envelope.workspace_id, expected_revision, &audit_head)?;
+        tx.commit()?;
+
+        Ok(envelope)
+    }
+
+    pub fn memory_note(&self, note_id: &str) -> CoreResult<Option<MemoryNoteRecord>> {
+        self.conn
+            .query_row(
+                "SELECT note_id, workspace_id, title, content, created_at, updated_at, status
+                 FROM memory_notes WHERE note_id = ?1",
+                params![note_id],
+                |row| {
+                    Ok(MemoryNoteRecord {
+                        note_id: row.get(0)?,
+                        workspace_id: row.get(1)?,
+                        title: row.get(2)?,
+                        content: row.get(3)?,
+                        created_at: checked_u64(row.get::<_, i64>(4)?)?,
+                        updated_at: checked_u64(row.get::<_, i64>(5)?)?,
+                        status: row.get(6)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(CoreError::from)
+    }
+
+    pub fn memory_source_check(
+        &mut self,
+        note_id: &str,
+        wiki_claim_keywords: &[String],
+    ) -> CoreResult<MemoryNoteRecord> {
+        let tx = self.conn.transaction()?;
+        let Some(record) = memory_note_in_tx(&tx, note_id)? else {
+            return Err(CoreError::WorkspaceMissing(format!(
+                "note not found: {note_id}"
+            )));
+        };
+
+        let content_lower = record.content.to_lowercase();
+        let has_conflict = wiki_claim_keywords
+            .iter()
+            .any(|kw| content_lower.contains(&kw.to_lowercase()));
+
+        let new_status = if has_conflict {
+            "conflict"
+        } else {
+            "source_checking"
+        };
+        update_memory_note_status(&tx, note_id, new_status)?;
+        tx.commit()?;
+
+        self.memory_note(note_id)?
+            .ok_or_else(|| CoreError::WorkspaceMissing(format!("note not found: {note_id}")))
     }
 
     pub fn append_wiki_patch_commit(
@@ -1239,6 +1527,7 @@ fn search_result_kind(kind: &CandidateKind) -> &'static str {
         CandidateKind::WikiPage => "wiki_page",
         CandidateKind::Claim => "claim",
         CandidateKind::SourceFrame => "source",
+        CandidateKind::MemoryNote => "memory_note",
     }
 }
 
@@ -1444,23 +1733,23 @@ fn ensure_approval_decision_absent_in_tx(
     Ok(())
 }
 
-fn ensure_approved_decision_for_commit(
+fn ensure_approved_decision_for_target(
     tx: &Transaction<'_>,
     approval_id: &str,
-    patch_id: &str,
+    target_id: &str,
     workspace_id: &str,
 ) -> CoreResult<()> {
     let Some((decision_workspace_id, decision)) = approval_decision_in_tx(tx, approval_id)? else {
         return Err(CoreError::ApprovalDecisionRequired {
             approval_id: approval_id.to_string(),
-            patch_id: patch_id.to_string(),
+            patch_id: target_id.to_string(),
         });
     };
 
-    if decision.patch_id != patch_id {
+    if decision.patch_id != target_id {
         return Err(CoreError::ApprovalDecisionPatchMismatch {
             approval_id: approval_id.to_string(),
-            expected_patch_id: patch_id.to_string(),
+            expected_patch_id: target_id.to_string(),
             actual_patch_id: decision.patch_id,
         });
     }
@@ -1476,12 +1765,21 @@ fn ensure_approved_decision_for_commit(
     if decision.decision != ApprovalDecisionStatus::Approved {
         return Err(CoreError::ApprovalDecisionNotApproved {
             approval_id: approval_id.to_string(),
-            patch_id: patch_id.to_string(),
+            patch_id: target_id.to_string(),
             decision: decision.decision,
         });
     }
 
     Ok(())
+}
+
+fn ensure_approved_decision_for_commit(
+    tx: &Transaction<'_>,
+    approval_id: &str,
+    patch_id: &str,
+    workspace_id: &str,
+) -> CoreResult<()> {
+    ensure_approved_decision_for_target(tx, approval_id, patch_id, workspace_id)
 }
 
 fn approval_decision_in_tx(
@@ -1729,6 +2027,69 @@ fn hex_digest(bytes: &[u8]) -> String {
     }
 
     output
+}
+
+fn insert_memory_note(
+    tx: &Transaction<'_>,
+    note_id: &str,
+    workspace_id: &str,
+    title: &str,
+    content: &str,
+    event_seq: u64,
+) -> CoreResult<()> {
+    let now = current_timestamp()?;
+    tx.execute(
+        "INSERT INTO memory_notes (note_id, workspace_id, title, content, created_at, updated_at, status, event_seq)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![
+            note_id,
+            workspace_id,
+            title,
+            content,
+            checked_i64(now)?,
+            checked_i64(now)?,
+            "proposed",
+            checked_i64(event_seq)?
+        ],
+    )?;
+    Ok(())
+}
+
+fn update_memory_note_status(tx: &Transaction<'_>, note_id: &str, status: &str) -> CoreResult<()> {
+    let now = current_timestamp()?;
+    tx.execute(
+        "UPDATE memory_notes SET status = ?2, updated_at = ?3 WHERE note_id = ?1",
+        params![note_id, status, checked_i64(now)?],
+    )?;
+    Ok(())
+}
+
+fn memory_note_in_tx(tx: &Transaction<'_>, note_id: &str) -> CoreResult<Option<MemoryNoteRecord>> {
+    tx.query_row(
+        "SELECT note_id, workspace_id, title, content, created_at, updated_at, status
+         FROM memory_notes WHERE note_id = ?1",
+        params![note_id],
+        |row| {
+            Ok(MemoryNoteRecord {
+                note_id: row.get(0)?,
+                workspace_id: row.get(1)?,
+                title: row.get(2)?,
+                content: row.get(3)?,
+                created_at: checked_u64(row.get::<_, i64>(4)?)?,
+                updated_at: checked_u64(row.get::<_, i64>(5)?)?,
+                status: row.get(6)?,
+            })
+        },
+    )
+    .optional()
+    .map_err(CoreError::from)
+}
+
+fn current_timestamp() -> CoreResult<u64> {
+    let duration = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| CoreError::WorkspaceMissing(format!("system time error: {e}")))?;
+    Ok(duration.as_secs())
 }
 
 fn checked_u64(value: i64) -> rusqlite::Result<u64> {

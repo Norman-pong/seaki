@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use sha2::{Digest, Sha256};
 
@@ -306,9 +306,71 @@ pub enum CapabilityGrantRejection {
     AlreadyUsed,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Provenance {
+    pub transaction_id: String,
+    pub source_id: String,
+    pub citation_ids: Vec<String>,
+    pub thread_scope: String,
+    pub audit_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChannelActionGrant {
+    pub grant_id: String,
+    pub scope: String,
+    pub audience: String,
+    pub ttl: Duration,
+    pub uses_remaining: u32,
+    pub idempotency_key: String,
+    pub allowed_actions: Vec<String>,
+    pub provenance: Provenance,
+    pub expires_at: SystemTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IssueChannelActionGrantInput {
+    pub grant_id: String,
+    pub scope: String,
+    pub audience: String,
+    pub ttl: Duration,
+    pub uses: u32,
+    pub idempotency_key: String,
+    pub allowed_actions: Vec<String>,
+    pub provenance: Provenance,
+    pub issued_at: SystemTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChannelActionGrantConsumption {
+    pub grant_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GrantError {
+    DuplicateGrantId(String),
+    GrantNotFound,
+    GrantExpired,
+    UsesExhausted,
+}
+
+impl fmt::Display for GrantError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::DuplicateGrantId(id) => write!(f, "duplicate grant id: {id}"),
+            Self::GrantNotFound => write!(f, "grant not found"),
+            Self::GrantExpired => write!(f, "grant expired"),
+            Self::UsesExhausted => write!(f, "uses exhausted"),
+        }
+    }
+}
+
+impl std::error::Error for GrantError {}
+
 #[derive(Debug, Default)]
 pub struct CapabilityStore {
     grants: Mutex<HashMap<String, CapabilityGrant>>,
+    channel_action_grants: Mutex<HashMap<String, ChannelActionGrant>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -476,6 +538,64 @@ impl CapabilityStore {
             .lock()
             .map_err(|_| PolicyError::CapabilityStorePoisoned)?;
         Ok(grants.get(capability_id).map(|grant| grant.uses_remaining))
+    }
+
+    pub fn issue_channel_action_grant(
+        &self,
+        input: IssueChannelActionGrantInput,
+    ) -> PolicyResult<Result<ChannelActionGrant, GrantError>> {
+        let mut grants = self
+            .channel_action_grants
+            .lock()
+            .map_err(|_| PolicyError::CapabilityStorePoisoned)?;
+        if grants.contains_key(&input.grant_id) {
+            return Ok(Err(GrantError::DuplicateGrantId(input.grant_id)));
+        }
+        let grant = ChannelActionGrant {
+            grant_id: input.grant_id.clone(),
+            scope: input.scope,
+            audience: input.audience,
+            ttl: input.ttl,
+            uses_remaining: input.uses,
+            idempotency_key: input.idempotency_key,
+            allowed_actions: input.allowed_actions,
+            provenance: input.provenance,
+            expires_at: input.issued_at + input.ttl,
+        };
+        grants.insert(input.grant_id, grant.clone());
+        Ok(Ok(grant))
+    }
+
+    pub fn consume_channel_action_grant(
+        &self,
+        grant_id: &str,
+        now: SystemTime,
+    ) -> PolicyResult<Result<ChannelActionGrantConsumption, GrantError>> {
+        let mut grants = self
+            .channel_action_grants
+            .lock()
+            .map_err(|_| PolicyError::CapabilityStorePoisoned)?;
+        let Some(grant) = grants.get_mut(grant_id) else {
+            return Ok(Err(GrantError::GrantNotFound));
+        };
+        if now >= grant.expires_at {
+            return Ok(Err(GrantError::GrantExpired));
+        }
+        if grant.uses_remaining == 0 {
+            return Ok(Err(GrantError::UsesExhausted));
+        }
+        grant.uses_remaining -= 1;
+        Ok(Ok(ChannelActionGrantConsumption {
+            grant_id: grant_id.to_string(),
+        }))
+    }
+
+    pub fn channel_action_uses_remaining(&self, grant_id: &str) -> PolicyResult<Option<u32>> {
+        let grants = self
+            .channel_action_grants
+            .lock()
+            .map_err(|_| PolicyError::CapabilityStorePoisoned)?;
+        Ok(grants.get(grant_id).map(|g| g.uses_remaining))
     }
 }
 
@@ -1283,6 +1403,87 @@ mod tests {
                 decided_at: now,
             }
         }
+    }
+
+    #[test]
+    fn channel_action_grant_issue_and_consume() {
+        let store = CapabilityStore::new();
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+        let provenance = Provenance {
+            transaction_id: "tx-1".to_string(),
+            source_id: "src-1".to_string(),
+            citation_ids: vec!["c1".to_string()],
+            thread_scope: "thread-1".to_string(),
+            audit_id: "audit-1".to_string(),
+        };
+        let input = IssueChannelActionGrantInput {
+            grant_id: "cg-1".to_string(),
+            scope: "scope-1".to_string(),
+            audience: "aud-1".to_string(),
+            ttl: Duration::from_secs(60),
+            uses: 2,
+            idempotency_key: "idem-1".to_string(),
+            allowed_actions: vec!["send".to_string()],
+            provenance: provenance.clone(),
+            issued_at: now,
+        };
+
+        let grant = store
+            .issue_channel_action_grant(input)
+            .expect("issue ok")
+            .expect("grant ok");
+        assert_eq!(grant.grant_id, "cg-1");
+        assert_eq!(grant.provenance.transaction_id, "tx-1");
+
+        store
+            .consume_channel_action_grant("cg-1", now + Duration::from_secs(1))
+            .expect("consume ok")
+            .expect("first use ok");
+        assert_eq!(
+            store.channel_action_uses_remaining("cg-1").unwrap(),
+            Some(1)
+        );
+
+        store
+            .consume_channel_action_grant("cg-1", now + Duration::from_secs(2))
+            .expect("consume ok")
+            .expect("second use ok");
+        assert_eq!(
+            store.channel_action_uses_remaining("cg-1").unwrap(),
+            Some(0)
+        );
+
+        let result = store
+            .consume_channel_action_grant("cg-1", now + Duration::from_secs(3))
+            .expect("consume ok");
+        assert_eq!(result, Err(GrantError::UsesExhausted));
+    }
+
+    #[test]
+    fn channel_action_grant_expired_cannot_consume() {
+        let store = CapabilityStore::new();
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+        let input = IssueChannelActionGrantInput {
+            grant_id: "cg-1".to_string(),
+            scope: "scope-1".to_string(),
+            audience: "aud-1".to_string(),
+            ttl: Duration::from_secs(10),
+            uses: 1,
+            idempotency_key: "idem-1".to_string(),
+            allowed_actions: vec!["send".to_string()],
+            provenance: Provenance {
+                transaction_id: "tx-1".to_string(),
+                source_id: "src-1".to_string(),
+                citation_ids: vec![],
+                thread_scope: "thread-1".to_string(),
+                audit_id: "audit-1".to_string(),
+            },
+            issued_at: now,
+        };
+        store.issue_channel_action_grant(input).unwrap().unwrap();
+
+        let result = store.consume_channel_action_grant("cg-1", now + Duration::from_secs(20));
+        assert_eq!(result.unwrap(), Err(GrantError::GrantExpired));
     }
 
     #[cfg(unix)]

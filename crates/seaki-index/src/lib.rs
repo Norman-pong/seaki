@@ -128,6 +128,7 @@ pub enum CandidateKind {
     WikiPage,
     Claim,
     SourceFrame,
+    MemoryNote,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -485,6 +486,19 @@ impl Bm25CandidateIndex {
             snippet: Some(candidate.document.body.chars().take(160).collect()),
             citation_refs: vec![citation_ref.clone()],
         })
+    }
+
+    pub fn get_document(
+        &self,
+        scope: &IndexScope,
+        candidate_id: &IndexCandidateId,
+    ) -> Option<&IndexedDocument> {
+        self.documents
+            .get(&ScopedCandidateKey::new(
+                scope.clone(),
+                candidate_id.clone(),
+            ))
+            .map(|entry| &entry.document)
     }
 
     pub fn mark_failed(

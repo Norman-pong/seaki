@@ -9,6 +9,9 @@ path = "src/lib.rs"
 
 [dependencies]
 seaki-core = { path = "../seaki-core" }
+seaki-pipe = { path = "../seaki-pipe" }
+serde_json.workspace = true
 
 [dev-dependencies]
+seaki-channel = { path = "../seaki-channel" }
 seaki-index = { path = "../seaki-index" }
