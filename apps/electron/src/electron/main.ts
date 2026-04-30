@@ -2,11 +2,14 @@ import { app, BrowserWindow } from "electron";
 import path from "node:path";
 
 const isDev = process.env.NODE_ENV === "development";
+const isTest = process.env.NODE_ENV === "test";
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
+    show: !isTest,
+    skipTaskbar: isTest,
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
