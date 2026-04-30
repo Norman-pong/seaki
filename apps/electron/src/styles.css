@@ -7,14 +7,7 @@
 
 :root {
   color: #16202a;
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  font-family: "Geist Variable", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: #f3f5f7;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -56,6 +49,7 @@
 
 body {
   margin: 0;
+  overflow: hidden;
 }
 
 button,
@@ -63,477 +57,585 @@ textarea {
   font: inherit;
 }
 
-.shell {
-  min-height: 100vh;
-  display: grid;
-  gap: 16px;
-  padding: 18px;
+/* ===== App Shell ===== */
+.app-shell {
+  width: 100vw;
+  height: 100vh;
+  background: #f0f1f3;
 }
 
-.topbar,
-.screenGrid,
-.approvalToolbar,
-.approvalGrid,
-.claimsPanel {
-  width: min(1440px, 100%);
-  margin: 0 auto;
+.app-panels {
+  width: 100%;
+  height: 100%;
 }
 
-.topbar {
+.app-left-panel,
+.app-center-panel,
+.app-right-panel {
   display: flex;
-  align-items: end;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-resize-handle {
+  width: 4px;
+  background: transparent;
+  transition: background 0.15s;
+  cursor: col-resize;
+}
+
+.app-resize-handle:hover {
+  background: #c9cdd3;
+}
+
+/* ===== Session Sidebar ===== */
+.session-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #ffffff;
+  border-right: 1px solid #e5e7eb;
+}
+
+.session-header {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  border-bottom: 1px solid #d9dfe5;
-  padding-bottom: 14px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #f0f1f3;
 }
 
-.eyebrow,
-.label {
+.session-title {
   margin: 0;
-  color: #5c6975;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-h1,
-h2,
-h3,
-p {
-  margin: 0;
-}
-
-h1 {
-  margin-top: 4px;
-  font-size: 24px;
-  line-height: 1.15;
-}
-
-h2 {
-  margin-top: 4px;
-  font-size: 15px;
-  line-height: 1.25;
-}
-
-h3 {
   font-size: 14px;
-  line-height: 1.25;
+  font-weight: 600;
+  color: #1f2937;
 }
 
-.topMetrics,
-.claimFacts {
-  margin: 0;
+.session-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
 }
 
-.topMetrics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
-  gap: 8px;
-}
-
-.topMetrics div {
-  border-left: 1px solid #d9dfe5;
-  padding-left: 12px;
-}
-
-dt {
-  color: #63707c;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-dd {
-  margin: 2px 0 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-
-.approvalToolbar {
+.session-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  border: 1px solid #d8dee5;
-  background: #ffffff;
-  padding: 12px;
-}
-
-.approvalToolbar strong,
-.approvalToolbar span {
-  margin-right: 10px;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #374151;
   font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s;
 }
 
-.approvalToolbar span {
-  color: #63707c;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+.session-item:hover {
+  background: #f3f4f6;
 }
 
-.actionGroup {
+.session-item.active {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.session-icon {
+  flex-shrink: 0;
+  color: #9ca3af;
+}
+
+.session-item.active .session-icon {
+  color: #3b82f6;
+}
+
+.session-info {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: end;
-  gap: 8px;
-}
-
-.screenGrid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.screenPanel {
+  flex-direction: column;
   min-width: 0;
-  border: 1px solid #d8dee5;
-  background: #ffffff;
+  flex: 1;
 }
 
-.screenPanel.wide {
-  grid-column: span 2;
-}
-
-.paneHeader.compact {
-  padding: 10px;
-}
-
-.screenDetail {
-  color: #4d5a65;
-  font-size: 12px;
-  line-height: 1.45;
-  padding: 10px;
-}
-
-.miniActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  border-top: 1px solid #eef1f4;
-  padding: 10px;
-}
-
-.compactFacts {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin: 0;
-  padding: 10px;
-}
-
-.queueList,
-.searchList {
-  display: grid;
-}
-
-.queueItem,
-.searchItem {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  border-top: 1px solid #eef1f4;
-  padding: 10px;
-}
-
-.queueItem strong,
-.searchItem strong {
-  display: block;
-  font-size: 13px;
-  line-height: 1.3;
-}
-
-.queueItem p,
-.searchItem p {
-  margin-top: 4px;
-  color: #586571;
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.queueMeta {
-  display: flex;
-  align-items: center;
-  justify-content: end;
-  gap: 8px;
-}
-
-.citationChips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 0 10px 10px;
-}
-
-.citationChips span {
-  border: 1px solid #d2dae2;
-  color: #4f5c68;
-  font-size: 12px;
-  font-weight: 650;
-  padding: 3px 7px;
-}
-
-.approvalGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
-  gap: 16px;
-}
-
-.pane,
-.claimsPanel {
-  border: 1px solid #d8dee5;
-  background: #ffffff;
-}
-
-.pane {
-  min-width: 0;
-}
-
-.paneHeader,
-.panelTitle,
-.claimTitle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.paneHeader {
-  border-bottom: 1px solid #e5e9ee;
-  padding: 12px;
-}
-
-.badge,
-.statusBadge,
-.citationState {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  border: 1px solid #c9d2db;
-  border-radius: 999px;
-  color: #26323e;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 0 8px;
+.session-name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.origin {
-  border-bottom: 1px solid #e5e9ee;
-  color: #5d6873;
-  font-size: 12px;
-  padding: 9px 12px;
+.session-time {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 2px;
 }
 
-.sourcePreview {
-  display: grid;
-  gap: 0;
+.session-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s;
 }
 
-.rangeBlock {
-  display: grid;
-  gap: 7px;
-  border-bottom: 1px solid #eef1f4;
-  padding: 12px;
+.session-item:hover .session-delete,
+.session-item.active .session-delete {
+  opacity: 1;
 }
 
-.rangeBlock:last-child {
-  border-bottom: 0;
+.session-delete:hover {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
-.rangeMeta {
+/* ===== Chat Panel ===== */
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #f8f9fa;
+}
+
+.chat-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  color: #4e5b66;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #ffffff;
 }
 
-.rangeBlock p {
-  color: #1f2a35;
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.diffBlock {
-  display: grid;
+.chat-session-title {
   margin: 0;
-  overflow: auto;
-  padding: 10px 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2937;
 }
 
-.diffLine {
-  display: block;
-  min-height: 27px;
-  border-left: 3px solid transparent;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+.chat-session-meta {
   font-size: 12px;
+  color: #9ca3af;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.chat-message {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 85%;
+}
+
+.chat-message.user {
+  align-self: flex-end;
+}
+
+.chat-message.assistant {
+  align-self: flex-start;
+}
+
+.chat-message-bubble {
+  padding: 14px 18px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.chat-message.user .chat-message-bubble {
+  background: #1d4ed8;
+  color: #ffffff;
+  border-bottom-right-radius: 4px;
+}
+
+.chat-message.assistant .chat-message-bubble {
+  background: #ffffff;
+  color: #1f2937;
+  border: 1px solid #e5e7eb;
+  border-bottom-left-radius: 4px;
+}
+
+.chat-message-text {
+  margin: 0;
+}
+
+.chat-message-time {
+  font-size: 11px;
+  color: #9ca3af;
+  padding: 0 6px;
+}
+
+.chat-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.chat-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.chat-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.chat-card-icon {
+  color: #6b7280;
+}
+
+.chat-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+  flex: 1;
+}
+
+.chat-card-badge {
+  font-size: 11px;
+  height: 20px;
+}
+
+.chat-card-body {
+  margin: 0;
+  font-size: 13px;
+  color: #4b5563;
   line-height: 1.5;
-  padding: 4px 12px 4px 14px;
-  white-space: pre-wrap;
 }
 
-.diffLine.add {
-  border-left-color: #2f8a4f;
-  background: #eef8f1;
-}
-
-.diffLine.remove {
-  border-left-color: #c44b45;
-  background: #fff1f0;
-}
-
-.diffLine.context {
-  color: #5b6671;
-}
-
-.claimsPanel {
-  display: grid;
-}
-
-.panelTitle {
-  border-bottom: 1px solid #e5e9ee;
-  padding: 12px;
-}
-
-.statusStrip {
+.chat-card-citations {
   display: flex;
   flex-wrap: wrap;
-  justify-content: end;
   gap: 6px;
+  margin-top: 10px;
 }
 
-.statusStrip span {
-  border: 1px solid #d5dce3;
-  color: #52606c;
-  font-size: 12px;
-  font-weight: 650;
-  padding: 3px 7px;
+.citation-chip {
+  font-size: 11px;
+  height: 22px;
 }
 
-.claimList {
-  display: grid;
+/* Chat Input */
+.chat-input-area {
+  padding: 14px 20px 20px;
+  background: #ffffff;
+  border-top: 1px solid #e5e7eb;
 }
 
-.claimCard {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
-  gap: 14px;
-  border-bottom: 1px solid #e8edf1;
-  padding: 12px;
-}
-
-.claimCard:last-child {
-  border-bottom: 0;
-}
-
-.claimMain {
-  display: grid;
+.chat-input-box {
+  display: flex;
+  align-items: flex-end;
   gap: 10px;
-  min-width: 0;
+  background: #f3f4f6;
+  border-radius: 16px;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.claimMain p,
-.reasonLine,
-.rejectLine {
+.chat-input-box:focus-within {
+  border-color: #bfdbfe;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08);
+  background: #ffffff;
+}
+
+.chat-textarea {
+  flex: 1;
+  border: none;
+  background: transparent;
+  resize: none;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1f2937;
+  outline: none;
+  min-height: 24px;
+  max-height: 120px;
+}
+
+.chat-textarea::placeholder {
+  color: #9ca3af;
+}
+
+.chat-send-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+/* ===== Wiki Sidebar ===== */
+.wiki-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #ffffff;
+  border-left: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+.wiki-panel-header {
+  padding: 14px 16px 10px;
+}
+
+.wiki-panel-title {
+  margin: 0;
   font-size: 13px;
-  line-height: 1.45;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
-.claimFacts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 14px;
+/* Wiki Tree */
+.wiki-tree {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 8px;
 }
 
-.reasonLine {
-  color: #8a5a00;
+.tree-node-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: none;
+  background: transparent;
+  color: #374151;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  border-radius: 6px;
+  margin: 0 6px;
+  width: calc(100% - 12px);
 }
 
-.rejectLine {
-  color: #9d302a;
+.tree-node-row:hover {
+  background: #f3f4f6;
 }
 
-.rejectBox {
-  display: grid;
-  align-content: start;
+.tree-node-row.selected {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.tree-chevron {
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.tree-chevron-placeholder {
+  width: 14px;
+  flex-shrink: 0;
+}
+
+.tree-icon {
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.tree-node-row.selected .tree-icon {
+  color: #3b82f6;
+}
+
+.tree-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Wiki Preview */
+.wiki-sidebar-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 0 12px;
+}
+
+.wiki-preview {
+  padding: 8px 0 16px;
+  max-height: 40%;
+  overflow-y: auto;
+}
+
+.wiki-preview-content {
+  padding: 10px 16px;
+}
+
+.wiki-preview-title {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.wiki-preview-revision {
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: #9ca3af;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.wiki-preview-body {
+  margin: 0;
+  font-size: 13px;
+  color: #4b5563;
+  line-height: 1.6;
+}
+
+.wiki-preview-citations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+/* ===== Approval Widget ===== */
+.approval-widget {
+  border-top: 1px solid #e5e7eb;
+  background: #fafafa;
+}
+
+.approval-widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.approval-widget-label {
+  font-weight: 600;
+  color: #374151;
+  margin-right: 8px;
+}
+
+.approval-widget-id {
+  color: #6b7280;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.approval-widget-body {
+  padding: 0 16px 16px;
+}
+
+.approval-widget-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.approval-claims-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.approval-claim-item {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 13px;
+}
+
+.approval-claim-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.approval-claim-name {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.approval-claim-statement {
+  margin: 0 0 8px;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+.approval-claim-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.meta-tag {
+  font-size: 11px;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.approval-claim-actions {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
 }
 
-.rejectBox label {
-  color: #5c6975;
+.approval-reject-input {
   font-size: 12px;
-  font-weight: 700;
+  min-height: 32px;
+  padding: 6px 10px;
 }
 
-.citationState.valid,
-.statusBadge.approved,
-.statusBadge.committed {
-  border-color: #9fc9ad;
-  background: #eef8f1;
-  color: #1f6b3c;
+.approval-action-btns {
+  display: flex;
+  gap: 8px;
 }
 
-.citationState.degraded,
-.statusBadge.pending,
-.statusBadge.applying,
-.statusBadge.expired {
-  border-color: #dfc178;
-  background: #fff8e6;
-  color: #785700;
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-.citationState.invalid,
-.statusBadge.rejected,
-.statusBadge.conflict {
-  border-color: #e1aaa6;
-  background: #fff1f0;
-  color: #8b2f29;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.claimCard.conflict,
-.claimCard.expired {
-  background: #fffdf7;
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
 }
 
-@media (max-width: 920px) {
-  .topbar,
-  .approvalToolbar,
-  .approvalGrid,
-  .screenGrid,
-  .claimCard {
-    grid-template-columns: 1fr;
-  }
-
-  .screenPanel.wide {
-    grid-column: span 1;
-  }
-
-  .topbar,
-  .approvalToolbar,
-  .panelTitle {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .topMetrics,
-  .claimFacts,
-  .compactFacts {
-    grid-template-columns: 1fr;
-  }
-
-  .actionGroup,
-  .statusStrip,
-  .queueMeta {
-    justify-content: start;
-  }
-
-  .queueItem,
-  .searchItem {
-    grid-template-columns: 1fr;
-  }
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }
 
 @theme inline {
