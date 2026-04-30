@@ -1,4 +1,4 @@
-import { MessageSquare, Plus, X } from "lucide-react";
+import { MessageSquare, Plus, X, Zap, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ChatSession } from "@/models/chatModel";
 
@@ -31,12 +31,35 @@ export function SessionSidebar({
 }: SessionSidebarProps) {
   return (
     <aside className="session-sidebar" aria-label="session history">
-      <div className="session-header">
-        <h2 className="session-title">会话</h2>
-        <Button variant="ghost" size="icon" type="button" onClick={onNewSession} aria-label="new session">
-          <Plus size={18} />
+      <div className="session-toolbar">
+        <Button
+          variant="ghost"
+          size="sm"
+          type="button"
+          className="session-toolbar-btn"
+          onClick={onNewSession}
+        >
+          <Plus size={14} />
+          <span>新建任务</span>
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          type="button"
+          className="session-toolbar-btn"
+        >
+          <Zap size={14} />
+          <span>技能</span>
         </Button>
       </div>
+
+      <div className="session-projects">
+        <div className="session-project-header">
+          <FolderOpen size={14} />
+          <span>项目列表</span>
+        </div>
+      </div>
+
       <div className="session-list">
         {sessions.map((session) => (
           <button
@@ -46,7 +69,7 @@ export function SessionSidebar({
             onClick={() => onSelectSession(session.id)}
             aria-current={session.id === activeSessionId ? "true" : undefined}
           >
-            <MessageSquare size={16} className="session-icon" />
+            <MessageSquare size={15} className="session-icon" />
             <div className="session-info">
               <span className="session-name">{session.title}</span>
               <span className="session-time">{formatTime(session.timestamp)}</span>
@@ -61,7 +84,7 @@ export function SessionSidebar({
                   onDeleteSession(session.id);
                 }}
               >
-                <X size={14} />
+                <X size={13} />
               </button>
             )}
           </button>

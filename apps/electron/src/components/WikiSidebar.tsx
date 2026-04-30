@@ -3,6 +3,8 @@ import { ChevronRight, ChevronDown, FileText, FolderOpen, Folder } from "lucide-
 import type { WikiTreeNode, WikiPagePreview } from "@/models/wikiTreeModel";
 import { createWikiPreview } from "@/models/wikiTreeModel";
 import { Badge } from "@/components/ui/badge";
+import { TodoPanel } from "./TodoPanel";
+import { ContextPanel } from "./ContextPanel";
 
 interface WikiPageTreeProps {
   readonly nodes: readonly WikiTreeNode[];
@@ -130,6 +132,10 @@ export function WikiSidebar({ tree, selectedPageId, onSelectPage }: WikiSidebarP
 
   return (
     <aside className="wiki-sidebar" aria-label="wiki sidebar">
+      <TodoPanel />
+      <div className="wiki-sidebar-divider" />
+      <ContextPanel />
+      <div className="wiki-sidebar-divider" />
       <WikiPageTree
         nodes={tree}
         onSelectPage={onSelectPage}

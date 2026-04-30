@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 
+import { TitleBar } from "@/components/TitleBar";
 import { SessionSidebar } from "@/components/SessionSidebar";
 import { ChatPanel } from "@/components/ChatPanel";
 import { WikiSidebar } from "@/components/WikiSidebar";
@@ -82,52 +83,55 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <Group orientation="horizontal" className="app-panels">
-        {/* Left: Session Sidebar */}
-        <Panel
-          defaultSize={18}
-          minSize={14}
-          maxSize={28}
-          className="app-left-panel"
-        >
-          <SessionSidebar
-            sessions={sessions}
-            activeSessionId={activeSessionId}
-            onSelectSession={handleSelectSession}
-            onNewSession={handleNewSession}
-            onDeleteSession={handleDeleteSession}
-          />
-        </Panel>
-
-        <Separator className="app-resize-handle" />
-
-        {/* Center: Chat Panel */}
-        <Panel defaultSize={50} minSize={30} className="app-center-panel">
-          {activeSession ? <ChatPanel session={activeSession} /> : null}
-        </Panel>
-
-        <Separator className="app-resize-handle" />
-
-        {/* Right: Wiki Sidebar + Approval */}
-        <Panel
-          defaultSize={32}
-          minSize={22}
-          maxSize={45}
-          className="app-right-panel"
-        >
-          <WikiSidebar
-            tree={wikiTree}
-            selectedPageId={selectedPageId}
-            onSelectPage={setSelectedPageId}
-          />
-          {approval ? (
-            <ApprovalWidget
-              model={approval}
-              onChange={setApproval}
+      <TitleBar session={activeSession} />
+      <div className="app-body">
+        <Group orientation="horizontal" className="app-panels">
+          {/* Left: Session Sidebar */}
+          <Panel
+            defaultSize={18}
+            minSize={14}
+            maxSize={28}
+            className="app-left-panel"
+          >
+            <SessionSidebar
+              sessions={sessions}
+              activeSessionId={activeSessionId}
+              onSelectSession={handleSelectSession}
+              onNewSession={handleNewSession}
+              onDeleteSession={handleDeleteSession}
             />
-          ) : null}
-        </Panel>
-      </Group>
+          </Panel>
+
+          <Separator className="app-resize-handle" />
+
+          {/* Center: Chat Panel */}
+          <Panel defaultSize={50} minSize={30} className="app-center-panel">
+            {activeSession ? <ChatPanel session={activeSession} /> : null}
+          </Panel>
+
+          <Separator className="app-resize-handle" />
+
+          {/* Right: Wiki Sidebar + Approval */}
+          <Panel
+            defaultSize={32}
+            minSize={22}
+            maxSize={45}
+            className="app-right-panel"
+          >
+            <WikiSidebar
+              tree={wikiTree}
+              selectedPageId={selectedPageId}
+              onSelectPage={setSelectedPageId}
+            />
+            {approval ? (
+              <ApprovalWidget
+                model={approval}
+                onChange={setApproval}
+              />
+            ) : null}
+          </Panel>
+        </Group>
+      </div>
     </div>
   );
 }
