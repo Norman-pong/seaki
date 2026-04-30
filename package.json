@@ -8,7 +8,7 @@
     "format:check": "oxfmt --check package.json pnpm-workspace.yaml tsconfig.json tsconfig.base.json \"apps/electron/**/*.{html,css,json,ts,tsx}\" \"packages/**/*.{json,ts,tsx}\"",
     "dto:generate": "cargo run -p seaki-dto-codegen -- packages/dto/src/generated.ts",
     "dto:check": "cargo run -p seaki-dto-codegen -- --check packages/dto/src/generated.ts",
-    "lint": "oxlint apps/electron packages --react-plugin --vitest-plugin --jsx-a11y-plugin --deny-warnings",
+    "lint": "oxlint apps/electron packages --react-plugin --vitest-plugin --jsx-a11y-plugin --deny-warnings --ignore-pattern '**/dist/**' --ignore-pattern '**/dist-electron/**'",
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
     "build": "pnpm --filter @seaki/electron build",
     "test": "vitest run",

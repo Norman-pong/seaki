@@ -36,3 +36,7 @@ target/
 
 # Generated DTO (run `pnpm dto:generate` to recreate)
 packages/dto/src/generated.ts
+
+# Electron build artifacts
+dist-electron/
+test-results/
