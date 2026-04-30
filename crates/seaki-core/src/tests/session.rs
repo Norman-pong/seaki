@@ -92,7 +92,7 @@ fn session_redact_indexes_and_audits() {
 
     // 验证原始 secret 被脱敏后搜索不到
     let search = ledger
-        .session_search(SessionSearchRequest::new(
+        .session_search(&SessionSearchRequest::new(
             "workspace-1",
             "actor-1",
             "sk-1234567890abcdef",
@@ -102,7 +102,7 @@ fn session_redact_indexes_and_audits() {
     assert!(search.is_empty());
 
     let search = ledger
-        .session_search(SessionSearchRequest::new(
+        .session_search(&SessionSearchRequest::new(
             "workspace-1",
             "actor-1",
             "api_key",
@@ -151,7 +151,7 @@ fn session_redact_duplicate_idempotency_rejected() {
 fn session_search_missing_workspace_returns_error() {
     let ledger = initialized_ledger();
     let err = ledger
-        .session_search(SessionSearchRequest::new(
+        .session_search(&SessionSearchRequest::new(
             "nonexistent-workspace",
             "actor-1",
             "query",

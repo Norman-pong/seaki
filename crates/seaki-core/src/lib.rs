@@ -1029,7 +1029,7 @@ impl CoreLedger {
     /// 当工作区不存在时返回 `CoreError`。
     pub fn session_search(
         &self,
-        request: SessionSearchRequest,
+        request: &SessionSearchRequest,
     ) -> CoreResult<Vec<SessionSearchResultDTO>> {
         self.workspace_revision(&request.workspace_id)?
             .ok_or_else(|| CoreError::WorkspaceMissing(request.workspace_id.clone()))?;

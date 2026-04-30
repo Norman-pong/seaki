@@ -177,7 +177,7 @@ where
     /// 当查询执行失败时返回 `L::Error`。
     pub fn session_search(
         &self,
-        input: SessionSearchInput,
+        input: &SessionSearchInput,
     ) -> Result<Vec<SessionSearchResultDTO>, L::Error> {
         self.ledger.session_search(input)
     }
@@ -282,7 +282,7 @@ pub trait CoreLedgerApi {
     /// 当操作失败时返回 `Self::Error`。
     fn session_search(
         &self,
-        input: SessionSearchInput,
+        input: &SessionSearchInput,
     ) -> Result<Vec<SessionSearchResultDTO>, Self::Error>;
 
     /// 对会话进行脱敏并加入索引。
@@ -424,7 +424,7 @@ impl CoreLedgerApi for seaki_core::CoreLedger {
 
     fn session_search(
         &self,
-        input: SessionSearchInput,
+        input: &SessionSearchInput,
     ) -> Result<Vec<SessionSearchResultDTO>, Self::Error> {
         seaki_core::CoreLedger::session_search(self, input)
     }
