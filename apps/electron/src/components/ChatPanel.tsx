@@ -27,8 +27,7 @@ interface ChatPanelProps {
   readonly session: ChatSession;
 }
 
-function ChatCardItem({ card }: { readonly card: ChatCard }) {
-
+const ChatCardItem = React.memo(function ChatCardItem({ card }: { readonly card: ChatCard }) {
   const isDone = card.status === "committed" || card.status === "ready";
 
   return (
@@ -63,9 +62,9 @@ function ChatCardItem({ card }: { readonly card: ChatCard }) {
       )}
     </Card>
   );
-}
+});
 
-function ChatMessageItem({ message }: { readonly message: ChatMessage }) {
+const ChatMessageItem = React.memo(function ChatMessageItem({ message }: { readonly message: ChatMessage }) {
   const isUser = message.role === "user";
 
   return (
@@ -116,7 +115,7 @@ function ChatMessageItem({ message }: { readonly message: ChatMessage }) {
       </div>
     </div>
   );
-}
+});
 
 export function ChatPanel({ session }: ChatPanelProps) {
   const [input, setInput] = useState("");

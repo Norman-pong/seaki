@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -41,6 +41,9 @@ function TreeNodeItem({
   readonly selectedPageId: string;
 }) {
   const [expanded, setExpanded] = useState(node.expanded ?? false);
+  useEffect(() => {
+    setExpanded(node.expanded ?? false);
+  }, [node.expanded]);
   const hasChildren = node.children.length > 0;
   const isSelected = node.id === selectedPageId;
 
