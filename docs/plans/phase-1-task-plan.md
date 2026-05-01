@@ -118,3 +118,30 @@
 
 - M1：`session_search`、手动 project note、pipe inspect/dry-run/compose、fake/local Channel provider。
 - M2：真实 Channel Bridge、多 IM 插件、远程附件导入、Pipeline Designer、MCP/skills 适配、跨工具 connector、自动 topic clustering。
+
+## 执行记录
+
+### 2026-04-30 — M0-09 Electron MVP Screens 布局重构
+
+将原有 13-panel grid 布局重构为 Trae Solo 风格三列可调整布局，并完成可访问性与性能优化。
+
+| 子任务 | 状态 | 验证 |
+| --- | --- | --- |
+| 三列 `react-resizable-panels` 布局（左会话 / 中聊天 / 右 Wiki） | ✅ 已完成 | E2E 14 passed |
+| 面板折叠/展开（标题栏按钮控制 + CSS transition 抽屉动画） | ✅ 已完成 | E2E 14 passed |
+| shadcn/ui 替换自定义 BEM（button/badge/card/textarea/tabs/separator） | ✅ 已完成 | build + oxlint 0 issues |
+| WikiSidebar 自研 tab → shadcn/ui Tabs（含 ARIA） | ✅ 已完成 | E2E + a11y 审核 |
+| 删除按钮键盘焦点可见（`focus-visible:opacity-100`） | ✅ 已完成 | a11y 审核 |
+| 聊天区 `aria-live` + 头像 `aria-label` | ✅ 已完成 | a11y 审核 |
+| Approval 折叠按钮 `aria-expanded` + `aria-controls` | ✅ 已完成 | a11y 审核 |
+| E2E count 断言改用 `expect.poll` 重试 | ✅ 已完成 | E2E 14 passed |
+| `useState` 惰性初始化避免重复创建 mock 数据 | ✅ 已完成 | build |
+| TreeNodeItem `expanded` 状态同步 `node.expanded` prop | ✅ 已完成 | build + E2E |
+| 滚动条样式包裹 `@media (hover: hover)` 尊重系统偏好 | ✅ 已完成 | build |
+| `ChatCardItem` / `ChatMessageItem` `React.memo` 优化 | ✅ 已完成 | build |
+| 移除 `ChatSession.active` 冗余派生状态 | ✅ 已完成 | build + E2E |
+
+提交记录：
+- `90c975e` refactor(electron): 三列可调整布局重构与可访问性修复
+- `89b5fb7` perf(electron): TreeNode 状态同步、滚动条媒体查询、消息列表 memo
+- `21e276f` refactor(electron): 移除 ChatSession.active 冗余派生状态
