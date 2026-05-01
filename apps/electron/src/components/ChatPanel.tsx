@@ -6,107 +6,62 @@ import {
   AlertCircle,
   Link2,
   CheckCircle2,
-  Terminal,
-  ChevronDown,
-  ChevronRight,
   Bot,
   User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import type { ChatSession, ChatMessage, ChatCard } from "@/models/chatModel";
+
+const ICON_MAP: Record<ChatCard["type"], React.ReactNode> = {
+  wiki: <FileText size={14} />,
+  search: <Search size={14} />,
+  approval: <AlertCircle size={14} />,
+  citation: <Link2 size={14} />,
+  link: <Link2 size={14} />,
+};
 
 interface ChatPanelProps {
   readonly session: ChatSession;
 }
 
 function ChatCardItem({ card }: { readonly card: ChatCard }) {
-  const icons: Record<ChatCard["type"], React.ReactNode> = {
-    wiki: <FileText size={14} />,
-    search: <Search size={14} />,
-    approval: <AlertCircle size={14} />,
-    citation: <Link2 size={14} />,
-    link: <Link2 size={14} />,
-  };
 
-  const statusIcons: Record<string, React.ReactNode> = {
-    committed: <CheckCircle2 size={12} className="status-done" />,
-    ready: <CheckCircle2 size={12} className="status-done" />,
-  };
+  const isDone = card.status === "committed" || card.status === "ready";
 
   return (
-    <div className="chat-card">
-      <div className="chat-card-header">
-        <span className="chat-card-icon">{icons[card.type]}</span>
-        <span className="chat-card-title">{card.title}</span>
-        {card.status ? (
-          <span className="chat-card-status">
-            {statusIcons[card.status] ?? null}
-            <Badge variant="outline" className="chat-card-badge">
+    <Card size="sm" className="mt-2 chat-card">
+      <CardHeader className="flex flex-row items-center gap-2 py-2">
+        <span className="text-muted-foreground">{ICON_MAP[card.type]}</span>
+        <span className="font-medium text-sm flex-1">{card.title}</span>
+        {card.status && (
+          <div className="flex items-center gap-1.5">
+            {isDone && <CheckCircle2 size={12} className="text-green-500" />}
+            <Badge variant="outline" className="text-xs h-5">
               {card.status}
             </Badge>
-          </span>
-        ) : null}
-      </div>
-      {card.content || card.snippet ? (
-        <p className="chat-card-body">{card.content ?? card.snippet}</p>
-      ) : null}
-      {card.citationRefs && card.citationRefs.length > 0 ? (
-        <div className="chat-card-citations">
-          {card.citationRefs.map((ref) => (
-            <Badge key={ref.id} variant="secondary" className="citation-chip">
-              {ref.label}
-            </Badge>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function ThinkingBlock({ content }: { readonly content: string }) {
-  const [expanded, setExpanded] = useState(false);
-
-  return (
-    <div className="thinking-block">
-      <button
-        type="button"
-        className="thinking-header"
-        onClick={() => setExpanded(!expanded)}
-        aria-expanded={expanded}
-      >
-        {expanded ? (
-          <ChevronDown size={14} />
-        ) : (
-          <ChevronRight size={14} />
+          </div>
         )}
-        <span>思考</span>
-      </button>
-      {expanded ? (
-        <div className="thinking-body">
-          <p>{content}</p>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function CommandBlock({
-  command,
-  output,
-}: {
-  readonly command: string;
-  readonly output: string;
-}) {
-  return (
-    <div className="command-block">
-      <div className="command-header">
-        <Terminal size={13} />
-        <span>命令已执行</span>
-        <code className="command-code">{command}</code>
-      </div>
-      <pre className="command-output">{output}</pre>
-    </div>
+      </CardHeader>
+      {(card.content || card.snippet) && (
+        <CardContent className="pt-0 pb-3">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {card.content ?? card.snippet}
+          </p>
+          {card.citationRefs && card.citationRefs.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2.5">
+              {card.citationRefs.map((ref) => (
+                <Badge key={ref.id} variant="secondary" className="text-xs h-5">
+                  {ref.label}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      )}
+    </Card>
   );
 }
 
@@ -114,22 +69,45 @@ function ChatMessageItem({ message }: { readonly message: ChatMessage }) {
   const isUser = message.role === "user";
 
   return (
-    <div className={`chat-message ${isUser ? "user" : "assistant"}`}>
-      <div className="chat-message-avatar">
+    <div
+      className={cn(
+        "chat-message flex gap-3 max-w-[92%]",
+        isUser ? "self-end flex-row-reverse" : "self-start"
+      )}
+    >
+      <div
+        className={cn(
+          "flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center",
+          isUser ? "bg-primary text-primary-foreground" : "bg-secondary"
+        )}
+        aria-label={isUser ? "用户" : "助手"}
+      >
         {isUser ? <User size={14} /> : <Bot size={14} />}
       </div>
-      <div className="chat-message-content">
-        <div className="chat-message-bubble">
-          <p className="chat-message-text">{message.content}</p>
-          {message.cards && message.cards.length > 0 ? (
-            <div className="chat-cards">
+      <div className="flex flex-col gap-1 min-w-0">
+        <div
+          className={cn(
+            "px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm",
+            isUser
+              ? "bg-primary text-primary-foreground rounded-br-sm"
+              : "bg-card ring-1 ring-border rounded-bl-sm"
+          )}
+        >
+          <p>{message.content}</p>
+          {message.cards && message.cards.length > 0 && (
+            <div className="flex flex-col gap-2 mt-3">
               {message.cards.map((card, index) => (
                 <ChatCardItem key={`${card.title}_${index}`} card={card} />
               ))}
             </div>
-          ) : null}
+          )}
         </div>
-        <span className="chat-message-time">
+        <span
+          className={cn(
+            "text-[11px] text-muted-foreground px-1",
+            isUser && "text-right"
+          )}
+        >
           {new Date(message.timestamp).toLocaleTimeString("zh-CN", {
             hour: "2-digit",
             minute: "2-digit",
@@ -149,40 +127,25 @@ export function ChatPanel({ session }: ChatPanelProps) {
   }, [session.messages]);
 
   return (
-    <section className="chat-panel" aria-label="chat flow">
-      <div className="chat-header">
-        <div className="chat-header-left">
-          <h2 className="chat-session-title">{session.title}</h2>
-          <span className="chat-session-meta">
-            {session.messages.length} 条消息
-          </span>
-        </div>
+    <section className="flex flex-col h-full bg-background" aria-label="chat flow">
+      <div className="flex items-center gap-3 px-5 py-3 border-b bg-background">
+        <h2 className="text-[15px] font-semibold">{session.title}</h2>
+        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+          {session.messages.length} 条消息
+        </span>
       </div>
 
-      <div className="chat-messages">
-        {/* Mock thinking block for first assistant message */}
-        {session.messages.some((m) => m.role === "assistant") ? (
-          <ThinkingBlock content="正在分析 workspace 结构和导入队列状态，准备生成可视化报告..." />
-        ) : null}
-
-        {/* Mock command block */}
-        <CommandBlock
-          command="git status --porcelain"
-          output={` M apps/electron/src/App.tsx
-A  apps/electron/src/components/ChatPanel.tsx
-D  apps/electron/src/components/OldPanel.tsx`}
-        />
-
+      <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4" aria-live="polite" aria-atomic="false">
         {session.messages.map((message) => (
           <ChatMessageItem key={message.id} message={message} />
         ))}
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="chat-input-area">
-        <div className="chat-input-box">
+      <div className="px-5 py-4 border-t bg-background">
+        <div className="flex items-end gap-2.5 bg-muted rounded-2xl px-4 py-2.5 border border-transparent focus-within:border-primary/20 focus-within:bg-background focus-within:ring-2 focus-within:ring-primary/5 transition-all">
           <textarea
-            className="chat-textarea"
+            className="flex-1 bg-transparent resize-none text-sm leading-relaxed outline-none min-h-[24px] max-h-[120px] placeholder:text-muted-foreground chat-textarea"
             placeholder="输入消息..."
             rows={2}
             value={input}
@@ -197,11 +160,11 @@ D  apps/electron/src/components/OldPanel.tsx`}
           <Button
             size="icon"
             type="button"
-            className="chat-send-btn"
+            className="h-8 w-8 rounded-lg flex-shrink-0"
             onClick={() => setInput("")}
             aria-label="send"
           >
-            <Send size={16} />
+            <Send size={15} />
           </Button>
         </div>
       </div>

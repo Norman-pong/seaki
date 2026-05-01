@@ -1,11 +1,10 @@
 import { useState, useEffect } from "react";
-import { Panel, Group, Separator } from "react-resizable-panels";
+import { Panel, Group, Separator, usePanelRef } from "react-resizable-panels";
 
 import { TitleBar } from "@/components/TitleBar";
 import { SessionSidebar } from "@/components/SessionSidebar";
 import { ChatPanel } from "@/components/ChatPanel";
 import { WikiSidebar } from "@/components/WikiSidebar";
-import { ApprovalWidget } from "@/components/ApprovalWidget";
 
 import { createChatSessions, createInitialSession } from "@/models/chatModel";
 import { createWikiTree } from "@/models/wikiTreeModel";
@@ -21,10 +20,14 @@ import {
 import "./styles.css";
 
 export function App() {
-  const [sessions, setSessions] = useState<readonly ChatSession[]>(createChatSessions());
-  const [activeSessionId, setActiveSessionId] = useState<string>(createInitialSession().id);
+  const [sessions, setSessions] = useState<readonly ChatSession[]>(() => createChatSessions());
+  const [activeSessionId, setActiveSessionId] = useState<string>(() => createInitialSession().id);
   const [selectedPageId, setSelectedPageId] = useState<string>("wiki_m0_ingest");
   const [approval, setApproval] = useState<ApprovalDiffModel | null>(null);
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
+  const leftPanelRef = usePanelRef();
+  const rightPanelRef = usePanelRef();
 
   useEffect(() => {
     let active = true;
@@ -62,36 +65,64 @@ export function App() {
   }
 
   function handleDeleteSession(sessionId: string) {
-    setSessions((prev) => {
-      const next = prev.filter((s) => s.id !== sessionId);
-      if (next.length === 0) {
-        const fallback: ChatSession = {
-          id: `session_${Date.now()}`,
-          title: "新会话",
-          timestamp: new Date().toISOString(),
-          active: true,
-          messages: [],
-        };
-        return [fallback];
-      }
-      if (activeSessionId === sessionId) {
-        setActiveSessionId(next[0]!.id);
-      }
-      return next;
-    });
+    const next = sessions.filter((s) => s.id !== sessionId);
+    if (next.length === 0) {
+      const fallback: ChatSession = {
+        id: `session_${Date.now()}`,
+        title: "新会话",
+        timestamp: new Date().toISOString(),
+        active: true,
+        messages: [],
+      };
+      setSessions([fallback]);
+      setActiveSessionId(fallback.id);
+      return;
+    }
+    setSessions(next);
+    if (activeSessionId === sessionId) {
+      setActiveSessionId(next[0]!.id);
+    }
+  }
+
+  function toggleLeftPanel() {
+    const next = !leftCollapsed;
+    setLeftCollapsed(next);
+    if (next) {
+      leftPanelRef.current?.resize(0);
+    } else {
+      leftPanelRef.current?.resize("18%");
+    }
+  }
+
+  function toggleRightPanel() {
+    const next = !rightCollapsed;
+    setRightCollapsed(next);
+    if (next) {
+      rightPanelRef.current?.resize(0);
+    } else {
+      rightPanelRef.current?.resize("32%");
+    }
   }
 
   return (
     <div className="app-shell">
-      <TitleBar session={activeSession} />
+      <TitleBar
+        session={activeSession}
+        leftCollapsed={leftCollapsed}
+        onToggleLeft={toggleLeftPanel}
+        rightCollapsed={rightCollapsed}
+        onToggleRight={toggleRightPanel}
+      />
       <div className="app-body">
         <Group orientation="horizontal" className="app-panels">
           {/* Left: Session Sidebar */}
           <Panel
-            defaultSize={18}
-            minSize={14}
-            maxSize={28}
+            defaultSize="18%"
+            minSize="14%"
+            maxSize="28%"
             className="app-left-panel"
+            panelRef={leftPanelRef}
+            style={{ transition: "flex-basis 0.3s ease, flex-grow 0.3s ease" }}
           >
             <SessionSidebar
               sessions={sessions}
@@ -99,13 +130,14 @@ export function App() {
               onSelectSession={handleSelectSession}
               onNewSession={handleNewSession}
               onDeleteSession={handleDeleteSession}
+              isCollapsed={leftCollapsed}
             />
           </Panel>
 
           <Separator className="app-resize-handle" />
 
           {/* Center: Chat Panel */}
-          <Panel defaultSize={50} minSize={30} className="app-center-panel">
+          <Panel defaultSize="50%" minSize="30%" className="app-center-panel">
             {activeSession ? <ChatPanel session={activeSession} /> : null}
           </Panel>
 
@@ -113,22 +145,21 @@ export function App() {
 
           {/* Right: Wiki Sidebar + Approval */}
           <Panel
-            defaultSize={32}
-            minSize={22}
-            maxSize={45}
+            defaultSize="32%"
+            minSize="22%"
+            maxSize="45%"
             className="app-right-panel"
+            panelRef={rightPanelRef}
+            style={{ transition: "flex-basis 0.3s ease, flex-grow 0.3s ease" }}
           >
             <WikiSidebar
               tree={wikiTree}
               selectedPageId={selectedPageId}
               onSelectPage={setSelectedPageId}
+              approval={approval}
+              onApprovalChange={setApproval}
+              isCollapsed={rightCollapsed}
             />
-            {approval ? (
-              <ApprovalWidget
-                model={approval}
-                onChange={setApproval}
-              />
-            ) : null}
           </Panel>
         </Group>
       </div>

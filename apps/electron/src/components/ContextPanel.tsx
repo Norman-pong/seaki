@@ -1,4 +1,6 @@
 import { BookOpen, FileText, Puzzle, Settings } from "lucide-react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 interface ContextTag {
   readonly id: string;
@@ -25,32 +27,43 @@ const iconMap = {
 
 export function ContextPanel() {
   return (
-    <div className="context-panel" aria-label="context panel">
-      <h3 className="panel-section-title">上下文</h3>
-      <div className="context-tags">
-        {contextTags.map((tag) => (
-          <span
-            key={tag.id}
-            className={`context-tag ${tag.active ? "active" : ""}`}
-          >
-            {iconMap[tag.icon]}
-            {tag.label}
-          </span>
-        ))}
-      </div>
+    <Card size="sm" className="m-3 border-0 shadow-none bg-transparent">
+      <CardHeader className="py-2">
+        <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
+          上下文
+        </h3>
+      </CardHeader>
+      <CardContent className="pt-0 space-y-3">
+        <div className="flex flex-wrap gap-2">
+          {contextTags.map((tag) => (
+            <span
+              key={tag.id}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors",
+                tag.active
+                  ? "bg-primary/10 text-primary border border-primary/20"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              )}
+            >
+              {iconMap[tag.icon]}
+              {tag.label}
+            </span>
+          ))}
+        </div>
 
-      <div className="context-progress">
-        <div className="context-progress-header">
-          <span>上下文占用</span>
-          <span className="context-progress-value">29%</span>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>上下文占用</span>
+            <span className="font-semibold text-primary">29%</span>
+          </div>
+          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-primary to-primary/70 rounded-full transition-all duration-300"
+              style={{ width: "29%" }}
+            />
+          </div>
         </div>
-        <div className="context-progress-bar">
-          <div
-            className="context-progress-fill"
-            style={{ width: "29%" }}
-          />
-        </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

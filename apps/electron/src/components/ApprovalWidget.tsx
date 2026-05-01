@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+
 import {
   type ApprovalDiffModel,
   type ApprovalClaimModel,
@@ -13,18 +15,6 @@ import {
   rejectClaim,
   updateRejectionDraft,
 } from "@/appModel";
-
-type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
-
-function approvalBadgeVariant(status: ApprovalResult): BadgeVariant {
-  if (status === "rejected" || status === "conflict") {
-    return "destructive";
-  }
-  if (status === "approved" || status === "committed") {
-    return "secondary";
-  }
-  return "outline";
-}
 
 const STATUS_LABEL: Record<ApprovalResult, string> = {
   approved: "已批准",
@@ -61,28 +51,41 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
   ).length;
 
   return (
-    <div className="approval-widget" aria-label="approval widget">
+    <Card size="sm" className="m-3 border-0 shadow-none bg-transparent" aria-label="approval widget">
       <button
         type="button"
-        className="approval-widget-header"
+        className="w-full flex items-center justify-between px-2 py-2 text-sm hover:bg-muted/60 rounded-md transition-colors"
         onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+        aria-controls="approval-claims-list"
       >
-        <div>
-          <span className="approval-widget-label">审批</span>
-          <span className="approval-widget-id">{approval.patch.patch_id}</span>
+        <div className="flex items-center gap-2">
+          <span className="font-semibold">审批</span>
+          <span className="font-mono text-xs text-muted-foreground">
+            {approval.patch.patch_id}
+          </span>
         </div>
-        <Badge variant={approvalBadgeVariant(approval.status)}>
+        <Badge
+          variant={
+            approval.status === "rejected" || approval.status === "conflict"
+              ? "destructive"
+              : approval.status === "approved" || approval.status === "committed"
+                ? "secondary"
+                : "outline"
+          }
+          className="text-xs h-5"
+        >
           {STATUS_LABEL[approval.status]}
         </Badge>
       </button>
 
-      {expanded ? (
-        <div className="approval-widget-body">
-          <div className="approval-widget-actions">
+      {expanded && (
+        <CardContent id="approval-claims-list" className="pt-2 pb-0 px-2 space-y-3">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
               size="sm"
-              type="button"
+              className="h-7 text-xs"
               disabled={batchApprovalCount === 0}
               onClick={() => onChange(approvePendingClaims(approval))}
             >
@@ -91,7 +94,7 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
             <Button
               variant="outline"
               size="sm"
-              type="button"
+              className="h-7 text-xs"
               disabled={!canApply}
               onClick={() => onChange(markApprovedClaimsApplying(approval))}
             >
@@ -100,7 +103,7 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
             <Button
               variant="outline"
               size="sm"
-              type="button"
+              className="h-7 text-xs"
               disabled={!canCommit}
               onClick={() => onChange(applyApprovedClaims(approval))}
             >
@@ -108,67 +111,92 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
             </Button>
           </div>
 
-          <div className="approval-claims-list">
+          <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
             {approval.claims.map((claim) => {
               const draft = approval.rejectionDrafts[claim.claimId] ?? "";
               const canApprove = claim.status === "pending" && claim.citationState !== "invalid";
               const canReject = claim.status !== "committed";
 
               return (
-                <div key={claim.claimId} className={`approval-claim-item ${claim.status}`}>
-                  <div className="approval-claim-main">
-                    <div className="approval-claim-title-row">
-                      <span className="approval-claim-name">{claim.title}</span>
-                      <Badge variant={approvalBadgeVariant(claim.status)}>
+                <Card key={claim.claimId} size="sm" className="approval-claim-item">
+                  <CardContent className="py-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-sm truncate">
+                        {claim.title}
+                      </span>
+                      <Badge
+                        variant={
+                          claim.status === "rejected" || claim.status === "conflict"
+                            ? "destructive"
+                            : claim.status === "approved" || claim.status === "committed"
+                              ? "secondary"
+                              : "outline"
+                        }
+                        className="text-[11px] h-5 flex-shrink-0"
+                      >
                         {STATUS_LABEL[claim.status]}
                       </Badge>
                     </div>
-                    <p className="approval-claim-statement">{claim.statement}</p>
-                    <div className="approval-claim-meta">
-                      <span className="meta-tag">
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {claim.statement}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded">
                         引用: {claim.citationId} · {CITATION_LABEL[claim.citationState]}
                       </span>
-                      <span className="meta-tag">风险: {claim.riskLevel}</span>
+                      <span className="text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                        风险: {claim.riskLevel}
+                      </span>
                     </div>
-                  </div>
-                  <div className="approval-claim-actions">
-                    <Textarea
-                      className="approval-reject-input"
-                      placeholder="拒绝原因"
-                      rows={1}
-                      value={draft}
-                      onChange={(event) => {
-                        onChange(updateRejectionDraft(approval, claim.claimId, event.currentTarget.value));
-                      }}
-                      disabled={!canReject}
-                    />
-                    <div className="approval-action-btns">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        type="button"
-                        disabled={!canApprove}
-                        onClick={() => onChange(approveClaim(approval, claim.claimId))}
-                      >
-                        批准
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        type="button"
-                        disabled={!canReject || draft.trim().length === 0}
-                        onClick={() => onChange(rejectClaim(approval, claim.claimId))}
-                      >
-                        拒绝
-                      </Button>
+                    <div className="space-y-2 pt-1">
+                      <Textarea
+                        className="min-h-[32px] text-xs py-1.5 px-2 resize-none"
+                        placeholder="拒绝原因"
+                        rows={1}
+                        value={draft}
+                        onChange={(event) => {
+                          onChange(
+                            updateRejectionDraft(
+                              approval,
+                              claim.claimId,
+                              event.currentTarget.value
+                            )
+                          );
+                        }}
+                        disabled={!canReject}
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={!canApprove}
+                          onClick={() =>
+                            onChange(approveClaim(approval, claim.claimId))
+                          }
+                        >
+                          批准
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={!canReject || draft.trim().length === 0}
+                          onClick={() =>
+                            onChange(rejectClaim(approval, claim.claimId))
+                          }
+                        >
+                          拒绝
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               );
             })}
           </div>
-        </div>
-      ) : null}
-    </div>
+        </CardContent>
+      )}
+    </Card>
   );
 }

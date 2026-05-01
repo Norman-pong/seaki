@@ -1,5 +1,6 @@
 import { MessageSquare, Plus, X, Zap, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import type { ChatSession } from "@/models/chatModel";
 
 interface SessionSidebarProps {
@@ -8,6 +9,7 @@ interface SessionSidebarProps {
   readonly onSelectSession: (sessionId: string) => void;
   readonly onNewSession: () => void;
   readonly onDeleteSession?: (sessionId: string) => void;
+  readonly isCollapsed?: boolean;
 }
 
 function formatTime(timestamp: string): string {
@@ -28,67 +30,89 @@ export function SessionSidebar({
   onSelectSession,
   onNewSession,
   onDeleteSession,
+  isCollapsed,
 }: SessionSidebarProps) {
   return (
-    <aside className="session-sidebar" aria-label="session history">
-      <div className="session-toolbar">
+    <aside
+      className={cn(
+        "flex flex-col h-full bg-muted/40 border-r transition-transform duration-300 ease-out",
+        isCollapsed && "-translate-x-full"
+      )}
+      aria-label="session history"
+    >
+      <div className="flex gap-2 p-3">
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
-          type="button"
-          className="session-toolbar-btn"
+          className="flex-1 justify-start gap-1.5 text-xs h-8"
           onClick={onNewSession}
         >
           <Plus size={14} />
-          <span>新建任务</span>
+          新建任务
         </Button>
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
-          type="button"
-          className="session-toolbar-btn"
+          className="flex-1 justify-start gap-1.5 text-xs h-8"
         >
           <Zap size={14} />
-          <span>技能</span>
+          技能
         </Button>
       </div>
 
-      <div className="session-projects">
-        <div className="session-project-header">
+      <div className="px-3 pb-2">
+        <div className="flex items-center gap-2 px-2.5 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
           <FolderOpen size={14} />
-          <span>项目列表</span>
+          项目列表
         </div>
       </div>
 
-      <div className="session-list">
-        {sessions.map((session) => (
-          <button
-            key={session.id}
-            type="button"
-            className={`session-item ${session.id === activeSessionId ? "active" : ""}`}
-            onClick={() => onSelectSession(session.id)}
-            aria-current={session.id === activeSessionId ? "true" : undefined}
-          >
-            <MessageSquare size={15} className="session-icon" />
-            <div className="session-info">
-              <span className="session-name">{session.title}</span>
-              <span className="session-time">{formatTime(session.timestamp)}</span>
-            </div>
-            {onDeleteSession && session.id === activeSessionId && (
+      <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5">
+        {sessions.map((session) => {
+          const isActive = session.id === activeSessionId;
+          return (
+            <div key={session.id} className="relative group">
               <button
                 type="button"
-                className="session-delete"
-                aria-label="delete session"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteSession(session.id);
-                }}
+                className={cn(
+                  "session-item w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left transition-colors pr-9",
+                  isActive
+                    ? "bg-primary/10 text-primary"
+                    : "hover:bg-muted text-foreground"
+                )}
+                onClick={() => onSelectSession(session.id)}
+                aria-current={isActive ? "true" : undefined}
               >
-                <X size={13} />
+                <MessageSquare
+                  size={15}
+                  className={cn(
+                    "flex-shrink-0",
+                    isActive ? "text-primary" : "text-muted-foreground"
+                  )}
+                />
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="font-medium truncate">{session.title}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {formatTime(session.timestamp)}
+                  </span>
+                </div>
               </button>
-            )}
-          </button>
-        ))}
+              {onDeleteSession && isActive && (
+                <button
+                  type="button"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center justify-center w-5 h-5 rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity hover:bg-destructive/10 hover:text-destructive"
+                  aria-label="delete session"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteSession(session.id);
+                  }}
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
     </aside>
   );

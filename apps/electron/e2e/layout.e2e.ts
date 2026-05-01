@@ -8,8 +8,7 @@ test.describe("新布局组件渲染", () => {
 
   test("对话流应包含消息气泡", async ({ page }) => {
     const messages = page.locator(".chat-message");
-    const count = await messages.count();
-    expect(count).toBeGreaterThanOrEqual(2);
+    await expect.poll(() => messages.count()).toBeGreaterThanOrEqual(2);
   });
 
   test("对话流应包含输入框", async ({ page }) => {
@@ -18,24 +17,25 @@ test.describe("新布局组件渲染", () => {
   });
 
   test("Wiki 页面树应可见", async ({ page }) => {
+    await page.locator("[data-tab='pages']").click();
     const tree = page.locator("[aria-label='wiki page tree']");
     await expect(tree).toBeVisible();
   });
 
   test("Wiki 页面树应包含层级节点", async ({ page }) => {
+    await page.locator("[data-tab='pages']").click();
     const treeNodes = page.locator(".tree-node-row");
-    const count = await treeNodes.count();
-    expect(count).toBeGreaterThanOrEqual(4);
+    await expect.poll(() => treeNodes.count()).toBeGreaterThanOrEqual(4);
   });
 
   test("Wiki 预览面板应可见", async ({ page }) => {
+    await page.locator("[data-tab='pages']").click();
     const preview = page.locator("[aria-label='wiki page preview']");
     await expect(preview).toBeVisible();
   });
 
   test("对话流中应包含卡片", async ({ page }) => {
     const cards = page.locator(".chat-card");
-    const count = await cards.count();
-    expect(count).toBeGreaterThanOrEqual(1);
+    await expect.poll(() => cards.count()).toBeGreaterThanOrEqual(1);
   });
 });
