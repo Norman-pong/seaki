@@ -19,7 +19,6 @@ export interface ChatSession {
   readonly id: string;
   readonly title: string;
   readonly timestamp: string;
-  readonly active: boolean;
   readonly messages: readonly ChatMessage[];
 }
 
@@ -28,7 +27,6 @@ const mockSessions: ChatSession[] = [
     id: "session_1",
     title: "Wiki 导入讨论",
     timestamp: "2026-04-30T09:30:00+08:00",
-    active: true,
     messages: [
       {
         id: "msg_1_1",
@@ -61,7 +59,6 @@ const mockSessions: ChatSession[] = [
     id: "session_2",
     title: "架构决策审查",
     timestamp: "2026-04-29T16:45:00+08:00",
-    active: false,
     messages: [
       {
         id: "msg_2_1",
@@ -90,7 +87,6 @@ const mockSessions: ChatSession[] = [
     id: "session_3",
     title: "搜索结果整理",
     timestamp: "2026-04-28T11:20:00+08:00",
-    active: false,
     messages: [
       {
         id: "msg_3_1",

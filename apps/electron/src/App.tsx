@@ -48,7 +48,7 @@ export function App() {
   function handleSelectSession(sessionId: string) {
     setActiveSessionId(sessionId);
     setSessions((prev) =>
-      prev.map((s) => ({ ...s, active: s.id === sessionId })),
+      prev.map((s) => ({ ...s })),
     );
   }
 
@@ -57,10 +57,9 @@ export function App() {
       id: `session_${Date.now()}`,
       title: "新会话",
       timestamp: new Date().toISOString(),
-      active: true,
       messages: [],
     };
-    setSessions((prev) => [newSession, ...prev.map((s) => ({ ...s, active: false }))]);
+    setSessions((prev) => [newSession, ...prev.map((s) => ({ ...s }))]);
     setActiveSessionId(newSession.id);
   }
 
