@@ -51,7 +51,7 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
   ).length;
 
   return (
-    <Card size="sm" className="m-3 border-0 shadow-none bg-transparent" aria-label="approval widget">
+    <Card size="sm" className="m-3 border-0 bg-transparent shadow-none" aria-label="approval widget">
       <button
         type="button"
         className="w-full flex items-center justify-between px-2 py-2 text-sm hover:bg-muted/60 rounded-md transition-colors"

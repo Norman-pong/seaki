@@ -38,4 +38,16 @@ test.describe("新布局组件渲染", () => {
     const cards = page.locator(".chat-card");
     await expect.poll(() => cards.count()).toBeGreaterThanOrEqual(1);
   });
+
+  test("命令面板应支持点击与快捷键打开", async ({ page }) => {
+    await page.locator(".title-command").click();
+    await expect(page.getByRole("dialog", { name: "Command Palette" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: "Command Palette" })).toBeHidden();
+
+    await page.keyboard.press(process.platform === "darwin" ? "Meta+K" : "Control+K");
+    await expect(page.getByRole("dialog", { name: "Command Palette" })).toBeVisible();
+    await page.getByRole("button", { name: /重建 stale workspace index/ }).click();
+    await expect(page.getByRole("dialog", { name: "Command Palette" })).toBeHidden();
+  });
 });

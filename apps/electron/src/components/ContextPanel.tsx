@@ -10,7 +10,7 @@ interface ContextTag {
 }
 
 const contextTags: ContextTag[] = [
-  { id: "ctx_1", label: "git-commit", icon: "skill", active: true },
+  { id: "ctx_1", label: "pipe command", icon: "skill", active: true },
   { id: "ctx_2", label: "llm-wiki", icon: "skill", active: true },
   { id: "ctx_3", label: "lore-commit", icon: "rule" },
   { id: "ctx_4", label: "AGENTS.md", icon: "file", active: true },
@@ -27,11 +27,16 @@ const iconMap = {
 
 export function ContextPanel() {
   return (
-    <Card size="sm" className="m-3 border-0 shadow-none bg-transparent">
+    <Card size="sm" className="m-3 border-0 bg-transparent shadow-none">
       <CardHeader className="py-2">
-        <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
-          上下文
-        </h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
+            上下文
+          </h3>
+          <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+            6 sources
+          </span>
+        </div>
       </CardHeader>
       <CardContent className="pt-0 space-y-3">
         <div className="flex flex-wrap gap-2">
@@ -58,7 +63,7 @@ export function ContextPanel() {
           </div>
           <div className="h-1.5 bg-muted rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-primary to-primary/70 rounded-full transition-all duration-300"
+              className="h-full context-meter rounded-full transition-all duration-300"
               style={{ width: "29%" }}
             />
           </div>

@@ -1,4 +1,4 @@
-import { MessageSquare, Plus, X, Zap, FolderOpen } from "lucide-react";
+import { FolderOpen, MessageSquare, Plus, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ChatSession } from "@/models/chatModel";
@@ -35,27 +35,27 @@ export function SessionSidebar({
   return (
     <aside
       className={cn(
-        "flex flex-col h-full bg-muted/40 border-r transition-transform duration-300 ease-out",
+        "flex flex-col h-full sidebar-surface border-r transition-transform duration-300 ease-out",
         isCollapsed && "-translate-x-full"
       )}
       aria-label="session history"
     >
-      <div className="flex gap-2 p-3">
+      <div className="flex flex-col gap-1 px-3 py-3">
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
-          className="flex-1 justify-start gap-1.5 text-xs h-8"
+          className="h-8 justify-start gap-2 text-sm"
           onClick={onNewSession}
         >
-          <Plus size={14} />
+          <Plus data-icon="inline-start" />
           新建任务
         </Button>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
-          className="flex-1 justify-start gap-1.5 text-xs h-8"
+          className="h-8 justify-start gap-2 text-sm"
         >
-          <Zap size={14} />
+          <Zap data-icon="inline-start" />
           技能
         </Button>
       </div>
@@ -67,7 +67,7 @@ export function SessionSidebar({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5">
+      <div className="flex-1 overflow-y-auto px-2 pb-2 flex flex-col gap-1">
         {sessions.map((session) => {
           const isActive = session.id === activeSessionId;
           return (
@@ -92,8 +92,9 @@ export function SessionSidebar({
                 />
                 <div className="flex flex-col min-w-0 flex-1">
                   <span className="font-medium truncate">{session.title}</span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {formatTime(session.timestamp)}
+                  <span className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                    <span>{formatTime(session.timestamp)}</span>
+                    <span>{session.messages.length} 条</span>
                   </span>
                 </div>
               </button>

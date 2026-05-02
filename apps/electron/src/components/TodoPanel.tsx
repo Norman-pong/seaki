@@ -10,7 +10,7 @@ export interface TodoItem {
 }
 
 const mockTodos: TodoItem[] = [
-  { id: "todo_1", text: "整理 Sunclaw 应用架构", done: true, time: "10:29" },
+  { id: "todo_1", text: "整理 seaki 应用架构", done: true, time: "10:29" },
   { id: "todo_2", text: "收敛开发侧提示词入口", done: true, time: "10:25" },
   { id: "todo_3", text: "Review 架构约束文档", done: false },
   { id: "todo_4", text: "更新 AGENTS.md 索引", done: false },
@@ -21,7 +21,7 @@ export function TodoPanel() {
   const total = mockTodos.length;
 
   return (
-    <Card size="sm" className="m-3 border-0 shadow-none bg-transparent">
+    <Card size="sm" className="m-3 border-0 bg-transparent shadow-none">
       <CardHeader className="flex flex-row items-center justify-between py-2">
         <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
           待办

@@ -5,6 +5,8 @@ import { TitleBar } from "@/components/TitleBar";
 import { SessionSidebar } from "@/components/SessionSidebar";
 import { ChatPanel } from "@/components/ChatPanel";
 import { WikiSidebar } from "@/components/WikiSidebar";
+import { CommandPalette } from "@/components/CommandPalette";
+import type { CommandPaletteAction } from "@/components/CommandPalette";
 
 import { createChatSessions, createInitialSession } from "@/models/chatModel";
 import { createWikiTree } from "@/models/wikiTreeModel";
@@ -26,6 +28,7 @@ export function App() {
   const [approval, setApproval] = useState<ApprovalDiffModel | null>(null);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const leftPanelRef = usePanelRef();
   const rightPanelRef = usePanelRef();
 
@@ -41,6 +44,22 @@ export function App() {
     return () => {
       active = false;
     };
+  }, []);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandPaletteOpen(true);
+      }
+
+      if (event.key === "Escape") {
+        setCommandPaletteOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? sessions[0];
@@ -70,7 +89,6 @@ export function App() {
         id: `session_${Date.now()}`,
         title: "新会话",
         timestamp: new Date().toISOString(),
-        active: true,
         messages: [],
       };
       setSessions([fallback]);
@@ -103,6 +121,19 @@ export function App() {
     }
   }
 
+  function handleCommand(action: CommandPaletteAction) {
+    if (action === "approval-review") {
+      setRightCollapsed(false);
+      rightPanelRef.current?.resize("32%");
+    }
+
+    if (action === "attach-source") {
+      handleNewSession();
+    }
+
+    setCommandPaletteOpen(false);
+  }
+
   return (
     <div className="app-shell">
       <TitleBar
@@ -111,6 +142,7 @@ export function App() {
         onToggleLeft={toggleLeftPanel}
         rightCollapsed={rightCollapsed}
         onToggleRight={toggleRightPanel}
+        onOpenCommandPalette={() => setCommandPaletteOpen(true)}
       />
       <div className="app-body">
         <Group orientation="horizontal" className="app-panels">
@@ -162,6 +194,11 @@ export function App() {
           </Panel>
         </Group>
       </div>
+      <CommandPalette
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        onSelectCommand={handleCommand}
+      />
     </div>
   );
 }

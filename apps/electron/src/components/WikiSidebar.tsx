@@ -130,7 +130,7 @@ function WikiPageTree({
 
 function WikiPreview({ preview }: { readonly preview: WikiPagePreview }) {
   return (
-    <Card size="sm" className="m-3 border-0 shadow-none bg-transparent" aria-label="wiki page preview">
+    <Card size="sm" className="m-3 border-0 bg-transparent shadow-none" aria-label="wiki page preview">
       <CardHeader className="py-2">
         <h3 className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
           预览
@@ -173,7 +173,7 @@ export function WikiSidebar({
   return (
     <aside
       className={cn(
-        "flex flex-col h-full bg-muted/40 border-l overflow-hidden transition-transform duration-300 ease-out",
+        "flex flex-col h-full sidebar-surface border-l overflow-hidden transition-transform duration-300 ease-out",
         isCollapsed && "translate-x-full"
       )}
       aria-label="wiki sidebar"
@@ -183,7 +183,7 @@ export function WikiSidebar({
         onValueChange={(v) => setActiveTab(v as typeof activeTab)}
         className="flex flex-col h-full"
       >
-        <TabsList className="mx-3 mt-2 mb-1 h-7 bg-transparent gap-1 p-0 self-start">
+        <TabsList className="mx-3 mt-3 mb-1 h-7 bg-background/70 gap-1 p-1 self-start shadow-none">
           <TabsTrigger
             value="overview"
             className="text-[11px] px-2 py-0.5 h-6 gap-1"
@@ -210,7 +210,7 @@ export function WikiSidebar({
 
         <TabsContent value="overview" className="flex-1 overflow-y-auto min-h-0 mt-0">
           <TodoPanel />
-          <Separator className="mx-3 w-auto" />
+          <Separator className="mx-3 w-[calc(100%-1.5rem)]" />
           <ContextPanel />
         </TabsContent>
         <TabsContent value="pages" className="flex-1 overflow-y-auto min-h-0 mt-0">
@@ -219,7 +219,7 @@ export function WikiSidebar({
             selectedPageId={selectedPageId}
             onSelectPage={onSelectPage}
           />
-          <Separator className="mx-3 w-auto" />
+          <Separator className="mx-3 w-[calc(100%-1.5rem)]" />
           <WikiPreview preview={preview} />
         </TabsContent>
         <TabsContent value="review" className="flex-1 overflow-y-auto min-h-0 mt-0">

@@ -1,11 +1,12 @@
 import {
-  Code,
   ExternalLink,
   Layout,
   Maximize2,
   PanelLeft,
   PanelRight,
+  Search,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ChatSession } from "@/models/chatModel";
 
@@ -15,6 +16,7 @@ interface TitleBarProps {
   readonly onToggleLeft?: () => void;
   readonly rightCollapsed?: boolean;
   readonly onToggleRight?: () => void;
+  readonly onOpenCommandPalette?: () => void;
 }
 
 export function TitleBar({
@@ -23,24 +25,18 @@ export function TitleBar({
   onToggleLeft,
   rightCollapsed,
   onToggleRight,
+  onOpenCommandPalette,
 }: TitleBarProps) {
   return (
-    <header className="h-10 flex items-center justify-between px-3.5 bg-background border-b flex-shrink-0 select-none">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-red-400 border border-red-500/50" />
-          <span className="w-3 h-3 rounded-full bg-yellow-400 border border-yellow-500/50" />
-          <span className="w-3 h-3 rounded-full bg-green-400 border border-green-500/50" />
-        </div>
-        <div className="flex items-center gap-1.5 text-muted-foreground text-xs font-medium px-2.5 py-1 bg-muted rounded-md">
-          <Code size={14} />
-          <span>seaki</span>
-        </div>
+    <header className="title-bar">
+      <div className="flex items-center gap-2">
         {onToggleLeft && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             className={cn(
-              "flex items-center justify-center w-7 h-7 rounded-md transition-colors",
+              "size-7",
               leftCollapsed
                 ? "text-primary bg-primary/10"
                 : "text-muted-foreground hover:bg-muted"
@@ -48,25 +44,33 @@ export function TitleBar({
             aria-label={leftCollapsed ? "展开左侧面板" : "收起左侧面板"}
             onClick={onToggleLeft}
           >
-            <PanelLeft size={14} />
-          </button>
+            <PanelLeft data-icon="icon" />
+          </Button>
         )}
+        <span className="title-product">seaki</span>
       </div>
 
-      <h1
-        className={cn(
-          "absolute left-1/2 -translate-x-1/2 text-sm font-medium truncate max-w-md"
-        )}
+      <button
+        type="button"
+        className="title-command"
+        onClick={onOpenCommandPalette}
+        aria-label="打开命令面板"
+        aria-haspopup="dialog"
+        aria-controls="command-palette"
       >
-        {session?.title ?? "AI Wiki 工作站"}
-      </h1>
+        <Search data-icon="inline-start" />
+        <span className="truncate">{session?.title ?? "AI Wiki 工作站"}</span>
+        <kbd>⌘K</kbd>
+      </button>
 
       <div className="flex items-center gap-1.5">
         {onToggleRight && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             className={cn(
-              "flex items-center justify-center w-7 h-7 rounded-md transition-colors",
+              "size-7",
               rightCollapsed
                 ? "text-primary bg-primary/10"
                 : "text-muted-foreground hover:bg-muted"
@@ -74,30 +78,36 @@ export function TitleBar({
             aria-label={rightCollapsed ? "展开右侧面板" : "收起右侧面板"}
             onClick={onToggleRight}
           >
-            <PanelRight size={14} />
-          </button>
+            <PanelRight data-icon="icon" />
+          </Button>
         )}
-        <button
+        <Button
           type="button"
-          className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-muted-foreground border rounded-md hover:bg-muted transition-colors"
+          variant="outline"
+          size="sm"
+          className="h-7 gap-1.5 text-xs text-muted-foreground"
         >
-          <ExternalLink size={13} />
+          <ExternalLink data-icon="inline-start" />
           <span>在编辑器中打开</span>
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="flex items-center justify-center w-7 h-7 text-muted-foreground border rounded-md hover:bg-muted transition-colors"
+          variant="outline"
+          size="icon"
+          className="size-7 text-muted-foreground"
           aria-label="layout"
         >
-          <Layout size={13} />
-        </button>
-        <button
+          <Layout data-icon="icon" />
+        </Button>
+        <Button
           type="button"
-          className="flex items-center justify-center w-7 h-7 text-muted-foreground border rounded-md hover:bg-muted transition-colors"
+          variant="outline"
+          size="icon"
+          className="size-7 text-muted-foreground"
           aria-label="fullscreen"
         >
-          <Maximize2 size={13} />
-        </button>
+          <Maximize2 data-icon="icon" />
+        </Button>
       </div>
     </header>
   );
