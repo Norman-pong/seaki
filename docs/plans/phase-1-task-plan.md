@@ -121,9 +121,9 @@
 
 ## 执行记录
 
-### 2026-04-30 — M0-09 Electron MVP Screens 布局重构
+### 2026-04-30 — M1 完成后前端优化迭代
 
-将原有 13-panel grid 布局重构为 Trae Solo 风格三列可调整布局，并完成可访问性与性能优化。
+M0 与 M1 已全部交付（见下方提交历史）。本次迭代在 M1 已完成的 Electron 前端基础上，将原有 13-panel grid 布局重构为 Trae Solo 风格三列可调整布局，并完成可访问性与性能优化。不属于 M0/M1 原始任务计划，作为前端体验改进单独记录。
 
 | 子任务 | 状态 | 验证 |
 | --- | --- | --- |
@@ -141,7 +141,10 @@
 | `ChatCardItem` / `ChatMessageItem` `React.memo` 优化 | ✅ 已完成 | build |
 | 移除 `ChatSession.active` 冗余派生状态 | ✅ 已完成 | build + E2E |
 
-提交记录：
+提交记录（按时间顺序）：
+- `1a8f30a` 重构(electron): 将 MVP 网格改造为 Trae Solo 风格的三栏 AI Wiki 工作站
+- `e78ad72` 优化(electron): 参照 AI 工作台设计图升级视觉与交互细节
 - `90c975e` refactor(electron): 三列可调整布局重构与可访问性修复
 - `89b5fb7` perf(electron): TreeNode 状态同步、滚动条媒体查询、消息列表 memo
 - `21e276f` refactor(electron): 移除 ChatSession.active 冗余派生状态
+- `d3f6573` 收敛桌面工作台到 Codex 式交互（中置 CommandPalette，降低边框存在感）

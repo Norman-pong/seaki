@@ -61,14 +61,17 @@
   2. **Memory 线**：第一轮 5/6 问题已解决，但 revision 引入新问题：project note 只有写没有读，"聚合零散笔记"场景存在结构性断点；M1-04 "会话结束时自动触发"在 Electron+mock transport 条件下缺乏真实 session 基础设施；M1-09 低信任注入 e2e 在 mock transport 下不可信；M1-05 对 M0 wiki claim 存在隐式依赖。修订：M1-05 增加 project note 标题+内容关键词 BM25 搜索；M1-04 将触发机制改为"用户手动触发 + daemon 支持手动触发 API"；M1-09 将低信任注入从 e2e 降级为"前端状态测试 + daemon 单元测试"；M1-05 依赖列显式声明 M0-06。
   3. **Channel 线**：第一轮 4/4 问题已解决，但 revision 引入新问题：M1-06 单任务塞入 8 个产出，范围过度膨胀；role-based policy 决策（guest 被拒绝）完全缺失验收；Channel 附件到 wiki 的跨线链路存在结构性缺口（quarantine 为 mock，不进入 `source.ingest`）；IM provenance 未纳入验收。修订：M1-06 拆分为 M1-06a（入站验证 + actor 解析 + role policy）和 M1-06b（附件授权 + quarantine mock）；M1-06a 增加 guest 角色 policy 拒绝验收；M1-07 增加 provenance 字段要求；风险缓解声明补充"M2 补全 Channel 附件从 quarantine 到 `source.ingest` 的真实 sandbox 链路"；M1-06b 诚实声明 quarantine 为契约模拟。
 
-## 2026-04-30 Electron 前端布局重构（M0-09）
+## 2026-04-30 ~ 05-02 Electron 前端布局重构（M1 完成后迭代）
+
+M0 与 M1 已全部交付。本次为 M1 完成后的前端体验优化迭代，非原始任务计划内容。
 
 - `apps/electron/src/App.tsx`：将 13-panel CSS grid 替换为 `react-resizable-panels` 三列可调整布局（左 18% 会话栏 / 中 50% 聊天区 / 右 32% Wiki 栏）。
-- 新增组件：`TitleBar`（macOS 交通灯 + 面板切换）、`SessionSidebar`（会话列表）、`ChatPanel`（消息流 + 输入区）、`WikiSidebar`（Wiki 树 + 预览 + Approval）。
+- 新增组件：`TitleBar`（面板切换）、`SessionSidebar`（会话列表）、`ChatPanel`（消息流 + 输入区）、`WikiSidebar`（Wiki 树 + 预览 + Approval）。
 - 面板折叠/展开由 `TitleBar` 图标控制，通过 `usePanelRef` 调用 `panelRef.resize()` 驱动，配合 CSS `transition: flex-basis` 实现抽屉动画。
 - 所有自定义 BEM CSS 替换为 Tailwind 工具类 + shadcn/ui 组件（`button`、`badge`、`card`、`textarea`、`tabs`、`separator`）。
 - `WikiSidebar` 自研 tab 切换器替换为已安装的 shadcn/ui `Tabs`，获得完整的 `role="tablist"`、`aria-selected`、键盘导航。
 - 可访问性修复：`SessionSidebar` 删除按钮添加 `focus-visible:opacity-100`；`ChatPanel` 消息容器添加 `aria-live="polite"`、头像添加 `aria-label`；`ApprovalWidget` 折叠按钮添加 `aria-expanded` + `aria-controls`。
 - 性能优化：`ChatPanel` 子组件包裹 `React.memo`；`App.tsx` `useState` 改为惰性初始化；`ChatCardItem` 的 `ICON_MAP` 提升到模块顶层。
 - 清理：`ChatSession` 接口移除冗余的 `active: boolean` 派生字段，由单一 `activeSessionId` 状态决定激活会话。
+- 后续 `d3f6573` 在此基础上进一步收敛为 Codex 式交互（中置 CommandPalette，降低边框存在感）。
 - 验证：E2E 14 passed、oxlint 0 issues、`cargo test` 全部通过。
