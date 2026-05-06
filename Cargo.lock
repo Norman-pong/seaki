@@ -430,6 +430,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "seaki-pipeline"
+version = "0.1.0"
+dependencies = [
+ "seaki-dto",
+ "seaki-pipe",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+]
+
+[[package]]
 name = "seaki-policy"
 version = "0.1.0"
 dependencies = [

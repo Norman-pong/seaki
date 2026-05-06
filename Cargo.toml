@@ -8,6 +8,7 @@ members = [
     "crates/seaki-index",
     "crates/seaki-memory",
     "crates/seaki-pipe",
+    "crates/seaki-pipeline",
     "crates/seaki-policy",
     "crates/seaki-sandbox",
     "crates/seaki-wiki",

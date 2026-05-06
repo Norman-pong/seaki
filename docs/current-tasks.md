@@ -56,6 +56,20 @@ e78ad72  参照 AI 工作台设计图升级视觉与交互细节
 | `pnpm dto:check` | ✅ |
 | `oxlint src/` | ✅ 0 warnings |
 
+## M2 阶段计划（已制定，Pipeline + Agent 优先）
+
+详见 [`docs/plans/m2-task-plan.md`](plans/m2-task-plan.md)。
+
+**执行策略**：Pipeline + Agent 优先，Channel Bridge 次之，Memory 智能化最后。
+
+| 阶段 | 任务范围 | 状态 |
+|------|----------|------|
+| 阶段一 M2-P | Pipeline Designer + Pipe Runtime（真实执行） | 🔄 待启动（M2-P01） |
+| 阶段二 M2-A | Agent Runtime + MCP 适配 | ⏳ 等待 P 阶段完成 |
+| 阶段三 M2-C | Channel Bridge 真实化 + 飞书插件 | ⏳ 等待 A 阶段完成 |
+| 阶段四 M2-M | 自动 Memory + Review Learning | ⏳ 等待 C 阶段完成 |
+| 阶段五 M2-F | 前端配套 + E2E 验收 | ⏳ 等待后端完成 |
+
 ## 待办（无阻塞项，均可后续安排）
 
 - [ ] `SessionSidebar` 允许删除非活跃会话（当前仅限活跃会话显示删除按钮）

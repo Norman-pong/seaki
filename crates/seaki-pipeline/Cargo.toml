@@ -1,0 +1,23 @@
+[package]
+name = "seaki-pipeline"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Pipeline Designer: intent compilation, type checking, policy and cost estimation"
+repository = "https://github.com/normanpong/seaki"
+readme = "../../README.md"
+keywords = ["seaki", "wiki", "local-first", "pipeline"]
+categories = ["development-tools"]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+seaki-pipe = { path = "../seaki-pipe" }
+seaki-dto = { path = "../seaki-dto" }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
