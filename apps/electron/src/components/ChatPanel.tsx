@@ -100,7 +100,7 @@ const ChatMessageItem = React.memo(function ChatMessageItem({ message }: { reado
           {message.cards && message.cards.length > 0 && (
             <div className="flex flex-col gap-2 mt-3">
               {message.cards.map((card, index) => (
-                <ChatCardItem key={`${card.title}_${index}`} card={card} />
+                <ChatCardItem key={`${message.id}_card_${card.type}_${index}`} card={card} />
               ))}
             </div>
           )}

@@ -12,14 +12,14 @@ import { createChatSessions, createInitialSession } from "@/models/chatModel";
 import { createWikiTree } from "@/models/wikiTreeModel";
 import type { ChatSession } from "@/models/chatModel";
 
-const wikiTree = createWikiTree();
-
 import {
   createElectronAppModel,
   type ApprovalDiffModel,
 } from "./appModel";
 
 import "./styles.css";
+
+const wikiTree = createWikiTree();
 
 export function App() {
   const [sessions, setSessions] = useState<readonly ChatSession[]>(() => createChatSessions());
@@ -66,9 +66,6 @@ export function App() {
 
   function handleSelectSession(sessionId: string) {
     setActiveSessionId(sessionId);
-    setSessions((prev) =>
-      prev.map((s) => ({ ...s })),
-    );
   }
 
   function handleNewSession() {
@@ -78,7 +75,7 @@ export function App() {
       timestamp: new Date().toISOString(),
       messages: [],
     };
-    setSessions((prev) => [newSession, ...prev.map((s) => ({ ...s }))]);
+    setSessions((prev) => [newSession, ...prev]);
     setActiveSessionId(newSession.id);
   }
 

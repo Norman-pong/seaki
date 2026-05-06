@@ -39,10 +39,9 @@ interface ApprovalWidgetProps {
 
 export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
   const [expanded, setExpanded] = useState(true);
-  const approval = model;
-  const canApply = approval.claims.some((claim) => claim.status === "approved");
-  const canCommit = approval.claims.some((claim) => claim.status === "applying");
-  const batchApprovalCount = approval.claims.filter(
+  const canApply = model.claims.some((claim) => claim.status === "approved");
+  const canCommit = model.claims.some((claim) => claim.status === "applying");
+  const batchApprovalCount = model.claims.filter(
     (claim) =>
       claim.status === "pending" &&
       claim.citationState === "valid" &&
@@ -62,20 +61,20 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
         <div className="flex items-center gap-2">
           <span className="font-semibold">审批</span>
           <span className="font-mono text-xs text-muted-foreground">
-            {approval.patch.patch_id}
+            {model.patch.patch_id}
           </span>
         </div>
         <Badge
           variant={
-            approval.status === "rejected" || approval.status === "conflict"
+            model.status === "rejected" || model.status === "conflict"
               ? "destructive"
-              : approval.status === "approved" || approval.status === "committed"
+              : model.status === "approved" || model.status === "committed"
                 ? "secondary"
                 : "outline"
           }
           className="text-xs h-5"
         >
-          {STATUS_LABEL[approval.status]}
+          {STATUS_LABEL[model.status]}
         </Badge>
       </button>
 
@@ -112,8 +111,8 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
           </div>
 
           <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
-            {approval.claims.map((claim) => {
-              const draft = approval.rejectionDrafts[claim.claimId] ?? "";
+            {model.claims.map((claim) => {
+              const draft = model.rejectionDrafts[claim.claimId] ?? "";
               const canApprove = claim.status === "pending" && claim.citationState !== "invalid";
               const canReject = claim.status !== "committed";
 

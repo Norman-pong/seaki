@@ -160,17 +160,24 @@ CitationOpen
 
 ### Electron MVP Screen Contracts
 
-| Screen | 输入 DTO / 事件 | 可触发命令 | 必须处理的状态 |
-| --- | --- | --- | --- |
-| `DaemonStatus` | `WorkspaceDTO`、daemon heartbeat、`DaemonUnavailableError` | reconnect、open logs | connecting、ready、degraded、readonly、unavailable |
-| `WorkspaceShell` | `WorkspaceDTO`、`IndexStatusDTO`、task summary events | workspace.init、index.rebuild | empty、ready、index_stale、audit_readonly |
-| `ImportQueue` | `UserSelectedFileDTO`、`SourceManifestDTO`、SourceIngestState events | files.prepareUserSelected、source.ingestSelectedFile、retry parse | capability_denied、failed、partial、index_stale |
-| `ApprovalDiff` | `WikiPatchProposalDTO`、`ApprovalRequestDTO`、citation validation events | approval.reviewPatch、approval.decide、regenerate patch | pending、expired、conflict、approved、rejected |
-| `WikiReader` | committed page DTO、`CitationRefDTO`、degraded citation events | wiki.readPage、citation.resolve | draft hidden、degraded citation、no access |
-| `SearchResults` | `SearchResultDTO`、`IndexStatusDTO`、visibility check events | search.query、index.rebuild、open citation | loading、empty、stale、filtered_by_permission |
-| `CitationPreview` | `CitationRefDTO`、`SourceCardDTO`、`AnnotationDTO` | citation.resolve、annotation.create | resolving、open_source_range、degraded、no_access |
+M1 完成后，前端在 2026-04-30 ~ 05-02 进行布局重构迭代，将原有的多 Screen 网格布局收敛为 Trae Solo 风格三列可调整布局。旧版 Screen（DaemonStatus、WorkspaceShell、ImportQueue 等）的契约语义仍由 domain use case 承载，但 UI 组件结构已替换为以下组件：
 
-`ApprovalDiff` 是信任核心：左侧必须显示 source preview / cited ranges，右侧显示 patch diff；每个 claim 都要展示 citation validation、risk summary、taint/security flags。用户可以批量批准、单条拒绝、填写拒绝原因或触发重新生成；approval 结果必须进入 WAL/audit。
+| 组件 | 职责 | 输入 / 事件 | 可触发命令 |
+| --- | --- | --- | --- |
+| `TitleBar` | 顶部标题栏、面板折叠切换、CommandPalette 入口 | `ChatSession`、折叠状态 | toggle left/right panel、open CommandPalette |
+| `SessionSidebar` | 左侧会话历史列表 | `sessions`、`activeSessionId` | select session、new session、delete session |
+| `ChatPanel` | 中间聊天消息流 + 输入区 | `ChatSession`（messages、title） | send message（mock） |
+| `WikiSidebar` | 右侧 Wiki 面板（含 Tabs） | `WikiTreeNode[]`、`selectedPageId`、`ApprovalDiffModel` | select page、toggle tab、approve/reject claims |
+| `CommandPalette` | 中置命令面板（Codex 式） | 快捷键 `Ctrl/Cmd+K`、Esc | approval-review、attach-source 等 |
+
+`WikiSidebar` 内部通过 Tabs 组织三个视图：
+- **概览**：`TodoPanel`（进度追踪）+ `ContextPanel`（技能标签、来源上下文）
+- **页面**：`WikiPageTree`（层级页面树）+ `WikiPreview`（选中页面预览）
+- **审查**：`ApprovalWidget`（diff 审批、claim 列表、批量/单条批准拒绝）
+
+`ApprovalWidget` 仍是信任核心：每个 claim 展示 citation validation、risk summary、taint/security flags；用户可批量批准、单条拒绝、填写拒绝原因；approval 结果必须进入 WAL/audit。
+
+> 注：旧版 Screen Contracts（DaemonStatus / WorkspaceShell / ImportQueue / WikiReader / SearchResults / CitationPreview）的 MVP 实现已在 M1 完成后迭代中重构为三列布局。Domain use case 和 DTO 契约不变，仅 UI 组件组织结构演进。
 
 ### 后续平台约束
 
