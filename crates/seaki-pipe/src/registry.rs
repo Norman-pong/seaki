@@ -53,6 +53,8 @@ pub struct PipeCommandManifest {
     pub description: String,
     pub input_schema: serde_json::Value,
     pub output_schema: serde_json::Value,
+    pub input_frame: crate::TypedFrame,
+    pub output_frame: crate::TypedFrame,
     pub side_effect_level: SideEffectLevel,
     pub resource_quota: Option<ResourceQuota>,
     pub schema_hash: String,
@@ -268,12 +270,16 @@ fn builtin_commands() -> Vec<PipeCommandManifest> {
         "type": "object"
     });
 
+    use crate::{Cardinality, FrameType};
+
     vec![
         PipeCommandManifest {
             command_id: "wiki.search".to_string(),
             description: "Search wiki by keyword and return paragraph frames".to_string(),
             input_schema: input_keyword.clone(),
             output_schema: output_paragraph_frames.clone(),
+            input_frame: (FrameType::JsonValue, Cardinality::One),
+            output_frame: (FrameType::ParagraphFrame, Cardinality::Many),
             side_effect_level: SideEffectLevel::None,
             resource_quota: Some(ResourceQuota {
                 cpu_ms: 100,
@@ -289,6 +295,8 @@ fn builtin_commands() -> Vec<PipeCommandManifest> {
             description: "Resolve citations into cited paragraphs".to_string(),
             input_schema: output_paragraph_frames.clone(),
             output_schema: input_cited_paragraphs.clone(),
+            input_frame: (FrameType::ParagraphFrame, Cardinality::Many),
+            output_frame: (FrameType::CitedParagraph, Cardinality::Many),
             side_effect_level: SideEffectLevel::None,
             resource_quota: Some(ResourceQuota {
                 cpu_ms: 50,
@@ -304,6 +312,8 @@ fn builtin_commands() -> Vec<PipeCommandManifest> {
             description: "Summarize cited paragraphs into a text answer".to_string(),
             input_schema: input_cited_paragraphs.clone(),
             output_schema: output_text_answer.clone(),
+            input_frame: (FrameType::CitedParagraph, Cardinality::Many),
+            output_frame: (FrameType::TextAnswer, Cardinality::One),
             side_effect_level: SideEffectLevel::None,
             resource_quota: Some(ResourceQuota {
                 cpu_ms: 200,
@@ -319,6 +329,8 @@ fn builtin_commands() -> Vec<PipeCommandManifest> {
             description: "Filter frames by predicate".to_string(),
             input_schema: passthrough_array.clone(),
             output_schema: passthrough_array.clone(),
+            input_frame: (FrameType::JsonValue, Cardinality::Many),
+            output_frame: (FrameType::JsonValue, Cardinality::Many),
             side_effect_level: SideEffectLevel::None,
             resource_quota: Some(ResourceQuota {
                 cpu_ms: 20,
@@ -334,6 +346,8 @@ fn builtin_commands() -> Vec<PipeCommandManifest> {
             description: "Map over frames".to_string(),
             input_schema: passthrough_array.clone(),
             output_schema: passthrough_array.clone(),
+            input_frame: (FrameType::JsonValue, Cardinality::Many),
+            output_frame: (FrameType::JsonValue, Cardinality::Many),
             side_effect_level: SideEffectLevel::None,
             resource_quota: Some(ResourceQuota {
                 cpu_ms: 20,
@@ -349,6 +363,8 @@ fn builtin_commands() -> Vec<PipeCommandManifest> {
             description: "Propose a patch from cited paragraphs".to_string(),
             input_schema: input_cited_paragraphs.clone(),
             output_schema: output_patch_proposal.clone(),
+            input_frame: (FrameType::CitedParagraph, Cardinality::Many),
+            output_frame: (FrameType::PatchProposalArtifact, Cardinality::One),
             side_effect_level: SideEffectLevel::ProposalOnly,
             resource_quota: Some(ResourceQuota {
                 cpu_ms: 300,

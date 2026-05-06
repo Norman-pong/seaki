@@ -137,31 +137,6 @@ impl std::fmt::Display for ComposeError {
 
 impl std::error::Error for ComposeError {}
 
-/// Resolve the typed input/output frame for a built-in command.
-fn command_typed_frame(command_id: &str) -> Option<TypedFrame> {
-    match command_id {
-        "wiki.search" => Some((FrameType::ParagraphFrame, Cardinality::Many)),
-        "citation.resolve" => Some((FrameType::CitedParagraph, Cardinality::Many)),
-        "adr.summarize" => Some((FrameType::TextAnswer, Cardinality::One)),
-        "filter" | "map" => Some((FrameType::JsonValue, Cardinality::Many)),
-        "wiki.patch.propose" => Some((FrameType::PatchProposalArtifact, Cardinality::One)),
-        _ => None,
-    }
-}
-
-/// For built-in commands, infer the expected input frame type.
-fn command_input_frame(command_id: &str) -> Option<TypedFrame> {
-    match command_id {
-        "wiki.search" => Some((FrameType::JsonValue, Cardinality::One)),
-        "citation.resolve" => Some((FrameType::ParagraphFrame, Cardinality::Many)),
-        "adr.summarize" | "wiki.patch.propose" => {
-            Some((FrameType::CitedParagraph, Cardinality::Many))
-        }
-        "filter" | "map" => Some((FrameType::JsonValue, Cardinality::Many)),
-        _ => None,
-    }
-}
-
 fn dfs<'a>(
     node: &'a str,
     graph: &HashMap<&'a str, Vec<&'a str>>,
@@ -208,10 +183,8 @@ pub fn compose(
             .inspect(&step.command_id)
             .map_err(|_| ComposeError::CommandNotFound(step.command_id.clone()))?;
 
-        let expected_input = command_input_frame(&step.command_id)
-            .ok_or_else(|| ComposeError::CommandNotFound(step.command_id.clone()))?;
-        let output_type = command_typed_frame(&step.command_id)
-            .ok_or_else(|| ComposeError::CommandNotFound(step.command_id.clone()))?;
+        let expected_input = manifest.input_frame;
+        let output_type = manifest.output_frame;
 
         // Determine the actual input type for this step based on binding.
         let actual_input = match &step.input_binding {
