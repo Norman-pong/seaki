@@ -436,6 +436,219 @@ impl Fixture {
 }
 
 #[test]
+fn issue_generic_capability_grant() {
+    let store = CapabilityStore::new();
+    let now = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+    let result = store.issue_capability_grant(
+        "cap-wiki".to_string(),
+        "user-1".to_string(),
+        "ws-1".to_string(),
+        "pipe.command.wiki.search".to_string(),
+        "seaki-pipe".to_string(),
+        "wiki.search".to_string(),
+        Some(now - Duration::from_secs(1)),
+        Some(now + Duration::from_secs(60)),
+        1,
+        "local_user".to_string(),
+    );
+    assert!(result.is_ok());
+    let handle = result.unwrap().unwrap();
+    assert_eq!(handle.capability_id, "cap-wiki");
+    assert_eq!(store.generic_uses_remaining("cap-wiki").unwrap(), Some(1));
+}
+
+#[test]
+fn consume_generic_grant_success() {
+    let store = CapabilityStore::new();
+    let now = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+    store
+        .issue_capability_grant(
+            "cap-wiki".to_string(),
+            "user-1".to_string(),
+            "ws-1".to_string(),
+            "pipe.command.wiki.search".to_string(),
+            "seaki-pipe".to_string(),
+            "wiki.search".to_string(),
+            Some(now - Duration::from_secs(1)),
+            Some(now + Duration::from_secs(60)),
+            1,
+            "local_user".to_string(),
+        )
+        .unwrap()
+        .unwrap();
+
+    let request = GenericUseCapabilityRequest {
+        capability_id: "cap-wiki".to_string(),
+        subject_actor_id: "user-1".to_string(),
+        audience: "seaki-pipe".to_string(),
+        workspace_id: "ws-1".to_string(),
+        capability: "pipe.command.wiki.search".to_string(),
+        operation: "wiki.search".to_string(),
+        now,
+    };
+
+    let result = store.consume_generic_grant(&request).unwrap();
+    assert!(result.is_ok());
+    assert_eq!(store.generic_uses_remaining("cap-wiki").unwrap(), Some(0));
+}
+
+#[test]
+fn consume_generic_grant_expired_fails() {
+    let store = CapabilityStore::new();
+    let now = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+    store
+        .issue_capability_grant(
+            "cap-wiki".to_string(),
+            "user-1".to_string(),
+            "ws-1".to_string(),
+            "pipe.command.wiki.search".to_string(),
+            "seaki-pipe".to_string(),
+            "wiki.search".to_string(),
+            Some(now - Duration::from_secs(60)),
+            Some(now - Duration::from_secs(1)),
+            1,
+            "local_user".to_string(),
+        )
+        .unwrap()
+        .unwrap();
+
+    let request = GenericUseCapabilityRequest {
+        capability_id: "cap-wiki".to_string(),
+        subject_actor_id: "user-1".to_string(),
+        audience: "seaki-pipe".to_string(),
+        workspace_id: "ws-1".to_string(),
+        capability: "pipe.command.wiki.search".to_string(),
+        operation: "wiki.search".to_string(),
+        now,
+    };
+
+    let result = store.consume_generic_grant(&request).unwrap();
+    assert_eq!(
+        result.unwrap_err().rejection,
+        CapabilityGrantRejection::Expired
+    );
+    assert_eq!(store.generic_uses_remaining("cap-wiki").unwrap(), Some(1));
+}
+
+#[test]
+fn consume_generic_grant_uses_depleted_fails() {
+    let store = CapabilityStore::new();
+    let now = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+    store
+        .issue_capability_grant(
+            "cap-wiki".to_string(),
+            "user-1".to_string(),
+            "ws-1".to_string(),
+            "pipe.command.wiki.search".to_string(),
+            "seaki-pipe".to_string(),
+            "wiki.search".to_string(),
+            Some(now - Duration::from_secs(1)),
+            Some(now + Duration::from_secs(60)),
+            0,
+            "local_user".to_string(),
+        )
+        .unwrap()
+        .unwrap();
+
+    let request = GenericUseCapabilityRequest {
+        capability_id: "cap-wiki".to_string(),
+        subject_actor_id: "user-1".to_string(),
+        audience: "seaki-pipe".to_string(),
+        workspace_id: "ws-1".to_string(),
+        capability: "pipe.command.wiki.search".to_string(),
+        operation: "wiki.search".to_string(),
+        now,
+    };
+
+    let result = store.consume_generic_grant(&request).unwrap();
+    assert_eq!(
+        result.unwrap_err().rejection,
+        CapabilityGrantRejection::AlreadyUsed
+    );
+}
+
+#[test]
+fn authorize_capability_no_grant_require_approval() {
+    let policy = WorkspacePathPolicy::try_new("/tmp").unwrap();
+    let engine = PolicyEngine::new(policy);
+    let request = CapabilityPolicyRequest {
+        actor_id: "user-1".to_string(),
+        workspace_id: "ws-1".to_string(),
+        capability: "pipe.command.wiki.search".to_string(),
+        operation: "wiki.search".to_string(),
+        capability_id: None,
+        side_effect_level: SideEffectLevel::ProposalOnly,
+        audience: "seaki-pipe".to_string(),
+    };
+
+    let eval = engine.authorize_capability(&request).unwrap();
+    assert_eq!(eval.decision, PolicyDecision::RequireApproval);
+    assert_eq!(eval.reason, PolicyReason::MissingCapabilityGrant);
+}
+
+#[test]
+fn authorize_capability_with_grant_allow() {
+    let policy = WorkspacePathPolicy::try_new("/tmp").unwrap();
+    let now = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+    let engine = PolicyEngine::with_fixed_now(policy, now);
+    engine
+        .capability_store()
+        .issue_capability_grant(
+            "cap-wiki".to_string(),
+            "user-1".to_string(),
+            "ws-1".to_string(),
+            "pipe.command.wiki.search".to_string(),
+            "seaki-pipe".to_string(),
+            "wiki.search".to_string(),
+            Some(now - Duration::from_secs(1)),
+            Some(now + Duration::from_secs(60)),
+            1,
+            "local_user".to_string(),
+        )
+        .unwrap()
+        .unwrap();
+
+    let request = CapabilityPolicyRequest {
+        actor_id: "user-1".to_string(),
+        workspace_id: "ws-1".to_string(),
+        capability: "pipe.command.wiki.search".to_string(),
+        operation: "wiki.search".to_string(),
+        capability_id: Some("cap-wiki".to_string()),
+        side_effect_level: SideEffectLevel::SideEffect,
+        audience: "seaki-pipe".to_string(),
+    };
+
+    let eval = engine.authorize_capability(&request).unwrap();
+    assert_eq!(eval.decision, PolicyDecision::Allow);
+    assert_eq!(eval.reason, PolicyReason::CapabilityGrant);
+    assert_eq!(
+        engine
+            .capability_store()
+            .generic_uses_remaining("cap-wiki")
+            .unwrap(),
+        Some(0)
+    );
+}
+
+#[test]
+fn authorize_capability_none_level_always_allow() {
+    let policy = WorkspacePathPolicy::try_new("/tmp").unwrap();
+    let engine = PolicyEngine::new(policy);
+    let request = CapabilityPolicyRequest {
+        actor_id: "user-1".to_string(),
+        workspace_id: "ws-1".to_string(),
+        capability: "pipe.command.wiki.search".to_string(),
+        operation: "wiki.search".to_string(),
+        capability_id: None,
+        side_effect_level: SideEffectLevel::None,
+        audience: "seaki-pipe".to_string(),
+    };
+
+    let eval = engine.authorize_capability(&request).unwrap();
+    assert_eq!(eval.decision, PolicyDecision::Allow);
+}
+
+#[test]
 fn channel_action_grant_issue_and_consume() {
     let store = CapabilityStore::new();
     let now = SystemTime::UNIX_EPOCH + Duration::from_secs(100);

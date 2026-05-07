@@ -27,6 +27,13 @@ impl PolicyDecision {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SideEffectLevel {
+    None,
+    ProposalOnly,
+    SideEffect,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PolicyReason {
     WorkspaceAllowlist,
@@ -288,6 +295,22 @@ pub struct CapabilityGrantHandle {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GenericCapabilityGrant {
+    capability_id: String,
+    subject_actor_id: String,
+    workspace_id: String,
+    capability: String,
+    audience: String,
+    operation: String,
+    not_before: SystemTime,
+    expires_at: SystemTime,
+    uses_remaining: u32,
+    granted_by: String,
+    policy_decision_id: String,
+    revoked_at: Option<SystemTime>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileReadGrantInput {
     pub capability_id: String,
     pub subject_actor_id: String,
@@ -312,6 +335,17 @@ pub struct UseCapabilityRequest {
     pub capability: String,
     pub operation: String,
     pub canonical_path: PathBuf,
+    pub now: SystemTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GenericUseCapabilityRequest {
+    pub capability_id: String,
+    pub subject_actor_id: String,
+    pub audience: String,
+    pub workspace_id: String,
+    pub capability: String,
+    pub operation: String,
     pub now: SystemTime,
 }
 
@@ -398,6 +432,7 @@ impl std::error::Error for GrantError {}
 #[derive(Debug, Default)]
 pub struct CapabilityStore {
     grants: Mutex<HashMap<String, CapabilityGrant>>,
+    generic_grants: Mutex<HashMap<String, GenericCapabilityGrant>>,
     channel_action_grants: Mutex<HashMap<String, ChannelActionGrant>>,
 }
 
@@ -479,15 +514,6 @@ impl CapabilityStore {
     }
 
     fn insert(&self, grant: CapabilityGrant) -> PolicyResult<()> {
-        if grant.capability != FILE_READ_CAPABILITY {
-            return Err(PolicyError::UnsupportedCapability(grant.capability));
-        }
-        if grant.uses_remaining != 1 {
-            return Err(PolicyError::UnsupportedCapability(
-                "file.read grants must be single-use".to_string(),
-            ));
-        }
-
         let mut grants = self
             .grants
             .lock()
@@ -501,6 +527,170 @@ impl CapabilityStore {
 
         grants.insert(grant.capability_id.clone(), grant);
         Ok(())
+    }
+
+    /// 签发通用能力授权。
+    ///
+    /// # Errors
+    ///
+    /// 当能力存储锁中毒或重复 ID 时返回错误。
+    #[allow(clippy::too_many_arguments)]
+    pub fn issue_capability_grant(
+        &self,
+        capability_id: String,
+        subject_actor_id: String,
+        workspace_id: String,
+        capability: String,
+        audience: String,
+        operation: String,
+        not_before: Option<SystemTime>,
+        expires_at: Option<SystemTime>,
+        uses_remaining: u32,
+        granted_by: String,
+    ) -> PolicyResult<Result<CapabilityGrantHandle, CapabilityGrantRejection>> {
+        let now = SystemTime::now();
+        let not_before = not_before.unwrap_or(now);
+        let expires_at = expires_at.unwrap_or(now + Duration::from_secs(365 * 24 * 60 * 60));
+        let policy_decision_id = hash_text(&format!(
+            "generic\n{}\n{}\n{}\n{}\n{}\n{:?}",
+            capability_id, subject_actor_id, workspace_id, capability, operation, now
+        ));
+
+        let grant = GenericCapabilityGrant {
+            capability_id: capability_id.clone(),
+            subject_actor_id,
+            workspace_id,
+            capability,
+            audience,
+            operation,
+            not_before,
+            expires_at,
+            uses_remaining,
+            granted_by,
+            policy_decision_id,
+            revoked_at: None,
+        };
+        let audit = AuditRecord::generic_grant_issued(&grant);
+
+        let mut grants = self
+            .generic_grants
+            .lock()
+            .map_err(|_| PolicyError::CapabilityStorePoisoned)?;
+
+        if grants.contains_key(&grant.capability_id) {
+            return Err(PolicyError::DuplicateCapabilityId(
+                grant.capability_id.clone(),
+            ));
+        }
+
+        grants.insert(grant.capability_id.clone(), grant);
+        Ok(Ok(CapabilityGrantHandle {
+            capability_id,
+            audit,
+        }))
+    }
+
+    /// 消耗通用能力授权。
+    ///
+    /// # Errors
+    ///
+    /// 当能力存储锁中毒时返回错误。
+    pub fn consume_generic_grant(
+        &self,
+        request: &GenericUseCapabilityRequest,
+    ) -> PolicyResult<Result<CapabilityConsumption, CapabilityUseFailure>> {
+        let mut grants = self
+            .generic_grants
+            .lock()
+            .map_err(|_| PolicyError::CapabilityStorePoisoned)?;
+        let Some(grant) = grants.get_mut(&request.capability_id) else {
+            return Ok(Err(CapabilityUseFailure {
+                rejection: CapabilityGrantRejection::Unknown,
+                grant_fingerprint: None,
+            }));
+        };
+        let grant_fingerprint = generic_grant_fingerprint(grant);
+        let reject = |rejection| {
+            Ok(Err(CapabilityUseFailure {
+                rejection,
+                grant_fingerprint: Some(grant_fingerprint.clone()),
+            }))
+        };
+
+        if grant.capability != request.capability {
+            return reject(CapabilityGrantRejection::WrongCapability);
+        }
+        if grant.audience != request.audience {
+            return reject(CapabilityGrantRejection::WrongAudience);
+        }
+        if grant.subject_actor_id != request.subject_actor_id {
+            return reject(CapabilityGrantRejection::WrongSubject);
+        }
+        if grant.workspace_id != request.workspace_id {
+            return reject(CapabilityGrantRejection::WrongWorkspace);
+        }
+        if grant.operation != request.operation {
+            return reject(CapabilityGrantRejection::WrongOperation);
+        }
+        if request.now < grant.not_before {
+            return reject(CapabilityGrantRejection::NotYetValid);
+        }
+        if request.now >= grant.expires_at {
+            return reject(CapabilityGrantRejection::Expired);
+        }
+        if grant.revoked_at.is_some() {
+            return reject(CapabilityGrantRejection::Revoked);
+        }
+        if grant.uses_remaining == 0 {
+            return reject(CapabilityGrantRejection::AlreadyUsed);
+        }
+
+        grant.uses_remaining -= 1;
+        Ok(Ok(CapabilityConsumption { grant_fingerprint }))
+    }
+
+    /// 查询指定通用能力授权的剩余使用次数。
+    ///
+    /// # Errors
+    ///
+    /// 当能力存储锁中毒时返回错误。
+    pub fn generic_uses_remaining(&self, capability_id: &str) -> PolicyResult<Option<u32>> {
+        let grants = self
+            .generic_grants
+            .lock()
+            .map_err(|_| PolicyError::CapabilityStorePoisoned)?;
+        Ok(grants.get(capability_id).map(|grant| grant.uses_remaining))
+    }
+
+    /// 检查指定 actor 是否拥有任何有效的通用能力授权。
+    ///
+    /// # Errors
+    ///
+    /// 当能力存储锁中毒时返回错误。
+    pub fn has_valid_generic_grant(
+        &self,
+        subject_actor_id: &str,
+        workspace_id: &str,
+        capability: &str,
+        operation: &str,
+        audience: &str,
+        now: SystemTime,
+    ) -> PolicyResult<bool> {
+        let grants = self
+            .generic_grants
+            .lock()
+            .map_err(|_| PolicyError::CapabilityStorePoisoned)?;
+        Ok(grants.values().any(|grant| {
+            grant.subject_actor_id == subject_actor_id
+                && grant.workspace_id == workspace_id
+                && grant.capability == capability
+                && grant.operation == operation
+                && grant.audience == audience
+                && grant.revoked_at.is_none()
+                && grant.uses_remaining > 0
+                && now >= grant.not_before
+                && now < grant.expires_at
+        }))
     }
 
     /// 消耗文件读取能力授权。
@@ -668,6 +858,17 @@ pub struct FileReadPolicyRequest {
     pub capability_id: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CapabilityPolicyRequest {
+    pub actor_id: String,
+    pub workspace_id: String,
+    pub capability: String,
+    pub operation: String,
+    pub capability_id: Option<String>,
+    pub side_effect_level: SideEffectLevel,
+    pub audience: String,
+}
+
 #[derive(Debug)]
 pub struct PolicyEngine {
     workspace_policy: WorkspacePathPolicy,
@@ -820,6 +1021,75 @@ impl PolicyEngine {
             }
         }
     }
+
+    /// 根据能力授权和副作用级别评估通用能力请求。
+    ///
+    /// # Errors
+    ///
+    /// 当能力存储操作失败时返回错误。
+    pub fn authorize_capability(
+        &self,
+        request: &CapabilityPolicyRequest,
+    ) -> PolicyResult<PolicyEvaluation> {
+        let now = self.now();
+
+        if request.side_effect_level == SideEffectLevel::None {
+            return Ok(PolicyEvaluation::allow(
+                PolicyReason::WorkspaceAllowlist,
+                AuditRecord::generic_policy_decision(
+                    request,
+                    now,
+                    PolicyDecision::Allow,
+                    PolicyReason::WorkspaceAllowlist,
+                ),
+            ));
+        }
+
+        let has_grant = if let Some(ref capability_id) = request.capability_id {
+            let use_request = GenericUseCapabilityRequest {
+                capability_id: capability_id.clone(),
+                subject_actor_id: request.actor_id.clone(),
+                audience: request.audience.clone(),
+                workspace_id: request.workspace_id.clone(),
+                capability: request.capability.clone(),
+                operation: request.operation.clone(),
+                now,
+            };
+            self.capability_store.consume_generic_grant(&use_request)?.is_ok()
+        } else {
+            self.capability_store.has_valid_generic_grant(
+                &request.actor_id,
+                &request.workspace_id,
+                &request.capability,
+                &request.operation,
+                &request.audience,
+                now,
+            )?
+        };
+
+        if has_grant {
+            Ok(PolicyEvaluation::allow(
+                PolicyReason::CapabilityGrant,
+                AuditRecord::generic_policy_decision(
+                    request,
+                    now,
+                    PolicyDecision::Allow,
+                    PolicyReason::CapabilityGrant,
+                ),
+            ))
+        } else {
+            Ok(PolicyEvaluation {
+                decision: PolicyDecision::RequireApproval,
+                reason: PolicyReason::MissingCapabilityGrant,
+                audit: AuditRecord::generic_policy_decision(
+                    request,
+                    now,
+                    PolicyDecision::RequireApproval,
+                    PolicyReason::MissingCapabilityGrant,
+                ),
+            })
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -906,6 +1176,48 @@ impl AuditRecord {
             canonical_path: canonical_path.to_path_buf(),
             capability_id: Some(capability_id.to_string()),
             grant_fingerprint,
+            decision,
+            reason,
+        }
+    }
+
+    fn generic_grant_issued(grant: &GenericCapabilityGrant) -> Self {
+        Self {
+            policy_decision_id: grant.policy_decision_id.clone(),
+            action: AuditAction::GrantIssued,
+            occurred_at: grant.not_before,
+            actor_id: grant.subject_actor_id.clone(),
+            workspace_id: grant.workspace_id.clone(),
+            audience: grant.audience.clone(),
+            operation: grant.operation.clone(),
+            canonical_path: PathBuf::new(),
+            capability_id: Some(grant.capability_id.clone()),
+            grant_fingerprint: Some(generic_grant_fingerprint(grant)),
+            decision: PolicyDecision::Allow,
+            reason: PolicyReason::CapabilityGrant,
+        }
+    }
+
+    fn generic_policy_decision(
+        request: &CapabilityPolicyRequest,
+        occurred_at: SystemTime,
+        decision: PolicyDecision,
+        reason: PolicyReason,
+    ) -> Self {
+        Self {
+            policy_decision_id: hash_text(&format!(
+                "generic\n{}\n{}\n{}\n{}\n{:?}",
+                request.actor_id, request.workspace_id, request.capability, request.operation, occurred_at
+            )),
+            action: AuditAction::PolicyDecision,
+            occurred_at,
+            actor_id: request.actor_id.clone(),
+            workspace_id: request.workspace_id.clone(),
+            audience: request.audience.clone(),
+            operation: request.operation.clone(),
+            canonical_path: PathBuf::new(),
+            capability_id: request.capability_id.clone(),
+            grant_fingerprint: None,
             decision,
             reason,
         }
@@ -1000,6 +1312,21 @@ fn file_read_grant_scope_hash(scope: &FileReadGrantScope<'_>) -> String {
         scope.declared_mime.unwrap_or(""),
         scope.resource.len,
         scope.resource.sha256
+    ))
+}
+
+fn generic_grant_fingerprint(grant: &GenericCapabilityGrant) -> String {
+    hash_text(&format!(
+        "{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
+        grant.capability_id,
+        grant.subject_actor_id,
+        grant.workspace_id,
+        grant.capability,
+        grant.audience,
+        grant.operation,
+        grant.not_before.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs(),
+        grant.expires_at.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs(),
+        grant.granted_by,
     ))
 }
 
