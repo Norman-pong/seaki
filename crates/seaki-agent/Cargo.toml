@@ -1,0 +1,24 @@
+[package]
+name = "seaki-agent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Agent Runtime: LLM orchestration, session management, skill dispatch"
+repository = "https://github.com/normanpong/seaki"
+readme = "../../README.md"
+keywords = ["seaki", "agent", "llm", "local-first"]
+categories = ["development-tools"]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+seaki-core = { path = "../seaki-core" }
+seaki-pipe = { path = "../seaki-pipe" }
+seaki-policy = { path = "../seaki-policy" }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

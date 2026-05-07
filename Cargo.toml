@@ -12,6 +12,7 @@ members = [
     "crates/seaki-policy",
     "crates/seaki-sandbox",
     "crates/seaki-wiki",
+    "crates/seaki-agent",
 ]
 resolver = "2"
 
