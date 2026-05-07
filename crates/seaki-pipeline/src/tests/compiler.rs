@@ -213,3 +213,138 @@ fn compiler_rejects_empty_pipeline() {
     let result = compile(&graph, &registry);
     assert!(matches!(result, Err(CompileError::EmptyPipeline)));
 }
+
+#[test]
+fn compile_dag_with_tee_branch_join() {
+    use crate::graph::{BranchCondition, MergeStrategy, Node, NodeId, PipelineGraph};
+    use seaki_pipe::registry::CommandRegistry;
+
+    let registry = CommandRegistry::builtin();
+    let mut graph = PipelineGraph::new("test_dag");
+
+    graph
+        .add_node(Node::Entry {
+            node_id: NodeId::from("entry"),
+        })
+        .unwrap();
+    graph
+        .add_node(Node::Command {
+            node_id: NodeId::from("search"),
+            command_id: "wiki.search".to_string(),
+            args: serde_json::json!({"keyword": "test"}),
+        })
+        .unwrap();
+    graph
+        .add_node(Node::Tee {
+            node_id: NodeId::from("tee"),
+            branches: vec![NodeId::from("filter"), NodeId::from("map")],
+        })
+        .unwrap();
+    graph
+        .add_node(Node::Command {
+            node_id: NodeId::from("filter"),
+            command_id: "filter".to_string(),
+            args: serde_json::json!({}),
+        })
+        .unwrap();
+    graph
+        .add_node(Node::Branch {
+            node_id: NodeId::from("branch"),
+            condition: BranchCondition::FrameType,
+            branches: vec![
+                (NodeId::from("map"), serde_json::json!({"type": "A"})),
+                (NodeId::from("filter"), serde_json::json!({"type": "B"})),
+            ],
+        })
+        .unwrap();
+    graph
+        .add_node(Node::Command {
+            node_id: NodeId::from("map"),
+            command_id: "map".to_string(),
+            args: serde_json::json!({}),
+        })
+        .unwrap();
+    graph
+        .add_node(Node::Join {
+            node_id: NodeId::from("join"),
+            sources: vec![NodeId::from("filter"), NodeId::from("map")],
+            merge_strategy: MergeStrategy::Concat,
+        })
+        .unwrap();
+    graph
+        .add_node(Node::Exit {
+            node_id: NodeId::from("exit"),
+        })
+        .unwrap();
+
+    graph.set_entry(NodeId::from("entry")).unwrap();
+    graph.add_exit(NodeId::from("exit")).unwrap();
+
+    graph
+        .add_edge(NodeId::from("entry"), NodeId::from("search"))
+        .unwrap();
+    graph
+        .add_edge(NodeId::from("search"), NodeId::from("tee"))
+        .unwrap();
+    graph
+        .add_edge(NodeId::from("tee"), NodeId::from("filter"))
+        .unwrap();
+    graph
+        .add_edge(NodeId::from("tee"), NodeId::from("branch"))
+        .unwrap();
+    graph
+        .add_edge(NodeId::from("filter"), NodeId::from("join"))
+        .unwrap();
+    graph
+        .add_edge(NodeId::from("branch"), NodeId::from("map"))
+        .unwrap();
+    graph
+        .add_edge(NodeId::from("map"), NodeId::from("join"))
+        .unwrap();
+    graph
+        .add_edge(NodeId::from("join"), NodeId::from("exit"))
+        .unwrap();
+
+    let dag = crate::compile_dag(&graph, &registry).unwrap();
+
+    assert_eq!(dag.pipeline_id, "test_dag");
+    // Entry is skipped; remaining nodes: search, tee, filter, branch, map, join, exit = 7 steps.
+    assert_eq!(
+        dag.steps.len(),
+        7,
+        "expected 7 DAG steps, got {}",
+        dag.steps.len()
+    );
+
+    // Verify kinds are present.
+    let kinds: Vec<_> = dag.steps.iter().map(|s| &s.kind).collect();
+    assert!(kinds
+        .iter()
+        .any(|k| matches!(k, seaki_pipe::DagNodeKind::Tee)));
+    assert!(kinds
+        .iter()
+        .any(|k| matches!(k, seaki_pipe::DagNodeKind::Branch)));
+    assert!(
+        kinds
+            .iter()
+            .any(|k| matches!(k, seaki_pipe::DagNodeKind::Join { .. })),
+        "expected Join kind in steps"
+    );
+
+    // Verify predecessors / successors for tee and join.
+    let tee_step = dag
+        .steps
+        .iter()
+        .find(|s| s.composed.step_id == "tee")
+        .unwrap();
+    assert_eq!(tee_step.predecessors, vec!["search"]);
+    assert_eq!(tee_step.successors.len(), 2);
+
+    let join_step = dag
+        .steps
+        .iter()
+        .find(|s| s.composed.step_id == "join")
+        .unwrap();
+    assert_eq!(join_step.successors, vec!["exit"]);
+    assert_eq!(join_step.predecessors.len(), 2);
+}

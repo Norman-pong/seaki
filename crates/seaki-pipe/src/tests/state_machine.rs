@@ -69,3 +69,52 @@ fn state_machine_invalid_transition_rejected() {
     assert_eq!(err.from, PipelineState::Completed);
     assert!(matches!(err.event, StateEvent::Start));
 }
+
+#[test]
+fn state_machine_approval_timeout() {
+    let mut sm = PipelineStateMachine::new("pipe-1".to_string());
+    sm.transition(StateEvent::Start).unwrap();
+    sm.transition(StateEvent::ApprovalRequested {
+        approval_id: "a1".to_string(),
+    })
+    .unwrap();
+    assert_eq!(sm.state, PipelineState::AwaitingApproval);
+    sm.transition(StateEvent::ApprovalTimeout).unwrap();
+    assert_eq!(sm.state, PipelineState::Failed);
+    assert_eq!(sm.approval_request_id, None);
+}
+
+#[test]
+fn state_machine_step_failed_retryable() {
+    let mut sm = PipelineStateMachine::new("pipe-1".to_string());
+    sm.transition(StateEvent::Start).unwrap();
+    sm.transition(StateEvent::StepFailed {
+        step_id: "s1".to_string(),
+        retryable: true,
+    })
+    .unwrap();
+    assert_eq!(sm.state, PipelineState::Running);
+}
+
+#[test]
+fn state_machine_step_completed() {
+    let mut sm = PipelineStateMachine::new("pipe-1".to_string());
+    sm.transition(StateEvent::Start).unwrap();
+    sm.transition(StateEvent::StepCompleted {
+        step_id: "s1".to_string(),
+    })
+    .unwrap();
+    assert_eq!(sm.state, PipelineState::Running);
+}
+
+#[test]
+fn state_machine_approval_requested() {
+    let mut sm = PipelineStateMachine::new("pipe-1".to_string());
+    sm.transition(StateEvent::Start).unwrap();
+    sm.transition(StateEvent::ApprovalRequested {
+        approval_id: "a1".to_string(),
+    })
+    .unwrap();
+    assert_eq!(sm.state, PipelineState::AwaitingApproval);
+    assert_eq!(sm.approval_request_id, Some("a1".to_string()));
+}

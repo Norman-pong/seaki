@@ -473,3 +473,153 @@ fn retry_non_retryable_no_retry() {
     assert!(!err.retryable);
     assert_eq!(err.failed_step_id, "s1");
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PanicExecutor;
+
+impl CommandExecutor for PanicExecutor {
+    fn execute(
+        &self,
+        _step: &ComposedStep,
+        _input: Vec<FrameEnvelope>,
+        _ctx: &mut ExecutionContext,
+    ) -> Result<Vec<FrameEnvelope>, PipelineError> {
+        panic!("executor should not be called when policy blocks execution")
+    }
+}
+
+struct DenyPolicy;
+
+impl StepPolicy for DenyPolicy {
+    fn check(&self, _step: &ComposedStep, _ctx: &ExecutionContext) -> PolicyDecision {
+        PolicyDecision::Deny
+    }
+}
+
+struct RequireApprovalPolicy;
+
+impl StepPolicy for RequireApprovalPolicy {
+    fn check(&self, _step: &ComposedStep, _ctx: &ExecutionContext) -> PolicyDecision {
+        PolicyDecision::RequireApproval
+    }
+}
+
+#[test]
+fn retry_policy_deny_no_retry() {
+    let mut registry = CommandRegistry::new();
+    let input = serde_json::json!({"type": "object"});
+    let output = serde_json::json!({"type": "object"});
+    let manifest = PipeCommandManifest {
+        command_id: "panic".to_string(),
+        description: "panic".to_string(),
+        input_schema: input.clone(),
+        output_schema: output.clone(),
+        input_frame: (FrameType::JsonValue, Cardinality::One),
+        output_frame: (FrameType::JsonValue, Cardinality::One),
+        side_effect_level: SideEffectLevel::None,
+        resource_quota: None,
+        schema_hash: PipeCommandManifest::compute_schema_hash(&input, &output),
+    };
+    registry.register(manifest).unwrap();
+
+    let mut ctx = test_context();
+    let mut executors: HashMap<String, Box<dyn CommandExecutor>> = HashMap::new();
+    executors.insert("panic".to_string(), Box::new(PanicExecutor));
+
+    let step = ComposedStep {
+        step_id: "s1".to_string(),
+        command_id: "panic".to_string(),
+        input_type: (FrameType::JsonValue, Cardinality::One),
+        output_type: (FrameType::JsonValue, Cardinality::One),
+        input_binding: InputBinding::PreviousStep,
+        failure_policy: FailurePolicy::FailFast,
+        side_effect_level: SideEffectLevel::None,
+        args: serde_json::json!({}),
+    };
+
+    let retry_policy = RetryPolicy {
+        max_attempts: 3,
+        backoff_ms: 0,
+    };
+
+    let result = crate::checkpoint::execute_step_with_retry(
+        &step,
+        vec![FrameEnvelope {
+            seq: 0,
+            step_id: "s1".to_string(),
+            frame_type: FrameType::JsonValue,
+            payload: serde_json::json!({}),
+        }],
+        &registry,
+        &executors,
+        &DenyPolicy,
+        &mut ctx,
+        &retry_policy,
+    );
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(!err.retryable);
+    assert_eq!(err.failed_step_id, "s1");
+    assert!(matches!(err.error_kind, ErrorKind::SideEffectBlocked));
+}
+
+#[test]
+fn retry_policy_require_approval_no_retry() {
+    let mut registry = CommandRegistry::new();
+    let input = serde_json::json!({"type": "object"});
+    let output = serde_json::json!({"type": "object"});
+    let manifest = PipeCommandManifest {
+        command_id: "panic".to_string(),
+        description: "panic".to_string(),
+        input_schema: input.clone(),
+        output_schema: output.clone(),
+        input_frame: (FrameType::JsonValue, Cardinality::One),
+        output_frame: (FrameType::JsonValue, Cardinality::One),
+        side_effect_level: SideEffectLevel::None,
+        resource_quota: None,
+        schema_hash: PipeCommandManifest::compute_schema_hash(&input, &output),
+    };
+    registry.register(manifest).unwrap();
+
+    let mut ctx = test_context();
+    let mut executors: HashMap<String, Box<dyn CommandExecutor>> = HashMap::new();
+    executors.insert("panic".to_string(), Box::new(PanicExecutor));
+
+    let step = ComposedStep {
+        step_id: "s1".to_string(),
+        command_id: "panic".to_string(),
+        input_type: (FrameType::JsonValue, Cardinality::One),
+        output_type: (FrameType::JsonValue, Cardinality::One),
+        input_binding: InputBinding::PreviousStep,
+        failure_policy: FailurePolicy::FailFast,
+        side_effect_level: SideEffectLevel::None,
+        args: serde_json::json!({}),
+    };
+
+    let retry_policy = RetryPolicy {
+        max_attempts: 3,
+        backoff_ms: 0,
+    };
+
+    let result = crate::checkpoint::execute_step_with_retry(
+        &step,
+        vec![FrameEnvelope {
+            seq: 0,
+            step_id: "s1".to_string(),
+            frame_type: FrameType::JsonValue,
+            payload: serde_json::json!({}),
+        }],
+        &registry,
+        &executors,
+        &RequireApprovalPolicy,
+        &mut ctx,
+        &retry_policy,
+    );
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.retryable);
+    assert_eq!(err.failed_step_id, "s1");
+    assert!(matches!(err.error_kind, ErrorKind::ApprovalRequired));
+}

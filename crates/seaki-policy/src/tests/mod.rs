@@ -1,11 +1,13 @@
 use super::*;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::{Arc, Barrier};
 use std::thread;
 use std::time::{Duration, SystemTime};
 use tempfile::TempDir;
 
+use crate::audit::AuditAction;
 use crate::grant::{file_read_grant_scope_hash, snapshot_file, FileReadGrantScope};
 
 #[test]
@@ -730,6 +732,199 @@ fn channel_action_grant_expired_cannot_consume() {
 
     let result = store.consume_channel_action_grant("cg-1", now + Duration::from_secs(20));
     assert_eq!(result.unwrap(), Err(GrantError::GrantExpired));
+}
+
+#[test]
+fn audit_record_grant_issued() {
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    fs::write(&tmp, "0123456789").unwrap();
+    let resource = snapshot_file(tmp.path(), 1024).unwrap().unwrap();
+    let now = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+    let grant = CapabilityGrant {
+        capability_id: "cap-1".to_string(),
+        subject_actor_id: "user-1".to_string(),
+        workspace_id: "ws-1".to_string(),
+        capability: "file.read".to_string(),
+        audience: "seaki-source-ingest".to_string(),
+        operation: "source.ingest".to_string(),
+        canonical_path: tmp.path().to_path_buf(),
+        resource,
+        max_bytes: 1024,
+        declared_mime: Some("text/markdown".to_string()),
+        not_before: now,
+        expires_at: now + Duration::from_secs(60),
+        uses_remaining: 1,
+        granted_by: "local_user".to_string(),
+        approval_id: "approval-1".to_string(),
+        policy_decision_id: "policy-1".to_string(),
+        revoked_at: None,
+    };
+    let record = AuditRecord::grant_issued(&grant);
+    assert_eq!(record.action, AuditAction::GrantIssued);
+    assert_eq!(record.actor_id, "user-1");
+    assert_eq!(record.workspace_id, "ws-1");
+    assert_eq!(record.audience, "seaki-source-ingest");
+    assert_eq!(record.operation, "source.ingest");
+    assert_eq!(record.canonical_path, tmp.path());
+    assert_eq!(record.capability_id, Some("cap-1".to_string()));
+    assert_eq!(record.decision, PolicyDecision::Allow);
+    assert_eq!(record.reason, PolicyReason::CapabilityGrant);
+    assert!(record.grant_fingerprint.is_some());
+    assert_eq!(record.policy_decision_id, "policy-1");
+    assert_eq!(record.occurred_at, now);
+}
+
+#[test]
+fn audit_record_generic_grant_issued() {
+    let now = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+    let grant = GenericCapabilityGrant {
+        capability_id: "cap-wiki".to_string(),
+        subject_actor_id: "user-1".to_string(),
+        workspace_id: "ws-1".to_string(),
+        capability: "pipe.command.wiki.search".to_string(),
+        audience: "seaki-pipe".to_string(),
+        operation: "wiki.search".to_string(),
+        not_before: now,
+        expires_at: now + Duration::from_secs(60),
+        uses_remaining: 1,
+        granted_by: "local_user".to_string(),
+        policy_decision_id: "policy-1".to_string(),
+        revoked_at: None,
+    };
+    let record = AuditRecord::generic_grant_issued(&grant);
+    assert_eq!(record.action, AuditAction::GrantIssued);
+    assert_eq!(record.actor_id, "user-1");
+    assert_eq!(record.workspace_id, "ws-1");
+    assert_eq!(record.audience, "seaki-pipe");
+    assert_eq!(record.operation, "wiki.search");
+    assert_eq!(record.canonical_path, PathBuf::new());
+    assert_eq!(record.capability_id, Some("cap-wiki".to_string()));
+    assert_eq!(record.decision, PolicyDecision::Allow);
+    assert_eq!(record.reason, PolicyReason::CapabilityGrant);
+    assert!(record.grant_fingerprint.is_some());
+    assert_eq!(record.policy_decision_id, "policy-1");
+    assert_eq!(record.occurred_at, now);
+}
+
+#[test]
+fn audit_record_policy_decision() {
+    let now = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+    let request = FileReadPolicyRequest {
+        actor_id: "user-1".to_string(),
+        workspace_id: "ws-1".to_string(),
+        audience: "seaki-source-ingest".to_string(),
+        operation: "source.ingest".to_string(),
+        path: PathBuf::from("/tmp/test.md"),
+        capability_id: None,
+    };
+    let canonical_path = PathBuf::from("/tmp/test.md");
+    let record = AuditRecord::policy_decision(
+        &request,
+        &canonical_path,
+        now,
+        PolicyDecision::Deny,
+        PolicyReason::PathOutsideWorkspace,
+    );
+    assert_eq!(record.action, AuditAction::PolicyDecision);
+    assert_eq!(record.actor_id, "user-1");
+    assert_eq!(record.workspace_id, "ws-1");
+    assert_eq!(record.audience, "seaki-source-ingest");
+    assert_eq!(record.operation, "source.ingest");
+    assert_eq!(record.canonical_path, canonical_path);
+    assert_eq!(record.capability_id, None);
+    assert_eq!(record.grant_fingerprint, None);
+    assert_eq!(record.decision, PolicyDecision::Deny);
+    assert_eq!(record.reason, PolicyReason::PathOutsideWorkspace);
+    assert_eq!(record.occurred_at, now);
+}
+
+#[test]
+fn audit_record_capability_consumed() {
+    let now = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+    let request = FileReadPolicyRequest {
+        actor_id: "user-1".to_string(),
+        workspace_id: "ws-1".to_string(),
+        audience: "seaki-source-ingest".to_string(),
+        operation: "source.ingest".to_string(),
+        path: PathBuf::from("/tmp/test.md"),
+        capability_id: Some("cap-1".to_string()),
+    };
+    let canonical_path = PathBuf::from("/tmp/test.md");
+    let record = AuditRecord::capability_consumed(
+        &request,
+        &canonical_path,
+        "cap-1",
+        Some("fingerprint-1".to_string()),
+        now,
+        PolicyDecision::Allow,
+        PolicyReason::CapabilityGrant,
+    );
+    assert_eq!(record.action, AuditAction::CapabilityConsumed);
+    assert_eq!(record.actor_id, "user-1");
+    assert_eq!(record.workspace_id, "ws-1");
+    assert_eq!(record.audience, "seaki-source-ingest");
+    assert_eq!(record.operation, "source.ingest");
+    assert_eq!(record.canonical_path, canonical_path);
+    assert_eq!(record.capability_id, Some("cap-1".to_string()));
+    assert_eq!(record.grant_fingerprint, Some("fingerprint-1".to_string()));
+    assert_eq!(record.decision, PolicyDecision::Allow);
+    assert_eq!(record.reason, PolicyReason::CapabilityGrant);
+    assert_eq!(record.occurred_at, now);
+}
+
+#[test]
+fn authorize_file_read_allow() {
+    let fixture = Fixture::new();
+    let allowed_file = fixture.workspace.path().join("allowed.md");
+    fs::write(&allowed_file, "# hello").expect("write allowed file");
+    let engine = fixture.engine();
+
+    let evaluation = engine
+        .authorize_file_read(&fixture.request(&allowed_file, None))
+        .expect("policy evaluation");
+
+    assert_eq!(evaluation.decision, PolicyDecision::Allow);
+    assert_eq!(evaluation.reason, PolicyReason::WorkspaceAllowlist);
+}
+
+#[test]
+fn side_effect_level_from_str_invalid() {
+    assert_eq!(
+        SideEffectLevel::from_str("invalid"),
+        Err("unknown side_effect_level: invalid".to_string())
+    );
+}
+
+#[test]
+fn policy_error_display() {
+    let err1 = PolicyError::PathCanonicalizeFailed {
+        path: PathBuf::from("/tmp/test"),
+        message: "no such file".to_string(),
+    };
+    assert_eq!(
+        err1.to_string(),
+        "failed to canonicalize /tmp/test: no such file"
+    );
+
+    let err2 = PolicyError::CapabilityStorePoisoned;
+    assert_eq!(err2.to_string(), "capability store lock poisoned");
+
+    let err3 = PolicyError::DuplicateCapabilityId("cap-1".to_string());
+    assert_eq!(err3.to_string(), "duplicate capability id: cap-1");
+
+    let err4 = PolicyError::UnsupportedCapability("file.write".to_string());
+    assert_eq!(err4.to_string(), "unsupported capability: file.write");
+}
+
+#[test]
+fn grant_error_display() {
+    assert_eq!(
+        GrantError::DuplicateGrantId("g1".to_string()).to_string(),
+        "duplicate grant id: g1"
+    );
+    assert_eq!(GrantError::GrantNotFound.to_string(), "grant not found");
+    assert_eq!(GrantError::GrantExpired.to_string(), "grant expired");
+    assert_eq!(GrantError::UsesExhausted.to_string(), "uses exhausted");
 }
 
 #[cfg(unix)]

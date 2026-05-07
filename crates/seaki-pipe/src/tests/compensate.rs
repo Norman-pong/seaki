@@ -227,3 +227,104 @@ fn rollback_continues_on_compensation_failure() {
     assert_eq!(records[1].step_id, "s1");
     assert!(records[1].success);
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct NoCompensateExecutor;
+
+impl CommandExecutor for NoCompensateExecutor {
+    fn execute(
+        &self,
+        step: &ComposedStep,
+        input: Vec<FrameEnvelope>,
+        ctx: &mut ExecutionContext,
+    ) -> Result<Vec<FrameEnvelope>, PipelineError> {
+        MapExecutor.execute(step, input, ctx)
+    }
+}
+
+#[test]
+fn rollback_skips_step_without_compensator() {
+    let dag = DagPipeline {
+        pipeline_id: "rollback_skip".to_string(),
+        steps: vec![
+            make_dag_step(
+                "s1",
+                DagNodeKind::Command,
+                "map",
+                serde_json::json!({"transform": {"a": 1}}),
+                (FrameType::JsonValue, Cardinality::Many),
+                (FrameType::JsonValue, Cardinality::Many),
+                vec!["entry"],
+                vec!["s2"],
+            ),
+            make_dag_step(
+                "s2",
+                DagNodeKind::Command,
+                "no_comp",
+                serde_json::json!({"transform": {"b": 2}}),
+                (FrameType::JsonValue, Cardinality::Many),
+                (FrameType::JsonValue, Cardinality::Many),
+                vec!["s1"],
+                vec!["exit"],
+            ),
+            make_dag_step(
+                "exit",
+                DagNodeKind::Exit,
+                "",
+                serde_json::json!({}),
+                (FrameType::JsonValue, Cardinality::Many),
+                (FrameType::JsonValue, Cardinality::Many),
+                vec!["s2"],
+                vec![],
+            ),
+        ],
+        input_type: (FrameType::JsonValue, Cardinality::Many),
+        output_type: (FrameType::JsonValue, Cardinality::Many),
+    };
+
+    let mut registry = CommandRegistry::builtin();
+    let input = serde_json::json!({"type": "array"});
+    let output = serde_json::json!({"type": "array"});
+    let manifest = PipeCommandManifest {
+        command_id: "no_comp".to_string(),
+        description: "no compensator".to_string(),
+        input_schema: input.clone(),
+        output_schema: output.clone(),
+        input_frame: (FrameType::JsonValue, Cardinality::Many),
+        output_frame: (FrameType::JsonValue, Cardinality::Many),
+        side_effect_level: SideEffectLevel::None,
+        resource_quota: None,
+        schema_hash: PipeCommandManifest::compute_schema_hash(&input, &output),
+    };
+    registry.register(manifest).unwrap();
+
+    let mut ctx = test_context();
+    let mut executors: HashMap<String, Box<dyn CommandExecutor>> = HashMap::new();
+    executors.insert("map".to_string(), Box::new(MapExecutor));
+    executors.insert("no_comp".to_string(), Box::new(NoCompensateExecutor));
+    let store = InMemoryCheckpointStore::default();
+
+    run_dag_with_checkpoint(
+        &dag,
+        serde_json::json!([{"x": 1}]),
+        &registry,
+        &executors,
+        &SimplePolicy,
+        &mut ctx,
+        &store,
+        None,
+    )
+    .unwrap();
+
+    let mut ctx2 = test_context();
+    let mut compensators: HashMap<String, Box<dyn CompensatingExecutor>> = HashMap::new();
+    // Only register compensator for "map", not for "no_comp"
+    compensators.insert("map".to_string(), Box::new(CompensatingMapExecutor));
+
+    let records = rollback_dag(&dag, &store, &registry, &compensators, &mut ctx2).unwrap();
+
+    // s2 has no compensator, so only s1 should be compensated
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].step_id, "s1");
+    assert!(records[0].success);
+}

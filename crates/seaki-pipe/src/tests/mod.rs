@@ -18,7 +18,7 @@ use crate::ast::{
     TypedFrame,
 };
 use crate::dry_run::{FrameEnvelope, PipelineError};
-use crate::registry::{CommandRegistry, PipeCommandManifest, SideEffectLevel};
+use crate::registry::{CommandRegistry, PipeCommandManifest, ResourceQuota, SideEffectLevel};
 use crate::run::*;
 use crate::ErrorKind;
 

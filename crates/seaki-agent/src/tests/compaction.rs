@@ -106,3 +106,32 @@ fn compaction_summary_inserted() {
     assert_eq!(session.messages[0].role, MessageRole::System);
     assert!(session.messages[0].content.starts_with("[Session summary:"));
 }
+
+#[test]
+fn compaction_summary_truncation() {
+    let mut session = make_session(30);
+    // Overwrite messages with very long content so total removed text exceeds 500 chars.
+    for msg in session.messages.iter_mut() {
+        msg.content = "a".repeat(50);
+    }
+
+    let compactor = SessionCompactor::new();
+    let summary = compactor.compact(&mut session).unwrap();
+
+    // The summary text itself should be truncated to exactly 500 chars.
+    assert_eq!(
+        summary.summary_text.len(),
+        500,
+        "summary should be truncated to 500 chars, got {}",
+        summary.summary_text.len()
+    );
+
+    // The System message wraps the summary; verify it exists and was truncated.
+    assert_eq!(session.messages[0].role, MessageRole::System);
+    let content = &session.messages[0].content;
+    assert!(content.starts_with("[Session summary:"));
+    assert!(
+        content.len() < 600,
+        "System message content should reflect truncation"
+    );
+}

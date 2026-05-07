@@ -325,3 +325,109 @@ fn run_resource_exceeded_terminates() {
         ErrorKind::ResourceExceeded { ref limit, .. } if limit == "frame_count"
     ));
 }
+
+#[test]
+fn run_frame_size_exceeded() {
+    let registry = CommandRegistry::builtin();
+    let large_string = "x".repeat(2 * 1_024 * 1_024);
+    let ast = PipelineAst {
+        pipeline_id: "frame_size".to_string(),
+        steps: vec![PipelineStep {
+            step_id: "s1".to_string(),
+            command_id: "filter".to_string(),
+            input_binding: InputBinding::Constant(serde_json::json!([{"data": large_string}])),
+            failure_policy: FailurePolicy::FailFast,
+            args: serde_json::json!({}),
+        }],
+    };
+    let composed = compose(&ast, &registry).unwrap();
+    let mut ctx = test_context();
+    let executors = builtin_executors();
+    let result = run(
+        &composed,
+        serde_json::json!({}),
+        &registry,
+        &executors,
+        &SimplePolicy,
+        &mut ctx,
+    );
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert_eq!(err.failed_step_id, "s1");
+    assert!(matches!(
+        err.error_kind,
+        ErrorKind::ResourceExceeded { ref limit, .. } if limit == "frame_size"
+    ));
+}
+
+#[test]
+fn run_cpu_ms_exceeded() {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    struct SlowExecutor;
+
+    impl CommandExecutor for SlowExecutor {
+        fn execute(
+            &self,
+            _step: &ComposedStep,
+            input: Vec<FrameEnvelope>,
+            _ctx: &mut ExecutionContext,
+        ) -> Result<Vec<FrameEnvelope>, PipelineError> {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            Ok(input)
+        }
+    }
+
+    let mut registry = CommandRegistry::new();
+    let input = serde_json::json!({"type": "object"});
+    let output = serde_json::json!({"type": "object"});
+    let manifest = PipeCommandManifest {
+        command_id: "slow".to_string(),
+        description: "slow".to_string(),
+        input_schema: input.clone(),
+        output_schema: output.clone(),
+        input_frame: (FrameType::JsonValue, Cardinality::One),
+        output_frame: (FrameType::JsonValue, Cardinality::One),
+        side_effect_level: SideEffectLevel::None,
+        resource_quota: Some(ResourceQuota {
+            cpu_ms: 10,
+            memory_mb: 1_024,
+        }),
+        schema_hash: PipeCommandManifest::compute_schema_hash(&input, &output),
+    };
+    registry.register(manifest).unwrap();
+
+    let ast = PipelineAst {
+        pipeline_id: "cpu".to_string(),
+        steps: vec![PipelineStep {
+            step_id: "s1".to_string(),
+            command_id: "slow".to_string(),
+            input_binding: InputBinding::Constant(serde_json::json!({})),
+            failure_policy: FailurePolicy::FailFast,
+            args: serde_json::json!({}),
+        }],
+    };
+    let composed = compose(&ast, &registry).unwrap();
+    let mut ctx = test_context();
+    let mut executors = HashMap::new();
+    executors.insert(
+        "slow".to_string(),
+        Box::new(SlowExecutor) as Box<dyn CommandExecutor>,
+    );
+    let result = run(
+        &composed,
+        serde_json::json!({}),
+        &registry,
+        &executors,
+        &SimplePolicy,
+        &mut ctx,
+    );
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert_eq!(err.failed_step_id, "s1");
+    assert!(matches!(
+        err.error_kind,
+        ErrorKind::ResourceExceeded { ref limit, .. } if limit == "cpu_ms"
+    ));
+}

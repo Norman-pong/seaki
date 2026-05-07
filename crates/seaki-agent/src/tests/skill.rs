@@ -202,3 +202,43 @@ fn skill_manifest_serialize_roundtrip() {
     let deserialized: SkillManifest = serde_json::from_str(&json).unwrap();
     assert_eq!(skill, deserialized);
 }
+
+#[test]
+fn match_intent_levenshtein_distance_2() {
+    let mut registry = SkillRegistry::new();
+    let mut skill = sample_skill("sk-001");
+    skill.trigger_patterns = vec!["search wiki".to_string()];
+    registry.register(skill).unwrap();
+
+    // "serch wki" is edit distance 2 from "search wiki" (missing 'a' and 'i').
+    let matches = registry.match_intent("serch wki");
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].score, 0.8);
+    assert_eq!(matches[0].matched_pattern, "search wiki");
+}
+
+#[test]
+fn match_intent_priority_sort() {
+    let mut registry = SkillRegistry::new();
+
+    let mut skill_a = sample_skill("sk-a");
+    skill_a.trigger_patterns = vec!["deploy".to_string()];
+    skill_a.priority = 5;
+    registry.register(skill_a.clone()).unwrap();
+
+    let mut skill_b = sample_skill("sk-b");
+    skill_b.trigger_patterns = vec!["deploy".to_string()];
+    skill_b.priority = 3;
+    registry.register(skill_b.clone()).unwrap();
+
+    // Both match exactly (score = 1.0); lower priority should come first.
+    let matches = registry.match_intent("deploy");
+    assert_eq!(matches.len(), 2);
+    assert_eq!(matches[0].score, 1.0);
+    assert_eq!(matches[1].score, 1.0);
+    assert_eq!(
+        matches[0].skill.priority, 3,
+        "lower priority should be first"
+    );
+    assert_eq!(matches[1].skill.priority, 5);
+}

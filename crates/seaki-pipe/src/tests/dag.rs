@@ -784,3 +784,184 @@ fn dag_approval_denied_triggers_compensate() {
         compensated
     );
 }
+
+#[test]
+fn dag_join_interleave_merges_alternating() {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    struct BranchAExecutor;
+
+    impl CommandExecutor for BranchAExecutor {
+        fn execute(
+            &self,
+            step: &ComposedStep,
+            _input: Vec<FrameEnvelope>,
+            _ctx: &mut ExecutionContext,
+        ) -> Result<Vec<FrameEnvelope>, PipelineError> {
+            Ok(vec![
+                FrameEnvelope {
+                    seq: 0,
+                    step_id: step.step_id.clone(),
+                    frame_type: FrameType::JsonValue,
+                    payload: serde_json::json!({"a": 1}),
+                },
+                FrameEnvelope {
+                    seq: 1,
+                    step_id: step.step_id.clone(),
+                    frame_type: FrameType::JsonValue,
+                    payload: serde_json::json!({"a": 2}),
+                },
+            ])
+        }
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    struct BranchBExecutor;
+
+    impl CommandExecutor for BranchBExecutor {
+        fn execute(
+            &self,
+            step: &ComposedStep,
+            _input: Vec<FrameEnvelope>,
+            _ctx: &mut ExecutionContext,
+        ) -> Result<Vec<FrameEnvelope>, PipelineError> {
+            Ok(vec![
+                FrameEnvelope {
+                    seq: 0,
+                    step_id: step.step_id.clone(),
+                    frame_type: FrameType::JsonValue,
+                    payload: serde_json::json!({"b": 10}),
+                },
+                FrameEnvelope {
+                    seq: 1,
+                    step_id: step.step_id.clone(),
+                    frame_type: FrameType::JsonValue,
+                    payload: serde_json::json!({"b": 20}),
+                },
+                FrameEnvelope {
+                    seq: 2,
+                    step_id: step.step_id.clone(),
+                    frame_type: FrameType::JsonValue,
+                    payload: serde_json::json!({"b": 30}),
+                },
+            ])
+        }
+    }
+
+    let dag = DagPipeline {
+        pipeline_id: "join_interleave".to_string(),
+        steps: vec![
+            make_dag_step(
+                "split",
+                DagNodeKind::Tee,
+                "",
+                serde_json::json!({}),
+                (FrameType::JsonValue, Cardinality::Many),
+                (FrameType::JsonValue, Cardinality::Many),
+                vec!["entry"],
+                vec!["A", "B"],
+            ),
+            make_dag_step(
+                "A",
+                DagNodeKind::Command,
+                "branch_a",
+                serde_json::json!({}),
+                (FrameType::JsonValue, Cardinality::Many),
+                (FrameType::JsonValue, Cardinality::Many),
+                vec!["split"],
+                vec!["join"],
+            ),
+            make_dag_step(
+                "B",
+                DagNodeKind::Command,
+                "branch_b",
+                serde_json::json!({}),
+                (FrameType::JsonValue, Cardinality::Many),
+                (FrameType::JsonValue, Cardinality::Many),
+                vec!["split"],
+                vec!["join"],
+            ),
+            make_dag_step(
+                "join",
+                DagNodeKind::Join {
+                    strategy: DagMergeStrategy::Interleave,
+                },
+                "",
+                serde_json::json!({}),
+                (FrameType::JsonValue, Cardinality::Many),
+                (FrameType::JsonValue, Cardinality::Many),
+                vec!["A", "B"],
+                vec!["exit"],
+            ),
+            make_dag_step(
+                "exit",
+                DagNodeKind::Exit,
+                "",
+                serde_json::json!({}),
+                (FrameType::JsonValue, Cardinality::Many),
+                (FrameType::JsonValue, Cardinality::Many),
+                vec!["join"],
+                vec![],
+            ),
+        ],
+        input_type: (FrameType::JsonValue, Cardinality::Many),
+        output_type: (FrameType::JsonValue, Cardinality::Many),
+    };
+
+    let mut registry = CommandRegistry::new();
+    let input = serde_json::json!({"type": "array"});
+    let output = serde_json::json!({"type": "array"});
+    let manifest_a = PipeCommandManifest {
+        command_id: "branch_a".to_string(),
+        description: "branch a".to_string(),
+        input_schema: input.clone(),
+        output_schema: output.clone(),
+        input_frame: (FrameType::JsonValue, Cardinality::Many),
+        output_frame: (FrameType::JsonValue, Cardinality::Many),
+        side_effect_level: SideEffectLevel::None,
+        resource_quota: None,
+        schema_hash: PipeCommandManifest::compute_schema_hash(&input, &output),
+    };
+    registry.register(manifest_a).unwrap();
+    let manifest_b = PipeCommandManifest {
+        command_id: "branch_b".to_string(),
+        description: "branch b".to_string(),
+        input_schema: input.clone(),
+        output_schema: output.clone(),
+        input_frame: (FrameType::JsonValue, Cardinality::Many),
+        output_frame: (FrameType::JsonValue, Cardinality::Many),
+        side_effect_level: SideEffectLevel::None,
+        resource_quota: None,
+        schema_hash: PipeCommandManifest::compute_schema_hash(&input, &output),
+    };
+    registry.register(manifest_b).unwrap();
+
+    let mut ctx = test_context();
+    let mut executors: HashMap<String, Box<dyn CommandExecutor>> = HashMap::new();
+    executors.insert("branch_a".to_string(), Box::new(BranchAExecutor));
+    executors.insert("branch_b".to_string(), Box::new(BranchBExecutor));
+
+    let result = run_dag(
+        &dag,
+        serde_json::json!([{"x": 1}]),
+        &registry,
+        &executors,
+        &SimplePolicy,
+        &mut ctx,
+    )
+    .unwrap();
+
+    // Interleave: A[0], B[0], A[1], B[1], B[2]
+    assert_eq!(result.output.len(), 5);
+    assert_eq!(result.output[0].payload, serde_json::json!({"a": 1}));
+    assert_eq!(result.output[1].payload, serde_json::json!({"b": 10}));
+    assert_eq!(result.output[2].payload, serde_json::json!({"a": 2}));
+    assert_eq!(result.output[3].payload, serde_json::json!({"b": 20}));
+    assert_eq!(result.output[4].payload, serde_json::json!({"b": 30}));
+
+    // Verify seq renumbering
+    assert_eq!(result.output[0].seq, 0);
+    assert_eq!(result.output[1].seq, 1);
+    assert_eq!(result.output[2].seq, 2);
+    assert_eq!(result.output[3].seq, 3);
+    assert_eq!(result.output[4].seq, 4);
+}
