@@ -690,7 +690,9 @@ pub enum SandboxError {
         message: String,
     },
     SpawnFailed(String),
-    TimeoutExceeded { timeout_ms: u64 },
+    TimeoutExceeded {
+        timeout_ms: u64,
+    },
 }
 
 impl fmt::Display for SandboxError {
@@ -761,10 +763,9 @@ impl PartialEq for SandboxError {
                 error.kind() == other_error.kind() && error.to_string() == other_error.to_string()
             }
             (Self::SpawnFailed(a), Self::SpawnFailed(b)) => a == b,
-            (
-                Self::TimeoutExceeded { timeout_ms: a },
-                Self::TimeoutExceeded { timeout_ms: b },
-            ) => a == b,
+            (Self::TimeoutExceeded { timeout_ms: a }, Self::TimeoutExceeded { timeout_ms: b }) => {
+                a == b
+            }
             _ => false,
         }
     }

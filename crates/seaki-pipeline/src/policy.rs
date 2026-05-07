@@ -42,11 +42,7 @@ impl PolicyEstimator {
         result: &CompileResult,
         actor_capabilities: &HashSet<String>,
     ) -> PolicyEstimate {
-        let required_commands: Vec<String> = result
-            .command_schema_hashes
-            .keys()
-            .cloned()
-            .collect();
+        let required_commands: Vec<String> = result.command_schema_hashes.keys().cloned().collect();
 
         let required_capabilities: Vec<String> = required_commands
             .iter()

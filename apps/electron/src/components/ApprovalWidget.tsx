@@ -50,13 +50,13 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
   ).length;
 
   return (
-    <Card size="sm" className="m-3 border-0 bg-transparent shadow-none" aria-label="approval widget">
+    <Card size="sm" className="m-3 border-0 bg-transparent shadow-none" aria-label="model widget">
       <button
         type="button"
         className="w-full flex items-center justify-between px-2 py-2 text-sm hover:bg-muted/60 rounded-md transition-colors"
         onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}
-        aria-controls="approval-claims-list"
+        aria-controls="model-claims-list"
       >
         <div className="flex items-center gap-2">
           <span className="font-semibold">审批</span>
@@ -79,14 +79,14 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
       </button>
 
       {expanded && (
-        <CardContent id="approval-claims-list" className="pt-2 pb-0 px-2 space-y-3">
+        <CardContent id="model-claims-list" className="pt-2 pb-0 px-2 space-y-3">
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
               size="sm"
               className="h-7 text-xs"
               disabled={batchApprovalCount === 0}
-              onClick={() => onChange(approvePendingClaims(approval))}
+              onClick={() => onChange(approvePendingClaims(model))}
             >
               批量批准 ({batchApprovalCount})
             </Button>
@@ -95,7 +95,7 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
               size="sm"
               className="h-7 text-xs"
               disabled={!canApply}
-              onClick={() => onChange(markApprovedClaimsApplying(approval))}
+              onClick={() => onChange(markApprovedClaimsApplying(model))}
             >
               应用
             </Button>
@@ -104,7 +104,7 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
               size="sm"
               className="h-7 text-xs"
               disabled={!canCommit}
-              onClick={() => onChange(applyApprovedClaims(approval))}
+              onClick={() => onChange(applyApprovedClaims(model))}
             >
               提交
             </Button>
@@ -117,7 +117,7 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
               const canReject = claim.status !== "committed";
 
               return (
-                <Card key={claim.claimId} size="sm" className="approval-claim-item">
+                <Card key={claim.claimId} size="sm" className="model-claim-item">
                   <CardContent className="py-3 space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-semibold text-sm truncate">
@@ -156,7 +156,7 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
                         onChange={(event) => {
                           onChange(
                             updateRejectionDraft(
-                              approval,
+                              model,
                               claim.claimId,
                               event.currentTarget.value
                             )
@@ -171,7 +171,7 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
                           className="h-7 text-xs"
                           disabled={!canApprove}
                           onClick={() =>
-                            onChange(approveClaim(approval, claim.claimId))
+                            onChange(approveClaim(model, claim.claimId))
                           }
                         >
                           批准
@@ -182,7 +182,7 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
                           className="h-7 text-xs"
                           disabled={!canReject || draft.trim().length === 0}
                           onClick={() =>
-                            onChange(rejectClaim(approval, claim.claimId))
+                            onChange(rejectClaim(model, claim.claimId))
                           }
                         >
                           拒绝

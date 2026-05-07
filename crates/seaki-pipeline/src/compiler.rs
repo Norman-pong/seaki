@@ -109,11 +109,15 @@ pub fn compile(
 
     // Validate schema hashes before delegating to compose.
     for step in &ast.steps {
-        let manifest = registry
-            .inspect(&step.command_id)
-            .map_err(|_| CompileError::Compose(seaki_pipe::ComposeError::CommandNotFound(step.command_id.clone())))?;
-        let expected_hash =
-            PipeCommandManifest::compute_schema_hash(&manifest.input_schema, &manifest.output_schema);
+        let manifest = registry.inspect(&step.command_id).map_err(|_| {
+            CompileError::Compose(seaki_pipe::ComposeError::CommandNotFound(
+                step.command_id.clone(),
+            ))
+        })?;
+        let expected_hash = PipeCommandManifest::compute_schema_hash(
+            &manifest.input_schema,
+            &manifest.output_schema,
+        );
         if manifest.schema_hash != expected_hash {
             return Err(CompileError::SchemaHashMismatch {
                 command_id: step.command_id.clone(),

@@ -57,7 +57,10 @@ pub enum VersionCompatibility {
 /// - Same major, runtime minor < required minor → BackwardCompatible
 /// - Different major → Incompatible
 #[must_use]
-pub fn check_compatibility(runtime: &ManifestVersion, required: &ManifestVersion) -> VersionCompatibility {
+pub fn check_compatibility(
+    runtime: &ManifestVersion,
+    required: &ManifestVersion,
+) -> VersionCompatibility {
     if runtime.major != required.major {
         return VersionCompatibility::Incompatible;
     }
@@ -111,7 +114,8 @@ impl VersionedRegistry {
             .iter()
             .filter(|m| !m.deprecated)
             .filter(|m| {
-                check_compatibility(&m.version, required_version) != VersionCompatibility::Incompatible
+                check_compatibility(&m.version, required_version)
+                    != VersionCompatibility::Incompatible
             })
             .max_by_key(|m| &m.version)
     }

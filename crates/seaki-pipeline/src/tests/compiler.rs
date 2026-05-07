@@ -1,7 +1,5 @@
-use crate::{
-    compile, CompileError, IntentParser,
-};
 use crate::intent::MockIntentParser;
+use crate::{compile, CompileError, IntentParser};
 use seaki_pipe::registry::{CommandRegistry, PipeCommandManifest, ResourceQuota, SideEffectLevel};
 use seaki_pipe::FrameType;
 
@@ -163,8 +161,14 @@ fn compiler_rejects_cardinality_conflict() {
             description: "consumes one value".to_string(),
             input_schema: serde_json::json!({ "type": "object" }),
             output_schema: serde_json::json!({ "type": "object" }),
-            input_frame: (seaki_pipe::FrameType::JsonValue, seaki_pipe::Cardinality::One),
-            output_frame: (seaki_pipe::FrameType::JsonValue, seaki_pipe::Cardinality::One),
+            input_frame: (
+                seaki_pipe::FrameType::JsonValue,
+                seaki_pipe::Cardinality::One,
+            ),
+            output_frame: (
+                seaki_pipe::FrameType::JsonValue,
+                seaki_pipe::Cardinality::One,
+            ),
             side_effect_level: SideEffectLevel::None,
             resource_quota: Some(ResourceQuota {
                 cpu_ms: 10,

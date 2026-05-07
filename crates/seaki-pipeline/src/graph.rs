@@ -55,13 +55,9 @@ pub enum Node {
         merge_strategy: MergeStrategy,
     },
     /// Entry point of the graph.
-    Entry {
-        node_id: NodeId,
-    },
+    Entry { node_id: NodeId },
     /// Exit point of the graph.
-    Exit {
-        node_id: NodeId,
-    },
+    Exit { node_id: NodeId },
 }
 
 impl Node {
@@ -207,7 +203,11 @@ impl PipelineGraph {
         if !self.nodes.contains_key(&to) {
             return Err(GraphError::NodeNotFound(to));
         }
-        self.edges.push(Edge { from, to, label: None });
+        self.edges.push(Edge {
+            from,
+            to,
+            label: None,
+        });
         Ok(())
     }
 
@@ -277,10 +277,7 @@ impl PipelineGraph {
         // Detect cycles via DFS.
         let mut graph: HashMap<&str, Vec<&str>> = HashMap::new();
         for edge in &self.edges {
-            graph
-                .entry(&edge.from.0)
-                .or_default()
-                .push(&edge.to.0);
+            graph.entry(&edge.from.0).or_default().push(&edge.to.0);
         }
 
         let mut visited = HashSet::new();
@@ -299,9 +296,7 @@ impl PipelineGraph {
     ///
     /// # Errors
     /// Returns `GraphError` if the graph is not a linear chain.
-    pub fn to_linear_ast(
-        &self,
-    ) -> Result<seaki_pipe::PipelineAst, GraphError> {
+    pub fn to_linear_ast(&self) -> Result<seaki_pipe::PipelineAst, GraphError> {
         // Build adjacency list.
         let mut outgoing: HashMap<&str, Vec<&str>> = HashMap::new();
         let mut incoming: HashMap<&str, Vec<&str>> = HashMap::new();

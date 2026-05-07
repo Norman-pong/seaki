@@ -1,4 +1,7 @@
-use crate::version::{check_compatibility, ManifestVersion, VersionCompatibility, VersionedManifest, VersionedRegistry};
+use crate::version::{
+    check_compatibility, ManifestVersion, VersionCompatibility, VersionedManifest,
+    VersionedRegistry,
+};
 
 #[test]
 fn versioned_registry_ignores_deprecated() {

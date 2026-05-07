@@ -1,9 +1,7 @@
-use crate::{
-    compile, CostEstimator, IntentParser,
-};
 use crate::compiler::{CompileResult, CompiledStep};
 use crate::cost::{ActualCost, CostConfidence};
 use crate::intent::MockIntentParser;
+use crate::{compile, CostEstimator, IntentParser};
 use seaki_pipe::registry::CommandRegistry;
 use seaki_pipe::{Cardinality, FrameType, ResourceQuota, SideEffectLevel};
 use std::collections::HashMap;

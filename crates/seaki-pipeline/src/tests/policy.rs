@@ -1,5 +1,5 @@
-use crate::{compile, IntentParser, PolicyEstimator};
 use crate::intent::MockIntentParser;
+use crate::{compile, IntentParser, PolicyEstimator};
 use seaki_pipe::registry::CommandRegistry;
 use seaki_pipe::registry::SideEffectLevel;
 use std::collections::HashSet;

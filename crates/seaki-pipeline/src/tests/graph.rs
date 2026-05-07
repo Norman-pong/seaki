@@ -61,9 +61,15 @@ fn graph_detects_cycle() {
         .unwrap();
     graph.set_entry(NodeId::from("entry")).unwrap();
     graph.add_exit(NodeId::from("exit")).unwrap();
-    graph.add_edge(NodeId::from("entry"), NodeId::from("a")).unwrap();
-    graph.add_edge(NodeId::from("a"), NodeId::from("b")).unwrap();
-    graph.add_edge(NodeId::from("b"), NodeId::from("a")).unwrap(); // cycle
+    graph
+        .add_edge(NodeId::from("entry"), NodeId::from("a"))
+        .unwrap();
+    graph
+        .add_edge(NodeId::from("a"), NodeId::from("b"))
+        .unwrap();
+    graph
+        .add_edge(NodeId::from("b"), NodeId::from("a"))
+        .unwrap(); // cycle
 
     let result = graph.validate();
     assert!(matches!(result, Err(GraphError::CycleDetected)));

@@ -1055,7 +1055,9 @@ impl PolicyEngine {
                 operation: request.operation.clone(),
                 now,
             };
-            self.capability_store.consume_generic_grant(&use_request)?.is_ok()
+            self.capability_store
+                .consume_generic_grant(&use_request)?
+                .is_ok()
         } else {
             self.capability_store.has_valid_generic_grant(
                 &request.actor_id,
@@ -1207,7 +1209,11 @@ impl AuditRecord {
         Self {
             policy_decision_id: hash_text(&format!(
                 "generic\n{}\n{}\n{}\n{}\n{:?}",
-                request.actor_id, request.workspace_id, request.capability, request.operation, occurred_at
+                request.actor_id,
+                request.workspace_id,
+                request.capability,
+                request.operation,
+                occurred_at
             )),
             action: AuditAction::PolicyDecision,
             occurred_at,
@@ -1324,8 +1330,16 @@ fn generic_grant_fingerprint(grant: &GenericCapabilityGrant) -> String {
         grant.capability,
         grant.audience,
         grant.operation,
-        grant.not_before.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs(),
-        grant.expires_at.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs(),
+        grant
+            .not_before
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+        grant
+            .expires_at
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
         grant.granted_by,
     ))
 }

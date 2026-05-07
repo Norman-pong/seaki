@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::ast::{compose, Cardinality, ComposedPipeline, ComposedStep, FailurePolicy, FrameType, InputBinding, PipelineAst, PipelineStep};
+use crate::ast::{
+    compose, Cardinality, ComposedPipeline, ComposedStep, FailurePolicy, FrameType, InputBinding,
+    PipelineAst, PipelineStep,
+};
 use crate::dry_run::{FrameEnvelope, PipelineError};
 use crate::registry::{CommandRegistry, PipeCommandManifest, SideEffectLevel};
 use crate::run::*;
@@ -19,9 +22,15 @@ fn test_context() -> ExecutionContext {
 fn builtin_executors() -> HashMap<String, Box<dyn CommandExecutor>> {
     let mut m: HashMap<String, Box<dyn CommandExecutor>> = HashMap::new();
     m.insert("wiki.search".to_string(), Box::new(WikiSearchExecutor));
-    m.insert("citation.resolve".to_string(), Box::new(CitationResolveExecutor));
+    m.insert(
+        "citation.resolve".to_string(),
+        Box::new(CitationResolveExecutor),
+    );
     m.insert("adr.summarize".to_string(), Box::new(AdrSummarizeExecutor));
-    m.insert("wiki.patch.propose".to_string(), Box::new(WikiPatchProposeExecutor));
+    m.insert(
+        "wiki.patch.propose".to_string(),
+        Box::new(WikiPatchProposeExecutor),
+    );
     m.insert("filter".to_string(), Box::new(FilterExecutor));
     m.insert("map".to_string(), Box::new(MapExecutor));
     m
@@ -84,7 +93,10 @@ fn run_empty_pipeline_fails() {
         &mut ctx,
     );
     assert!(result.is_err());
-    assert!(matches!(result.unwrap_err().error_kind, ErrorKind::ComposeFailed));
+    assert!(matches!(
+        result.unwrap_err().error_kind,
+        ErrorKind::ComposeFailed
+    ));
 }
 
 #[test]
@@ -128,9 +140,7 @@ fn run_multi_step_chain_success() {
             PipelineStep {
                 step_id: "s1".to_string(),
                 command_id: "map".to_string(),
-                input_binding: InputBinding::Constant(
-                    serde_json::json!([{"x": 1}, {"x": 2}]),
-                ),
+                input_binding: InputBinding::Constant(serde_json::json!([{"x": 1}, {"x": 2}])),
                 failure_policy: FailurePolicy::FailFast,
                 args: serde_json::json!({"transform": {"tag": "a"}}),
             },
@@ -157,8 +167,14 @@ fn run_multi_step_chain_success() {
     .unwrap();
 
     assert_eq!(result.output.len(), 2);
-    assert_eq!(result.output[0].payload, serde_json::json!({"x": 1, "tag": "a"}));
-    assert_eq!(result.output[1].payload, serde_json::json!({"x": 2, "tag": "a"}));
+    assert_eq!(
+        result.output[0].payload,
+        serde_json::json!({"x": 1, "tag": "a"})
+    );
+    assert_eq!(
+        result.output[1].payload,
+        serde_json::json!({"x": 2, "tag": "a"})
+    );
     assert_eq!(ctx.audit.len(), 2);
 }
 
@@ -178,7 +194,10 @@ fn run_fail_fast_propagates_error() {
     let composed = compose(&ast, &registry).unwrap();
     let mut ctx = test_context();
     let mut executors = HashMap::new();
-    executors.insert("failing".to_string(), Box::new(FailingExecutor) as Box<dyn CommandExecutor>);
+    executors.insert(
+        "failing".to_string(),
+        Box::new(FailingExecutor) as Box<dyn CommandExecutor>,
+    );
     let result = run(
         &composed,
         serde_json::json!({}),
@@ -235,8 +254,14 @@ fn run_skip_policy_continues() {
     let composed = compose(&ast, &registry).unwrap();
     let mut ctx = test_context();
     let mut executors = HashMap::new();
-    executors.insert("failing".to_string(), Box::new(FailingExecutor) as Box<dyn CommandExecutor>);
-    executors.insert("map".to_string(), Box::new(MapExecutor) as Box<dyn CommandExecutor>);
+    executors.insert(
+        "failing".to_string(),
+        Box::new(FailingExecutor) as Box<dyn CommandExecutor>,
+    );
+    executors.insert(
+        "map".to_string(),
+        Box::new(MapExecutor) as Box<dyn CommandExecutor>,
+    );
     let result = run(
         &composed,
         serde_json::json!({}),
@@ -250,8 +275,14 @@ fn run_skip_policy_continues() {
     // s1 skipped -> empty output; s2 map on empty -> empty output.
     assert!(result.output.is_empty());
     // Audit should contain both the skip record for s1 and the allow record for s2.
-    assert!(ctx.audit.iter().any(|a| a.step_id == "s1" && a.decision.starts_with("skipped")));
-    assert!(ctx.audit.iter().any(|a| a.step_id == "s2" && a.decision == "allow"));
+    assert!(ctx
+        .audit
+        .iter()
+        .any(|a| a.step_id == "s1" && a.decision.starts_with("skipped")));
+    assert!(ctx
+        .audit
+        .iter()
+        .any(|a| a.step_id == "s2" && a.decision == "allow"));
 }
 
 #[test]
@@ -270,7 +301,10 @@ fn run_default_value_on_failure() {
     let composed = compose(&ast, &registry).unwrap();
     let mut ctx = test_context();
     let mut executors = HashMap::new();
-    executors.insert("failing".to_string(), Box::new(FailingExecutor) as Box<dyn CommandExecutor>);
+    executors.insert(
+        "failing".to_string(),
+        Box::new(FailingExecutor) as Box<dyn CommandExecutor>,
+    );
     let result = run(
         &composed,
         serde_json::json!({}),
@@ -282,16 +316,18 @@ fn run_default_value_on_failure() {
     .unwrap();
 
     assert_eq!(result.output.len(), 1);
-    assert_eq!(result.output[0].payload, serde_json::json!({"default": true}));
+    assert_eq!(
+        result.output[0].payload,
+        serde_json::json!({"default": true})
+    );
 }
 
 #[test]
 fn run_resource_exceeded_terminates() {
     let registry = CommandRegistry::builtin();
     // Create an array with 1_001 elements to exceed MAX_FRAME_COUNT.
-    let large_array: Vec<serde_json::Value> = (0..1_001)
-        .map(|i| serde_json::json!({"idx": i}))
-        .collect();
+    let large_array: Vec<serde_json::Value> =
+        (0..1_001).map(|i| serde_json::json!({"idx": i})).collect();
 
     let ast = PipelineAst {
         pipeline_id: "res".to_string(),
@@ -355,7 +391,10 @@ fn run_filter_executor_real() {
     .unwrap();
 
     assert_eq!(result.output.len(), 2);
-    assert!(result.output.iter().all(|f| f.payload.get("name") == Some(&serde_json::json!("alice"))));
+    assert!(result
+        .output
+        .iter()
+        .all(|f| f.payload.get("name") == Some(&serde_json::json!("alice"))));
 }
 
 #[test]
@@ -388,6 +427,12 @@ fn run_map_executor_real() {
     .unwrap();
 
     assert_eq!(result.output.len(), 2);
-    assert_eq!(result.output[0].payload, serde_json::json!({"x": 1, "y": 10}));
-    assert_eq!(result.output[1].payload, serde_json::json!({"x": 2, "y": 10}));
+    assert_eq!(
+        result.output[0].payload,
+        serde_json::json!({"x": 1, "y": 10})
+    );
+    assert_eq!(
+        result.output[1].payload,
+        serde_json::json!({"x": 2, "y": 10})
+    );
 }

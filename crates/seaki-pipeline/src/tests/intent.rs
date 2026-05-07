@@ -13,7 +13,10 @@ fn mock_parser_unrecognized() {
     let parser = MockIntentParser::new();
     let result = parser.parse("do something completely unknown");
     assert!(result.is_err());
-    assert!(matches!(result, Err(IntentParseError::UnrecognizedIntent(_))));
+    assert!(matches!(
+        result,
+        Err(IntentParseError::UnrecognizedIntent(_))
+    ));
 }
 
 #[test]

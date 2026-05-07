@@ -108,11 +108,13 @@ pub fn run(
     }];
 
     for step in &pipeline.steps {
-        let manifest = registry.inspect(&step.command_id).map_err(|_| PipelineError {
-            retryable: false,
-            failed_step_id: step.step_id.clone(),
-            error_kind: ErrorKind::CommandNotFound,
-        })?;
+        let manifest = registry
+            .inspect(&step.command_id)
+            .map_err(|_| PipelineError {
+                retryable: false,
+                failed_step_id: step.step_id.clone(),
+                error_kind: ErrorKind::CommandNotFound,
+            })?;
 
         // c. Resolve input binding into input frames.
         let input_frames = resolve_input(step, &previous_output, &step_outputs);
@@ -134,11 +136,13 @@ pub fn run(
         }
 
         // d. Look up executor.
-        let executor = executors.get(&step.command_id).ok_or_else(|| PipelineError {
-            retryable: false,
-            failed_step_id: step.step_id.clone(),
-            error_kind: ErrorKind::CommandNotFound,
-        })?;
+        let executor = executors
+            .get(&step.command_id)
+            .ok_or_else(|| PipelineError {
+                retryable: false,
+                failed_step_id: step.step_id.clone(),
+                error_kind: ErrorKind::CommandNotFound,
+            })?;
 
         // e. Execute.
         let start = Instant::now();
@@ -257,10 +261,7 @@ fn resolve_input(
     }
 }
 
-fn check_frame_limits(
-    step: &ComposedStep,
-    frames: &[FrameEnvelope],
-) -> Result<(), PipelineError> {
+fn check_frame_limits(step: &ComposedStep, frames: &[FrameEnvelope]) -> Result<(), PipelineError> {
     let frame_count = frames.len() as u64;
     if frame_count > MAX_FRAME_COUNT {
         return Err(resource_exceeded(step, "frame_count", frame_count));
@@ -286,7 +287,11 @@ fn check_step_limits(
         return Err(resource_exceeded(step, "cpu_ms", elapsed_ms));
     }
     if ctx.resource_used.memory_mb > quota.memory_mb {
-        return Err(resource_exceeded(step, "memory_mb", ctx.resource_used.memory_mb));
+        return Err(resource_exceeded(
+            step,
+            "memory_mb",
+            ctx.resource_used.memory_mb,
+        ));
     }
     Ok(())
 }
@@ -450,7 +455,11 @@ impl CommandExecutor for FilterExecutor {
         input: Vec<FrameEnvelope>,
         _ctx: &mut ExecutionContext,
     ) -> Result<Vec<FrameEnvelope>, PipelineError> {
-        let predicate = step.args.get("predicate").cloned().unwrap_or(serde_json::json!({}));
+        let predicate = step
+            .args
+            .get("predicate")
+            .cloned()
+            .unwrap_or(serde_json::json!({}));
 
         let filtered: Vec<FrameEnvelope> = input
             .into_iter()
@@ -482,7 +491,11 @@ impl CommandExecutor for MapExecutor {
         input: Vec<FrameEnvelope>,
         _ctx: &mut ExecutionContext,
     ) -> Result<Vec<FrameEnvelope>, PipelineError> {
-        let transform = step.args.get("transform").cloned().unwrap_or(serde_json::json!({}));
+        let transform = step
+            .args
+            .get("transform")
+            .cloned()
+            .unwrap_or(serde_json::json!({}));
 
         let mapped: Vec<FrameEnvelope> = input
             .into_iter()
