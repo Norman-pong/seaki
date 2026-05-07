@@ -1,9 +1,13 @@
+pub mod dispatch;
 pub mod llm;
 pub mod session;
+pub mod skill;
 pub mod wal;
 
+pub use dispatch::*;
 pub use llm::*;
 pub use session::*;
+pub use skill::*;
 pub use wal::*;
 
 use serde_json::Value;
