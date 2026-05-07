@@ -142,6 +142,7 @@ pub enum GraphError {
     DuplicateNodeId(NodeId),
     NodeNotFound(NodeId),
     CycleDetected,
+    NotLinearGraph { reason: String },
     MissingEntry,
     MissingExit,
     DanglingEdge { from: NodeId, to: NodeId },
@@ -154,6 +155,9 @@ impl std::fmt::Display for GraphError {
             Self::DuplicateNodeId(id) => write!(f, "duplicate node id: {id}"),
             Self::NodeNotFound(id) => write!(f, "node not found: {id}"),
             Self::CycleDetected => write!(f, "cycle detected in pipeline graph"),
+            Self::NotLinearGraph { reason } => {
+                write!(f, "graph is not a linear chain: {reason}")
+            }
             Self::MissingEntry => write!(f, "pipeline graph missing entry node"),
             Self::MissingExit => write!(f, "pipeline graph missing exit node"),
             Self::DanglingEdge { from, to } => {
@@ -338,14 +342,22 @@ impl PipelineGraph {
                     is_first_command = false;
                 }
                 Node::Tee { .. } | Node::Branch { .. } | Node::Join { .. } => {
-                    return Err(GraphError::CycleDetected); // Reuse error: not linear
+                    return Err(GraphError::NotLinearGraph {
+                        reason: "graph contains tee/branch/join nodes".to_string(),
+                    });
                 }
                 Node::Entry { .. } | Node::Exit { .. } => {}
             }
 
-            let next_nodes = outgoing.get(current).ok_or(GraphError::CycleDetected)?;
+            let next_nodes = outgoing
+                .get(current)
+                .ok_or_else(|| GraphError::NotLinearGraph {
+                    reason: "dead end detected".to_string(),
+                })?;
             if next_nodes.len() != 1 {
-                return Err(GraphError::CycleDetected); // Branch or dead end
+                return Err(GraphError::NotLinearGraph {
+                    reason: "branch or merge detected".to_string(),
+                });
             }
             current = next_nodes[0];
         }

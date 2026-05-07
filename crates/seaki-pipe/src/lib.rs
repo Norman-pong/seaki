@@ -6,8 +6,9 @@ pub mod run;
 pub const SCHEMA_VERSION: u32 = 1;
 
 pub use ast::{
-    compose, Cardinality, ComposeError, ComposedPipeline, ComposedStep, FailurePolicy, FrameType,
-    InputBinding, PipelineAst, PipelineStep, TypedFrame,
+    compose, Cardinality, ComposeError, ComposedPipeline, ComposedStep, DagMergeStrategy,
+    DagNodeKind, DagPipeline, DagStep, FailurePolicy, FrameType, InputBinding, PipelineAst,
+    PipelineStep, TypedFrame,
 };
 pub use dry_run::{
     dry_run, DryRunEvent, DryRunResult, ErrorKind, FrameEnvelope, PatchProposalArtifact,

@@ -13,7 +13,7 @@ pub mod intent;
 pub mod policy;
 pub mod version;
 
-pub use compiler::{compile, CompileError, CompileResult};
+pub use compiler::{compile, compile_dag, CompileError, CompileResult};
 pub use cost::{CostEstimate, CostEstimator};
 pub use graph::{Edge, Node, NodeId, PipelineGraph};
 pub use intent::{IntentParseError, IntentParser};

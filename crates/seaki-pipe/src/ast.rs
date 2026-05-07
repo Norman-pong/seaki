@@ -97,6 +97,42 @@ pub struct ComposedPipeline {
     pub output_type: TypedFrame,
 }
 
+/// Merge strategy for Join nodes in a DAG pipeline.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DagMergeStrategy {
+    Concat,
+    Interleave,
+    FirstNonEmpty,
+}
+
+/// Kind of a node in a DAG pipeline.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DagNodeKind {
+    Command,
+    Tee,
+    Branch,
+    Join { strategy: DagMergeStrategy },
+    Exit,
+}
+
+/// A step in a DAG pipeline with topology metadata.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DagStep {
+    pub composed: ComposedStep,
+    pub kind: DagNodeKind,
+    pub predecessors: Vec<String>,
+    pub successors: Vec<String>,
+}
+
+/// A DAG pipeline with topologically sorted steps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DagPipeline {
+    pub pipeline_id: String,
+    pub steps: Vec<DagStep>,
+    pub input_type: TypedFrame,
+    pub output_type: TypedFrame,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ComposeError {
     TypeMismatch {

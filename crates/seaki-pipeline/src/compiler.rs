@@ -1,6 +1,6 @@
 //! Pipeline compiler: type-check and validate a `PipelineGraph` against a `CommandRegistry`.
 
-use crate::graph::{GraphError, PipelineGraph};
+use crate::graph::{GraphError, Node, NodeId, PipelineGraph};
 use seaki_pipe::registry::{CommandRegistry, PipeCommandManifest, ResourceQuota, SideEffectLevel};
 use seaki_pipe::TypedFrame;
 use std::collections::HashMap;
@@ -84,6 +84,268 @@ impl From<seaki_pipe::ComposeError> for CompileError {
     fn from(e: seaki_pipe::ComposeError) -> Self {
         Self::Compose(e)
     }
+}
+
+/// Compile a `PipelineGraph` into a `DagPipeline`.
+///
+/// # Errors
+/// Returns `CompileError` if the graph is invalid, contains unknown commands,
+/// has schema hash mismatches, or has type/cardinality conflicts.
+pub fn compile_dag(
+    graph: &PipelineGraph,
+    registry: &CommandRegistry,
+) -> Result<seaki_pipe::DagPipeline, CompileError> {
+    graph.validate()?;
+
+    let topo = topological_sort(graph)?;
+
+    let mut steps: Vec<seaki_pipe::DagStep> = Vec::new();
+    let mut input_type = (
+        seaki_pipe::FrameType::JsonValue,
+        seaki_pipe::Cardinality::One,
+    );
+    let mut output_type = (
+        seaki_pipe::FrameType::JsonValue,
+        seaki_pipe::Cardinality::One,
+    );
+
+    let mut predecessors: HashMap<String, Vec<String>> = HashMap::new();
+    let mut successors: HashMap<String, Vec<String>> = HashMap::new();
+    for edge in &graph.edges {
+        predecessors
+            .entry(edge.to.0.clone())
+            .or_default()
+            .push(edge.from.0.clone());
+        successors
+            .entry(edge.from.0.clone())
+            .or_default()
+            .push(edge.to.0.clone());
+    }
+
+    for node_id in &topo {
+        let node = graph
+            .get_node(node_id)
+            .ok_or(GraphError::NodeNotFound(node_id.clone()))?;
+
+        if matches!(node, Node::Entry { .. }) {
+            continue;
+        }
+
+        let preds = predecessors.get(&node_id.0).cloned().unwrap_or_default();
+        let succs = successors.get(&node_id.0).cloned().unwrap_or_default();
+
+        let dag_step = match node {
+            Node::Command {
+                command_id, args, ..
+            } => {
+                let manifest = registry.inspect(command_id).map_err(|_| {
+                    CompileError::Compose(seaki_pipe::ComposeError::CommandNotFound(
+                        command_id.clone(),
+                    ))
+                })?;
+
+                let expected_hash = PipeCommandManifest::compute_schema_hash(
+                    &manifest.input_schema,
+                    &manifest.output_schema,
+                );
+                if manifest.schema_hash != expected_hash {
+                    return Err(CompileError::SchemaHashMismatch {
+                        command_id: command_id.clone(),
+                        expected: expected_hash,
+                        found: manifest.schema_hash.clone(),
+                    });
+                }
+
+                seaki_pipe::DagStep {
+                    composed: seaki_pipe::ComposedStep {
+                        step_id: node_id.0.clone(),
+                        command_id: command_id.clone(),
+                        input_type: manifest.input_frame,
+                        output_type: manifest.output_frame,
+                        input_binding: seaki_pipe::InputBinding::PreviousStep,
+                        failure_policy: seaki_pipe::FailurePolicy::FailFast,
+                        side_effect_level: manifest.side_effect_level,
+                        args: args.clone(),
+                    },
+                    kind: seaki_pipe::DagNodeKind::Command,
+                    predecessors: preds,
+                    successors: succs,
+                }
+            }
+            Node::Tee { .. } => seaki_pipe::DagStep {
+                composed: seaki_pipe::ComposedStep {
+                    step_id: node_id.0.clone(),
+                    command_id: String::new(),
+                    input_type: (
+                        seaki_pipe::FrameType::JsonValue,
+                        seaki_pipe::Cardinality::One,
+                    ),
+                    output_type: (
+                        seaki_pipe::FrameType::JsonValue,
+                        seaki_pipe::Cardinality::One,
+                    ),
+                    input_binding: seaki_pipe::InputBinding::PreviousStep,
+                    failure_policy: seaki_pipe::FailurePolicy::FailFast,
+                    side_effect_level: seaki_pipe::SideEffectLevel::None,
+                    args: serde_json::json!({}),
+                },
+                kind: seaki_pipe::DagNodeKind::Tee,
+                predecessors: preds,
+                successors: succs,
+            },
+            Node::Branch {
+                condition,
+                branches,
+                ..
+            } => {
+                let branch_args = serde_json::json!({
+                    "branches": branches.iter().map(|(n, v)| serde_json::json!({
+                        "target": n.0,
+                        "predicate": v
+                    })).collect::<Vec<_>>(),
+                    "condition": match condition {
+                        crate::graph::BranchCondition::FrameType => "frame_type",
+                        crate::graph::BranchCondition::Predicate { field, .. } => field,
+                    }
+                });
+                seaki_pipe::DagStep {
+                    composed: seaki_pipe::ComposedStep {
+                        step_id: node_id.0.clone(),
+                        command_id: String::new(),
+                        input_type: (
+                            seaki_pipe::FrameType::JsonValue,
+                            seaki_pipe::Cardinality::One,
+                        ),
+                        output_type: (
+                            seaki_pipe::FrameType::JsonValue,
+                            seaki_pipe::Cardinality::One,
+                        ),
+                        input_binding: seaki_pipe::InputBinding::PreviousStep,
+                        failure_policy: seaki_pipe::FailurePolicy::FailFast,
+                        side_effect_level: seaki_pipe::SideEffectLevel::None,
+                        args: branch_args,
+                    },
+                    kind: seaki_pipe::DagNodeKind::Branch,
+                    predecessors: preds,
+                    successors: succs,
+                }
+            }
+            Node::Join { merge_strategy, .. } => {
+                let strategy = match merge_strategy {
+                    crate::graph::MergeStrategy::Concat => seaki_pipe::DagMergeStrategy::Concat,
+                    crate::graph::MergeStrategy::Interleave => {
+                        seaki_pipe::DagMergeStrategy::Interleave
+                    }
+                    crate::graph::MergeStrategy::FirstNonEmpty => {
+                        seaki_pipe::DagMergeStrategy::FirstNonEmpty
+                    }
+                };
+                seaki_pipe::DagStep {
+                    composed: seaki_pipe::ComposedStep {
+                        step_id: node_id.0.clone(),
+                        command_id: String::new(),
+                        input_type: (
+                            seaki_pipe::FrameType::JsonValue,
+                            seaki_pipe::Cardinality::One,
+                        ),
+                        output_type: (
+                            seaki_pipe::FrameType::JsonValue,
+                            seaki_pipe::Cardinality::One,
+                        ),
+                        input_binding: seaki_pipe::InputBinding::PreviousStep,
+                        failure_policy: seaki_pipe::FailurePolicy::FailFast,
+                        side_effect_level: seaki_pipe::SideEffectLevel::None,
+                        args: serde_json::json!({}),
+                    },
+                    kind: seaki_pipe::DagNodeKind::Join { strategy },
+                    predecessors: preds,
+                    successors: succs,
+                }
+            }
+            Node::Exit { .. } => seaki_pipe::DagStep {
+                composed: seaki_pipe::ComposedStep {
+                    step_id: node_id.0.clone(),
+                    command_id: String::new(),
+                    input_type: (
+                        seaki_pipe::FrameType::JsonValue,
+                        seaki_pipe::Cardinality::One,
+                    ),
+                    output_type: (
+                        seaki_pipe::FrameType::JsonValue,
+                        seaki_pipe::Cardinality::One,
+                    ),
+                    input_binding: seaki_pipe::InputBinding::PreviousStep,
+                    failure_policy: seaki_pipe::FailurePolicy::FailFast,
+                    side_effect_level: seaki_pipe::SideEffectLevel::None,
+                    args: serde_json::json!({}),
+                },
+                kind: seaki_pipe::DagNodeKind::Exit,
+                predecessors: preds,
+                successors: succs,
+            },
+            Node::Entry { .. } => unreachable!(),
+        };
+
+        steps.push(dag_step);
+    }
+
+    if let Some(first) = steps.first() {
+        input_type = first.composed.input_type;
+    }
+    if let Some(last) = steps.last() {
+        output_type = last.composed.output_type;
+    }
+
+    Ok(seaki_pipe::DagPipeline {
+        pipeline_id: graph.graph_id.clone(),
+        steps,
+        input_type,
+        output_type,
+    })
+}
+
+fn topological_sort(graph: &PipelineGraph) -> Result<Vec<NodeId>, CompileError> {
+    let mut in_degree: HashMap<String, usize> = HashMap::new();
+    let mut adj: HashMap<String, Vec<String>> = HashMap::new();
+
+    for node_id in graph.node_ids() {
+        in_degree.entry(node_id.0.clone()).or_insert(0);
+    }
+
+    for edge in &graph.edges {
+        adj.entry(edge.from.0.clone())
+            .or_default()
+            .push(edge.to.0.clone());
+        *in_degree.entry(edge.to.0.clone()).or_insert(0) += 1;
+    }
+
+    let mut queue: Vec<String> = in_degree
+        .iter()
+        .filter(|(_, &deg)| deg == 0)
+        .map(|(id, _)| id.clone())
+        .collect();
+
+    let mut result = Vec::new();
+
+    while let Some(id) = queue.pop() {
+        result.push(NodeId::from(id.clone()));
+        if let Some(neighbors) = adj.get(&id) {
+            for neighbor in neighbors {
+                if let Some(deg) = in_degree.get_mut(neighbor) {
+                    *deg -= 1;
+                    if *deg == 0 {
+                        queue.push(neighbor.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    if result.len() != graph.node_count() {
+        return Err(CompileError::Graph(GraphError::CycleDetected));
+    }
+
+    Ok(result)
 }
 
 /// Compile a `PipelineGraph` into a `CompileResult`.
