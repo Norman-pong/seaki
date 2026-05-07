@@ -266,19 +266,22 @@ fn pipe_dry_run_delegates_to_core() {
                 input_binding: seaki_pipe::InputBinding::Constant(
                     serde_json::json!({"keyword": "rust"}),
                 ),
-                failure_policy: seaki_pipe::FailurePolicy::FailFast,
+                args: serde_json::json!({}),
+            failure_policy: seaki_pipe::FailurePolicy::FailFast,
             },
             seaki_pipe::PipelineStep {
                 step_id: "s2".to_string(),
                 command_id: "citation.resolve".to_string(),
                 input_binding: seaki_pipe::InputBinding::PreviousStep,
-                failure_policy: seaki_pipe::FailurePolicy::FailFast,
+                args: serde_json::json!({}),
+            failure_policy: seaki_pipe::FailurePolicy::FailFast,
             },
             seaki_pipe::PipelineStep {
                 step_id: "s3".to_string(),
                 command_id: "wiki.patch.propose".to_string(),
                 input_binding: seaki_pipe::InputBinding::PreviousStep,
-                failure_policy: seaki_pipe::FailurePolicy::FailFast,
+                args: serde_json::json!({}),
+            failure_policy: seaki_pipe::FailurePolicy::FailFast,
             },
         ],
     };

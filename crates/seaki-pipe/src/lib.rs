@@ -1,6 +1,7 @@
 pub mod ast;
 pub mod dry_run;
 pub mod registry;
+pub mod run;
 
 pub const SCHEMA_VERSION: u32 = 1;
 

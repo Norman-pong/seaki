@@ -337,6 +337,7 @@ impl PipelineGraph {
                         step_id: node_id.0.clone(),
                         command_id: command_id.clone(),
                         input_binding,
+                        args: serde_json::json!({}),
                         failure_policy: seaki_pipe::FailurePolicy::FailFast,
                     });
                     is_first_command = false;

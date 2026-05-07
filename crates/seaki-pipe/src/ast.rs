@@ -63,6 +63,12 @@ pub struct PipelineStep {
     pub command_id: String,
     pub input_binding: InputBinding,
     pub failure_policy: FailurePolicy,
+    #[serde(default = "default_args")]
+    pub args: serde_json::Value,
+}
+
+fn default_args() -> serde_json::Value {
+    serde_json::json!({})
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -80,6 +86,7 @@ pub struct ComposedStep {
     pub input_binding: InputBinding,
     pub failure_policy: FailurePolicy,
     pub side_effect_level: SideEffectLevel,
+    pub args: serde_json::Value,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -225,6 +232,7 @@ pub fn compose(
             input_binding: step.input_binding.clone(),
             failure_policy: step.failure_policy.clone(),
             side_effect_level: manifest.side_effect_level,
+            args: step.args.clone(),
         });
 
         previous_output = Some(output_type);

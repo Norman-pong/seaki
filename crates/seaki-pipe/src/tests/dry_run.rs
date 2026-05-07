@@ -13,18 +13,21 @@ fn composed_side_effect_free_chain() -> ComposedPipeline {
                 command_id: "wiki.search".to_string(),
                 input_binding: InputBinding::Constant(serde_json::json!({"keyword": "rust"})),
                 failure_policy: FailurePolicy::FailFast,
+                args: serde_json::json!({}),
             },
             PipelineStep {
                 step_id: "s2".to_string(),
                 command_id: "citation.resolve".to_string(),
                 input_binding: InputBinding::PreviousStep,
                 failure_policy: FailurePolicy::FailFast,
+                args: serde_json::json!({}),
             },
             PipelineStep {
                 step_id: "s3".to_string(),
                 command_id: "adr.summarize".to_string(),
                 input_binding: InputBinding::PreviousStep,
                 failure_policy: FailurePolicy::FailFast,
+                args: serde_json::json!({}),
             },
         ],
     };
@@ -41,18 +44,21 @@ fn composed_proposal_chain() -> ComposedPipeline {
                 command_id: "wiki.search".to_string(),
                 input_binding: InputBinding::Constant(serde_json::json!({"keyword": "rust"})),
                 failure_policy: FailurePolicy::FailFast,
+                args: serde_json::json!({}),
             },
             PipelineStep {
                 step_id: "s2".to_string(),
                 command_id: "citation.resolve".to_string(),
                 input_binding: InputBinding::PreviousStep,
                 failure_policy: FailurePolicy::FailFast,
+                args: serde_json::json!({}),
             },
             PipelineStep {
                 step_id: "s3".to_string(),
                 command_id: "wiki.patch.propose".to_string(),
                 input_binding: InputBinding::PreviousStep,
                 failure_policy: FailurePolicy::FailFast,
+                args: serde_json::json!({}),
             },
         ],
     };

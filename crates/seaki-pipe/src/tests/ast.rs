@@ -15,6 +15,7 @@ fn linear_pipeline(steps: Vec<(&str, &str)>) -> PipelineAst {
                     InputBinding::PreviousStep
                 },
                 failure_policy: FailurePolicy::FailFast,
+                args: serde_json::json!({}),
             })
             .collect(),
     }
@@ -90,12 +91,14 @@ fn compose_rejects_cardinality_conflict() {
                 command_id: "wiki.search".to_string(),
                 input_binding: InputBinding::Constant(serde_json::json!({"keyword": "x"})),
                 failure_policy: FailurePolicy::FailFast,
+                args: serde_json::json!({}),
             },
             PipelineStep {
                 step_id: "step2".to_string(),
                 command_id: "adr.summarize".to_string(),
                 input_binding: InputBinding::StepOutput("step1".to_string()),
                 failure_policy: FailurePolicy::FailFast,
+                args: serde_json::json!({}),
             },
         ],
     };
@@ -138,12 +141,14 @@ fn compose_rejects_cycle() {
                 command_id: "filter".to_string(),
                 input_binding: InputBinding::StepOutput("b".to_string()),
                 failure_policy: FailurePolicy::FailFast,
+                args: serde_json::json!({}),
             },
             PipelineStep {
                 step_id: "b".to_string(),
                 command_id: "filter".to_string(),
                 input_binding: InputBinding::StepOutput("a".to_string()),
                 failure_policy: FailurePolicy::FailFast,
+                args: serde_json::json!({}),
             },
         ],
     };
