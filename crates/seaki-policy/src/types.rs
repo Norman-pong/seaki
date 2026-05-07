@@ -28,6 +28,7 @@ pub enum SideEffectLevel {
     None,
     ProposalOnly,
     SideEffect,
+    ExternalIrreversible,
 }
 
 impl SideEffectLevel {
@@ -37,6 +38,7 @@ impl SideEffectLevel {
             Self::None => "none",
             Self::ProposalOnly => "proposal_only",
             Self::SideEffect => "side_effect",
+            Self::ExternalIrreversible => "external_irreversible",
         }
     }
 }
@@ -55,6 +57,7 @@ impl std::str::FromStr for SideEffectLevel {
             "none" => Ok(Self::None),
             "proposal_only" => Ok(Self::ProposalOnly),
             "side_effect" => Ok(Self::SideEffect),
+            "external_irreversible" => Ok(Self::ExternalIrreversible),
             other => Err(format!("unknown side_effect_level: {other}")),
         }
     }

@@ -205,6 +205,7 @@ pub fn profile_for_side_effect(level: seaki_policy::SideEffectLevel) -> SandboxP
         seaki_policy::SideEffectLevel::None => SandboxProfile::ReadOnly,
         seaki_policy::SideEffectLevel::ProposalOnly => SandboxProfile::WorkspaceWrite,
         seaki_policy::SideEffectLevel::SideEffect => SandboxProfile::WorkspaceWrite,
+        seaki_policy::SideEffectLevel::ExternalIrreversible => SandboxProfile::SourceIngest,
     }
 }
 
