@@ -15,6 +15,7 @@ fn binding() -> BindingEntry {
         provider_tenant_id: "tenant-1".to_string(),
         channel_binding_id: "bind-1".to_string(),
         provider_user_id: "user-1".to_string(),
+        seaki_workspace_id: "ws-1".to_string(),
         seaki_actor_id: "actor-1".to_string(),
         workspace_role: "member".to_string(),
     }

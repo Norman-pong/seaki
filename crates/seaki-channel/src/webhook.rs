@@ -27,6 +27,30 @@ impl std::fmt::Display for WebhookError {
 
 impl std::error::Error for WebhookError {}
 
+/// Trait for webhook payload verification.
+pub trait WebhookVerifier: Send + Sync {
+    /// Verify a webhook payload.
+    fn verify(
+        &self,
+        event_id: &str,
+        raw_payload: &[u8],
+        signature: &str,
+        timestamp: SystemTime,
+    ) -> Result<(), WebhookError>;
+}
+
+impl WebhookVerifier for FakeWebhookVerifier {
+    fn verify(
+        &self,
+        event_id: &str,
+        raw_payload: &[u8],
+        signature: &str,
+        timestamp: SystemTime,
+    ) -> Result<(), WebhookError> {
+        self.verify(event_id, raw_payload, signature, timestamp)
+    }
+}
+
 /// Simple in-memory HMAC-SHA256 (RFC 2104) using only `sha2`.
 #[must_use]
 pub fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; 32] {

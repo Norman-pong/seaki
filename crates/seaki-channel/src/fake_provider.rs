@@ -21,6 +21,13 @@ pub struct ChannelEvent {
     pub provider_user_id: String,
     pub payload: ChannelMessagePayload,
     pub timestamp: SystemTime,
+    // Core normalized fields (M2-C02)
+    pub seaki_workspace_id: String,
+    pub seaki_actor_id: String,
+    pub workspace_role: String,
+    pub channel_scope: String,
+    pub signature_verified_at: SystemTime,
+    pub normalized_at: SystemTime,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +35,7 @@ pub struct BindingEntry {
     pub provider_tenant_id: String,
     pub channel_binding_id: String,
     pub provider_user_id: String,
+    pub seaki_workspace_id: String,
     pub seaki_actor_id: String,
     pub workspace_role: String,
 }
@@ -144,6 +152,13 @@ impl FakeChannelProvider {
             .resolve_actor(provider_tenant_id, channel_binding_id, provider_user_id)
             .ok_or(WebhookError::SignatureMismatch)?;
 
+        let verified_at = SystemTime::now();
+        let normalized_at = SystemTime::now();
+        let channel_scope = format!(
+            "workspace:{}/channel:{}/user:{}",
+            binding.seaki_workspace_id, binding.channel_binding_id, binding.provider_user_id
+        );
+
         Ok(ChannelEvent {
             event_id: event_id.to_string(),
             event_type: event_type.to_string(),
@@ -152,6 +167,12 @@ impl FakeChannelProvider {
             provider_user_id: binding.provider_user_id,
             payload,
             timestamp,
+            seaki_workspace_id: binding.seaki_workspace_id,
+            seaki_actor_id: binding.seaki_actor_id,
+            workspace_role: binding.workspace_role,
+            channel_scope,
+            signature_verified_at: verified_at,
+            normalized_at,
         })
     }
 }
