@@ -42,16 +42,10 @@ pub struct RunResult {
     pub audit: Vec<AuditRecord>,
 }
 
-/// Simplified policy decision for runtime checks.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PolicyDecision {
-    Allow,
-    Deny,
-    RequireApproval,
-}
+pub use seaki_policy::PolicyDecision;
 
-/// Simplified policy engine trait.
-pub trait PolicyEngine: Send + Sync {
+/// Runtime policy engine trait for per-step authorization checks.
+pub trait StepPolicy: Send + Sync {
     /// Check whether a step is permitted to execute.
     fn check(&self, step: &ComposedStep, ctx: &ExecutionContext) -> PolicyDecision;
 }
@@ -60,7 +54,7 @@ pub trait PolicyEngine: Send + Sync {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SimplePolicy;
 
-impl PolicyEngine for SimplePolicy {
+impl StepPolicy for SimplePolicy {
     fn check(&self, step: &ComposedStep, _ctx: &ExecutionContext) -> PolicyDecision {
         match step.side_effect_level {
             SideEffectLevel::None => PolicyDecision::Allow,
@@ -88,7 +82,7 @@ pub fn run(
     initial_input: serde_json::Value,
     registry: &CommandRegistry,
     executors: &HashMap<String, Box<dyn CommandExecutor>>,
-    policy: &dyn PolicyEngine,
+    policy: &dyn StepPolicy,
     ctx: &mut ExecutionContext,
 ) -> Result<RunResult, PipelineError> {
     if pipeline.steps.is_empty() {
@@ -127,12 +121,22 @@ pub fn run(
 
         // b. Policy check.
         let policy_decision = policy.check(step, ctx);
-        if policy_decision == PolicyDecision::Deny {
-            return Err(PipelineError {
-                retryable: false,
-                failed_step_id: step.step_id.clone(),
-                error_kind: ErrorKind::SideEffectBlocked,
-            });
+        match policy_decision {
+            PolicyDecision::Deny => {
+                return Err(PipelineError {
+                    retryable: false,
+                    failed_step_id: step.step_id.clone(),
+                    error_kind: ErrorKind::SideEffectBlocked,
+                });
+            }
+            PolicyDecision::RequireApproval => {
+                return Err(PipelineError {
+                    retryable: true,
+                    failed_step_id: step.step_id.clone(),
+                    error_kind: ErrorKind::ApprovalRequired,
+                });
+            }
+            PolicyDecision::Allow => {}
         }
 
         // d. Look up executor.
@@ -208,7 +212,7 @@ pub fn run(
                 decision: match policy_decision {
                     PolicyDecision::Allow => "allow".to_string(),
                     PolicyDecision::Deny => "deny".to_string(),
-                    PolicyDecision::RequireApproval => "require_approval".to_string(),
+                    PolicyDecision::RequireApproval => "approval_required".to_string(),
                 },
                 timestamp_ms: now_ms(),
             });

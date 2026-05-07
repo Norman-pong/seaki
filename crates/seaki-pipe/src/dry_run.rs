@@ -56,6 +56,7 @@ pub enum ErrorKind {
     QuotaExceeded,
     ComposeFailed,
     SideEffectBlocked,
+    ApprovalRequired,
     ResourceExceeded { limit: String, current: u64 },
 }
 
@@ -68,6 +69,7 @@ impl std::fmt::Display for ErrorKind {
             Self::QuotaExceeded => f.write_str("QuotaExceeded"),
             Self::ComposeFailed => f.write_str("ComposeFailed"),
             Self::SideEffectBlocked => f.write_str("SideEffectBlocked"),
+            Self::ApprovalRequired => f.write_str("ApprovalRequired"),
             Self::ResourceExceeded { limit, current } => {
                 write!(f, "ResourceExceeded(limit={limit}, current={current})")
             }

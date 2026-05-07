@@ -323,6 +323,45 @@ fn run_default_value_on_failure() {
 }
 
 #[test]
+fn run_require_approval_blocks_execution() {
+    let registry = CommandRegistry::builtin();
+    // wiki.patch.propose has side_effect_level = ProposalOnly, so SimplePolicy
+    // returns RequireApproval.
+    let ast = PipelineAst {
+        pipeline_id: "approval".to_string(),
+        steps: vec![PipelineStep {
+            step_id: "s1".to_string(),
+            command_id: "wiki.patch.propose".to_string(),
+            input_binding: InputBinding::Constant(serde_json::json!([])),
+            failure_policy: FailurePolicy::FailFast,
+            args: serde_json::json!({}),
+        }],
+    };
+    let composed = compose(&ast, &registry).unwrap();
+    let mut ctx = test_context();
+    let executors = builtin_executors();
+    let result = run(
+        &composed,
+        serde_json::json!({}),
+        &registry,
+        &executors,
+        &SimplePolicy,
+        &mut ctx,
+    );
+
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert_eq!(err.failed_step_id, "s1");
+    assert!(matches!(err.error_kind, ErrorKind::ApprovalRequired));
+    assert!(err.retryable);
+    // Executor must NOT have been called — no audit for successful execution.
+    assert!(!ctx
+        .audit
+        .iter()
+        .any(|a| a.step_id == "s1" && a.decision == "allow"));
+}
+
+#[test]
 fn run_resource_exceeded_terminates() {
     let registry = CommandRegistry::builtin();
     // Create an array with 1_001 elements to exceed MAX_FRAME_COUNT.

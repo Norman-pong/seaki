@@ -14,6 +14,7 @@ path = "src/lib.rs"
 
 [dependencies]
 seaki-dto = { path = "../seaki-dto" }
+seaki-policy = { path = "../seaki-policy" }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 sha2.workspace = true

@@ -10,42 +10,7 @@ pub struct ResourceQuota {
     pub memory_mb: u64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SideEffectLevel {
-    None,
-    ProposalOnly,
-    SideEffect,
-}
-
-impl SideEffectLevel {
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::None => "none",
-            Self::ProposalOnly => "proposal_only",
-            Self::SideEffect => "side_effect",
-        }
-    }
-}
-
-impl std::fmt::Display for SideEffectLevel {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-impl std::str::FromStr for SideEffectLevel {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "none" => Ok(Self::None),
-            "proposal_only" => Ok(Self::ProposalOnly),
-            "side_effect" => Ok(Self::SideEffect),
-            other => Err(format!("unknown side_effect_level: {other}")),
-        }
-    }
-}
+pub use seaki_policy::SideEffectLevel;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PipeCommandManifest {
