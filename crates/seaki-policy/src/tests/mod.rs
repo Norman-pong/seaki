@@ -1,9 +1,12 @@
 use super::*;
 use std::fs;
+use std::path::Path;
 use std::sync::{Arc, Barrier};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use tempfile::TempDir;
+
+use crate::grant::{file_read_grant_scope_hash, snapshot_file, FileReadGrantScope};
 
 #[test]
 fn policy_default_shape_keeps_grants_opaque() {
@@ -349,7 +352,7 @@ impl Fixture {
         )
     }
 
-    fn write_external_file(&self, name: &str, contents: &str) -> PathBuf {
+    fn write_external_file(&self, name: &str, contents: &str) -> std::path::PathBuf {
         let path = self.external.path().join(name);
         fs::write(&path, contents).expect("write external file");
         path
@@ -357,7 +360,7 @@ impl Fixture {
 
     fn request(
         &self,
-        path: impl Into<PathBuf>,
+        path: impl Into<std::path::PathBuf>,
         capability_id: Option<&str>,
     ) -> FileReadPolicyRequest {
         self.request_at(
@@ -369,7 +372,7 @@ impl Fixture {
 
     fn request_at(
         &self,
-        path: impl Into<PathBuf>,
+        path: impl Into<std::path::PathBuf>,
         capability_id: Option<&str>,
         _now: SystemTime,
     ) -> FileReadPolicyRequest {
