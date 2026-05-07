@@ -1,11 +1,14 @@
+pub mod approval_gate;
 pub mod ast;
 pub mod checkpoint;
 pub mod compensate;
 pub mod dag;
 pub mod dry_run;
+pub mod event;
 pub mod executor;
 pub mod registry;
 pub mod run;
+pub mod state_machine;
 
 use std::collections::HashMap;
 

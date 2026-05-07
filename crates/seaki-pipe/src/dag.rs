@@ -2,13 +2,20 @@
 
 use std::collections::HashMap;
 
+use crate::approval_gate::{ApprovalGate, ApprovalRequestInput};
 use crate::ast::{Cardinality, DagMergeStrategy, DagNodeKind, DagPipeline, DagStep};
-use crate::checkpoint::{execute_step_with_retry, save_checkpoint, CheckpointStore, RetryPolicy};
+use crate::checkpoint::{
+    execute_step_with_retry, execute_step_with_retry_unchecked, save_checkpoint, CheckpointStore,
+    RetryPolicy,
+};
+use crate::compensate::rollback_dag;
 use crate::dry_run::{FrameEnvelope, PipelineError};
 use crate::registry::CommandRegistry;
 use crate::run::{
-    execute_step, CommandExecutor, ExecutionContext, RunResult, StepPolicy, StepState,
+    execute_step, execute_step_core, CommandExecutor, CompensatingExecutor, ExecutionContext,
+    RunResult, StepPolicy, StepState,
 };
+use crate::state_machine::{PipelineState, PipelineStateMachine, StateEvent};
 use crate::ErrorKind;
 
 #[allow(clippy::too_many_arguments)]
@@ -24,6 +31,8 @@ pub(crate) fn execute_dag_core(
     step_outputs: &mut HashMap<String, Vec<FrameEnvelope>>,
     step_states: &mut HashMap<String, StepState>,
     branch_selections: &mut HashMap<String, String>,
+    approval_gate: Option<&dyn ApprovalGate>,
+    mut state_machine: Option<&mut PipelineStateMachine>,
 ) -> Result<(), PipelineError> {
     let initial = FrameEnvelope {
         seq: 0,
@@ -38,6 +47,10 @@ pub(crate) fn execute_dag_core(
         .enumerate()
         .map(|(i, s)| (s.composed.step_id.clone(), i))
         .collect();
+
+    if let Some(sm) = state_machine.as_mut() {
+        sm.transition(StateEvent::Start)?;
+    }
 
     for step in &dag.steps {
         if step_states.contains_key(&step.composed.step_id) {
@@ -92,9 +105,110 @@ pub(crate) fn execute_dag_core(
             &topo_order,
         );
 
-        let output_frames = match &step.kind {
+        let step_result = match &step.kind {
             DagNodeKind::Command => {
-                if let Some(rp) = retry_policy {
+                if let Some(sm) = state_machine.as_mut() {
+                    sm.transition(StateEvent::StepStarted {
+                        step_id: step.composed.step_id.clone(),
+                    })?;
+                }
+
+                if let Some(ag) = approval_gate {
+                    let decision = policy.check(&step.composed, ctx);
+                    match decision {
+                        crate::run::PolicyDecision::Deny => {
+                            return Err(PipelineError {
+                                retryable: false,
+                                failed_step_id: step.composed.step_id.clone(),
+                                error_kind: ErrorKind::SideEffectBlocked,
+                            });
+                        }
+                        crate::run::PolicyDecision::RequireApproval => {
+                            let approval_id = ag.request_approval(ApprovalRequestInput {
+                                pipeline_id: ctx.pipeline_id.clone(),
+                                step_id: step.composed.step_id.clone(),
+                                actor_id: ctx.actor_id.clone(),
+                                workspace_id: ctx.workspace_id.clone(),
+                                operation: step.composed.command_id.clone(),
+                                reason: format!("step {} requires approval", step.composed.step_id),
+                            })?;
+                            if let Some(sm) = state_machine.as_mut() {
+                                sm.transition(StateEvent::ApprovalRequested {
+                                    approval_id: approval_id.clone(),
+                                })?;
+                            }
+                            let timeout = 30_000u64;
+                            match ag.wait_for_approval(&approval_id, timeout)? {
+                                seaki_policy::ApprovalStatus::Approved => {
+                                    if let Some(sm) = state_machine.as_mut() {
+                                        sm.transition(StateEvent::ApprovalGranted)?;
+                                    }
+                                    if let Some(rp) = retry_policy {
+                                        execute_step_with_retry_unchecked(
+                                            &step.composed,
+                                            input_frames,
+                                            registry,
+                                            executors,
+                                            ctx,
+                                            rp,
+                                        )
+                                    } else {
+                                        execute_step_core(
+                                            &step.composed,
+                                            input_frames,
+                                            registry,
+                                            executors,
+                                            ctx,
+                                            crate::run::PolicyDecision::Allow,
+                                        )
+                                    }
+                                }
+                                seaki_policy::ApprovalStatus::Denied => {
+                                    if let Some(sm) = state_machine.as_mut() {
+                                        sm.transition(StateEvent::ApprovalDenied)?;
+                                    }
+                                    Err(PipelineError {
+                                        retryable: false,
+                                        failed_step_id: step.composed.step_id.clone(),
+                                        error_kind: ErrorKind::ApprovalRequired,
+                                    })
+                                }
+                                seaki_policy::ApprovalStatus::Pending => {
+                                    if let Some(sm) = state_machine.as_mut() {
+                                        sm.transition(StateEvent::ApprovalTimeout)?;
+                                    }
+                                    Err(PipelineError {
+                                        retryable: false,
+                                        failed_step_id: step.composed.step_id.clone(),
+                                        error_kind: ErrorKind::ApprovalRequired,
+                                    })
+                                }
+                            }
+                        }
+                        crate::run::PolicyDecision::Allow => {
+                            if let Some(rp) = retry_policy {
+                                execute_step_with_retry(
+                                    &step.composed,
+                                    input_frames,
+                                    registry,
+                                    executors,
+                                    policy,
+                                    ctx,
+                                    rp,
+                                )
+                            } else {
+                                execute_step(
+                                    &step.composed,
+                                    input_frames,
+                                    registry,
+                                    executors,
+                                    policy,
+                                    ctx,
+                                )
+                            }
+                        }
+                    }
+                } else if let Some(rp) = retry_policy {
                     execute_step_with_retry(
                         &step.composed,
                         input_frames,
@@ -103,7 +217,7 @@ pub(crate) fn execute_dag_core(
                         policy,
                         ctx,
                         rp,
-                    )?
+                    )
                 } else {
                     execute_step(
                         &step.composed,
@@ -112,27 +226,51 @@ pub(crate) fn execute_dag_core(
                         executors,
                         policy,
                         ctx,
-                    )?
+                    )
                 }
             }
-            DagNodeKind::Tee => input_frames,
+            DagNodeKind::Tee => Ok(input_frames),
             DagNodeKind::Branch => {
                 let selected = evaluate_branch(step, &input_frames);
                 if let Some(target) = selected {
                     branch_selections.insert(step.composed.step_id.clone(), target);
                 }
-                input_frames
+                Ok(input_frames)
             }
-            DagNodeKind::Join { .. } => input_frames,
+            DagNodeKind::Join { .. } => Ok(input_frames),
             DagNodeKind::Exit => unreachable!(),
+        };
+
+        let output_frames = match step_result {
+            Ok(frames) => frames,
+            Err(err) => {
+                if let Some(sm) = state_machine.as_mut() {
+                    let is_retry_exhausted = retry_policy.is_some() && err.retryable;
+                    let _ = sm.transition(StateEvent::StepFailed {
+                        step_id: step.composed.step_id.clone(),
+                        retryable: !is_retry_exhausted && err.retryable,
+                    });
+                }
+                return Err(err);
+            }
         };
 
         step_outputs.insert(step.composed.step_id.clone(), output_frames.clone());
         step_states.insert(step.composed.step_id.clone(), StepState::Completed);
 
+        if let Some(sm) = state_machine.as_mut() {
+            sm.transition(StateEvent::StepCompleted {
+                step_id: step.composed.step_id.clone(),
+            })?;
+        }
+
         if let Some(store) = checkpoint_store {
             save_checkpoint(store, dag, step, &output_frames, StepState::Completed, ctx)?;
         }
+    }
+
+    if let Some(sm) = state_machine.as_mut() {
+        sm.transition(StateEvent::Complete)?;
     }
 
     Ok(())
@@ -175,6 +313,8 @@ pub fn run_dag(
         &mut step_outputs,
         &mut step_states,
         &mut branch_selections,
+        None,
+        None,
     )?;
 
     let exit_outputs: Vec<Vec<FrameEnvelope>> = dag
@@ -238,6 +378,8 @@ pub fn run_dag_with_checkpoint(
         &mut step_outputs,
         &mut step_states,
         &mut branch_selections,
+        None,
+        None,
     )?;
 
     let exit_outputs: Vec<Vec<FrameEnvelope>> = dag
@@ -346,6 +488,8 @@ pub fn resume_dag_with_retry(
         &mut step_outputs,
         &mut step_states,
         &mut branch_selections,
+        None,
+        None,
     )?;
 
     let exit_outputs: Vec<Vec<FrameEnvelope>> = dag
@@ -369,6 +513,83 @@ pub fn resume_dag_with_retry(
     };
 
     Ok(RunResult {
+        output: final_output,
+        audit: ctx.audit.clone(),
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn run_dag_with_approval(
+    dag: &DagPipeline,
+    initial_input: serde_json::Value,
+    registry: &CommandRegistry,
+    executors: &HashMap<String, Box<dyn CommandExecutor>>,
+    policy: &dyn StepPolicy,
+    approval_gate: &dyn ApprovalGate,
+    checkpoint_store: &dyn CheckpointStore,
+    compensators: &HashMap<String, Box<dyn CompensatingExecutor>>,
+    ctx: &mut ExecutionContext,
+    state_machine: &mut PipelineStateMachine,
+) -> Result<RunResult, PipelineError> {
+    if dag.steps.is_empty() {
+        return Err(PipelineError {
+            retryable: false,
+            failed_step_id: String::new(),
+            error_kind: ErrorKind::ComposeFailed,
+        });
+    }
+
+    let mut step_outputs: HashMap<String, Vec<FrameEnvelope>> = HashMap::new();
+    let mut step_states: HashMap<String, StepState> = HashMap::new();
+    let mut branch_selections: HashMap<String, String> = HashMap::new();
+
+    let result = execute_dag_core(
+        dag,
+        initial_input,
+        registry,
+        executors,
+        policy,
+        ctx,
+        Some(checkpoint_store),
+        None,
+        &mut step_outputs,
+        &mut step_states,
+        &mut branch_selections,
+        Some(approval_gate),
+        Some(state_machine),
+    );
+
+    if let Err(ref _err) = result {
+        if matches!(
+            state_machine.state,
+            PipelineState::Failed | PipelineState::Cancelled
+        ) {
+            let _ = rollback_dag(dag, checkpoint_store, registry, compensators, ctx);
+            let _ = state_machine.transition(StateEvent::CompensateCompleted);
+        }
+    }
+
+    let exit_outputs: Vec<Vec<FrameEnvelope>> = dag
+        .steps
+        .iter()
+        .filter(|s| matches!(s.kind, DagNodeKind::Exit))
+        .filter_map(|s| step_outputs.get(&s.composed.step_id))
+        .cloned()
+        .collect();
+
+    let final_output = if exit_outputs.is_empty() {
+        dag.steps
+            .iter()
+            .rev()
+            .find(|s| !matches!(s.kind, DagNodeKind::Exit))
+            .and_then(|s| step_outputs.get(&s.composed.step_id))
+            .cloned()
+            .unwrap_or_default()
+    } else {
+        exit_outputs.into_iter().flatten().collect()
+    };
+
+    result.map(|_| RunResult {
         output: final_output,
         audit: ctx.audit.clone(),
     })

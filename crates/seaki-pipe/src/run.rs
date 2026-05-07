@@ -218,14 +218,17 @@ pub(crate) fn now_ms() -> u64 {
         .as_millis() as u64
 }
 
-/// Execute a single composed step with full policy and resource checks.
-pub(crate) fn execute_step(
+/// Execute a single composed step without policy check.
+///
+/// The caller is responsible for ensuring policy authorization before
+/// invoking this function.
+pub(crate) fn execute_step_core(
     step: &ComposedStep,
     input_frames: Vec<FrameEnvelope>,
     registry: &CommandRegistry,
     executors: &HashMap<String, Box<dyn CommandExecutor>>,
-    policy: &dyn StepPolicy,
     ctx: &mut ExecutionContext,
+    policy_decision: PolicyDecision,
 ) -> Result<Vec<FrameEnvelope>, PipelineError> {
     let manifest = registry
         .inspect(&step.command_id)
@@ -238,25 +241,6 @@ pub(crate) fn execute_step(
     if let Some(quota) = &manifest.resource_quota {
         check_frame_limits(step, &input_frames)?;
         check_step_limits(step, quota, 0, ctx)?;
-    }
-
-    let policy_decision = policy.check(step, ctx);
-    match policy_decision {
-        PolicyDecision::Deny => {
-            return Err(PipelineError {
-                retryable: false,
-                failed_step_id: step.step_id.clone(),
-                error_kind: ErrorKind::SideEffectBlocked,
-            });
-        }
-        PolicyDecision::RequireApproval => {
-            return Err(PipelineError {
-                retryable: true,
-                failed_step_id: step.step_id.clone(),
-                error_kind: ErrorKind::ApprovalRequired,
-            });
-        }
-        PolicyDecision::Allow => {}
     }
 
     let executor = executors
@@ -333,12 +317,52 @@ pub(crate) fn execute_step(
     Ok(output_frames)
 }
 
+/// Execute a single composed step with full policy and resource checks.
+pub(crate) fn execute_step(
+    step: &ComposedStep,
+    input_frames: Vec<FrameEnvelope>,
+    registry: &CommandRegistry,
+    executors: &HashMap<String, Box<dyn CommandExecutor>>,
+    policy: &dyn StepPolicy,
+    ctx: &mut ExecutionContext,
+) -> Result<Vec<FrameEnvelope>, PipelineError> {
+    let policy_decision = policy.check(step, ctx);
+    match policy_decision {
+        PolicyDecision::Deny => {
+            return Err(PipelineError {
+                retryable: false,
+                failed_step_id: step.step_id.clone(),
+                error_kind: ErrorKind::SideEffectBlocked,
+            });
+        }
+        PolicyDecision::RequireApproval => {
+            return Err(PipelineError {
+                retryable: true,
+                failed_step_id: step.step_id.clone(),
+                error_kind: ErrorKind::ApprovalRequired,
+            });
+        }
+        PolicyDecision::Allow => {}
+    }
+
+    execute_step_core(
+        step,
+        input_frames,
+        registry,
+        executors,
+        ctx,
+        policy_decision,
+    )
+}
+
 // Re-exports for backward compatibility
 pub use crate::checkpoint::{
     Checkpoint, CheckpointError, CheckpointStore, InMemoryCheckpointStore, RetryPolicy,
 };
 pub use crate::compensate::{rollback_dag, CompensationRecord};
-pub use crate::dag::{resume_dag, resume_dag_with_retry, run_dag, run_dag_with_checkpoint};
+pub use crate::dag::{
+    resume_dag, resume_dag_with_retry, run_dag, run_dag_with_approval, run_dag_with_checkpoint,
+};
 pub use crate::executor::{
     AdrSummarizeExecutor, CitationResolveExecutor, FilterExecutor, MapExecutor,
     WikiPatchProposeExecutor, WikiSearchExecutor,

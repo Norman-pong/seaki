@@ -7,7 +7,7 @@ use crate::ast::{DagPipeline, DagStep};
 use crate::dry_run::{FrameEnvelope, PipelineError};
 use crate::registry::CommandRegistry;
 use crate::run::{
-    execute_step, now_ms, CommandExecutor, ExecutionContext, ResourceUsage, StepPolicy, StepState,
+    now_ms, CommandExecutor, ExecutionContext, PolicyDecision, ResourceUsage, StepPolicy, StepState,
 };
 use crate::ErrorKind;
 
@@ -92,18 +92,24 @@ pub struct RetryPolicy {
     pub backoff_ms: u64,
 }
 
-pub(crate) fn execute_step_with_retry(
+pub(crate) fn execute_step_with_retry_unchecked(
     step: &crate::ast::ComposedStep,
     input_frames: Vec<FrameEnvelope>,
     registry: &CommandRegistry,
     executors: &HashMap<String, Box<dyn CommandExecutor>>,
-    policy: &dyn StepPolicy,
     ctx: &mut ExecutionContext,
     retry_policy: &RetryPolicy,
 ) -> Result<Vec<FrameEnvelope>, PipelineError> {
     let mut last_error = None;
     for attempt in 1..=retry_policy.max_attempts {
-        match execute_step(step, input_frames.clone(), registry, executors, policy, ctx) {
+        match crate::run::execute_step_core(
+            step,
+            input_frames.clone(),
+            registry,
+            executors,
+            ctx,
+            crate::run::PolicyDecision::Allow,
+        ) {
             Ok(frames) => return Ok(frames),
             Err(err) => {
                 if !err.retryable {
@@ -117,6 +123,37 @@ pub(crate) fn execute_step_with_retry(
         }
     }
     Err(last_error.expect("last_error set when retry exhausted"))
+}
+
+pub(crate) fn execute_step_with_retry(
+    step: &crate::ast::ComposedStep,
+    input_frames: Vec<FrameEnvelope>,
+    registry: &CommandRegistry,
+    executors: &HashMap<String, Box<dyn CommandExecutor>>,
+    policy: &dyn StepPolicy,
+    ctx: &mut ExecutionContext,
+    retry_policy: &RetryPolicy,
+) -> Result<Vec<FrameEnvelope>, PipelineError> {
+    let policy_decision = policy.check(step, ctx);
+    match policy_decision {
+        PolicyDecision::Deny => {
+            return Err(PipelineError {
+                retryable: false,
+                failed_step_id: step.step_id.clone(),
+                error_kind: ErrorKind::SideEffectBlocked,
+            });
+        }
+        PolicyDecision::RequireApproval => {
+            return Err(PipelineError {
+                retryable: true,
+                failed_step_id: step.step_id.clone(),
+                error_kind: ErrorKind::ApprovalRequired,
+            });
+        }
+        PolicyDecision::Allow => {}
+    }
+
+    execute_step_with_retry_unchecked(step, input_frames, registry, executors, ctx, retry_policy)
 }
 
 pub(crate) fn save_checkpoint(
