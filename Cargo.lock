@@ -453,6 +453,7 @@ dependencies = [
 name = "seaki-sandbox"
 version = "0.1.0"
 dependencies = [
+ "seaki-policy",
  "tempfile",
 ]
 

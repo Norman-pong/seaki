@@ -1,5 +1,72 @@
 use super::*;
+use std::time::Duration;
 use tempfile::tempdir;
+
+#[test]
+fn profile_for_side_effect_maps_correctly() {
+    assert_eq!(
+        profile_for_side_effect(seaki_policy::SideEffectLevel::None),
+        SandboxProfile::ReadOnly
+    );
+    assert_eq!(
+        profile_for_side_effect(seaki_policy::SideEffectLevel::ProposalOnly),
+        SandboxProfile::WorkspaceWrite
+    );
+    assert_eq!(
+        profile_for_side_effect(seaki_policy::SideEffectLevel::SideEffect),
+        SandboxProfile::WorkspaceWrite
+    );
+}
+
+#[test]
+fn execute_in_sandbox_spawn_mock_command() {
+    let plan = SandboxCommandPlan {
+        backend: SandboxBackendKind::MacosSeatbelt,
+        executable: PathBuf::from("/bin/echo"),
+        args: vec!["hello".to_string()],
+        profile_source: "(version 1)".to_string(),
+    };
+
+    let result = execute_in_sandbox(&plan, b"", 5000).unwrap();
+    assert_eq!(String::from_utf8_lossy(&result.stdout).trim(), "hello");
+    assert!(result.stderr.is_empty());
+    assert_eq!(result.exit_code, 0);
+    assert!(result.audit_records.is_empty());
+}
+
+#[test]
+fn execute_in_sandbox_timeout_kills() {
+    let plan = SandboxCommandPlan {
+        backend: SandboxBackendKind::MacosSeatbelt,
+        executable: PathBuf::from("/bin/sleep"),
+        args: vec!["10".to_string()],
+        profile_source: "(version 1)".to_string(),
+    };
+
+    let start = std::time::Instant::now();
+    let result = execute_in_sandbox(&plan, b"", 100);
+    let elapsed = start.elapsed();
+
+    assert!(result.is_err());
+    assert!(matches!(
+        result.unwrap_err(),
+        SandboxError::TimeoutExceeded { timeout_ms: 100 }
+    ));
+    assert!(elapsed < Duration::from_secs(2));
+}
+
+#[test]
+fn execute_in_sandbox_exit_code_preserved() {
+    let plan = SandboxCommandPlan {
+        backend: SandboxBackendKind::MacosSeatbelt,
+        executable: PathBuf::from("/bin/sh"),
+        args: vec!["-c".to_string(), "exit 42".to_string()],
+        profile_source: "(version 1)".to_string(),
+    };
+
+    let result = execute_in_sandbox(&plan, b"", 5000).unwrap();
+    assert_eq!(result.exit_code, 42);
+}
 
 #[test]
 fn source_ingest_profile_is_networkless() {

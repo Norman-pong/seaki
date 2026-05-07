@@ -171,6 +171,14 @@ pub struct SandboxCommandPlan {
     pub profile_source: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SandboxExecutionResult {
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+    pub exit_code: i32,
+    pub audit_records: Vec<SandboxAuditRecord>,
+}
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct MacosSeatbeltBackend;
 
@@ -188,6 +196,92 @@ impl MacosSeatbeltBackend {
             profile_source,
         }
     }
+}
+
+/// 根据副作用级别选择对应的沙箱 profile。
+#[must_use]
+pub fn profile_for_side_effect(level: seaki_policy::SideEffectLevel) -> SandboxProfile {
+    match level {
+        seaki_policy::SideEffectLevel::None => SandboxProfile::ReadOnly,
+        seaki_policy::SideEffectLevel::ProposalOnly => SandboxProfile::WorkspaceWrite,
+        seaki_policy::SideEffectLevel::SideEffect => SandboxProfile::WorkspaceWrite,
+    }
+}
+
+/// 在沙箱中执行命令计划。
+///
+/// # Errors
+///
+/// 当进程创建失败、超时或 IO 错误时返回错误。
+pub fn execute_in_sandbox(
+    plan: &SandboxCommandPlan,
+    stdin_input: &[u8],
+    timeout_ms: u64,
+) -> Result<SandboxExecutionResult, SandboxError> {
+    use std::io::{Read, Write};
+    use std::process::{Command, Stdio};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::Duration;
+
+    let child = Arc::new(std::sync::Mutex::new(
+        Command::new(&plan.executable)
+            .args(&plan.args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| SandboxError::SpawnFailed(e.to_string()))?,
+    ));
+
+    let timed_out = Arc::new(AtomicBool::new(false));
+    let timed_out_clone = Arc::clone(&timed_out);
+    let child_clone = Arc::clone(&child);
+
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(timeout_ms));
+        timed_out_clone.store(true, Ordering::Relaxed);
+        let _ = child_clone.lock().unwrap().kill();
+    });
+
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+
+    {
+        let mut child = child.lock().unwrap();
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(stdin_input).map_err(SandboxError::Io)?;
+        }
+        let stdout_handle = child.stdout.take();
+        let stderr_handle = child.stderr.take();
+        drop(child);
+
+        if let Some(mut out) = stdout_handle {
+            out.read_to_end(&mut stdout).map_err(SandboxError::Io)?;
+        }
+        if let Some(mut err) = stderr_handle {
+            err.read_to_end(&mut stderr).map_err(SandboxError::Io)?;
+        }
+    }
+
+    let status = {
+        let mut child = child.lock().unwrap();
+        child.wait().map_err(SandboxError::Io)?
+    };
+
+    if timed_out.load(Ordering::Relaxed) && status.code().is_none() {
+        return Err(SandboxError::TimeoutExceeded { timeout_ms });
+    }
+
+    let exit_code = status.code().unwrap_or(-1);
+
+    Ok(SandboxExecutionResult {
+        stdout,
+        stderr,
+        exit_code,
+        audit_records: Vec::new(),
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -559,9 +653,12 @@ impl SandboxAuditRecord {
         let (decision, deny_reason) = match result {
             Ok(_) => (SandboxDecision::Allow, None),
             Err(SandboxError::Denied { reason, .. }) => (SandboxDecision::Deny, Some(*reason)),
-            Err(SandboxError::Io(_) | SandboxError::PathCanonicalizeFailed { .. }) => {
-                (SandboxDecision::Deny, None)
-            }
+            Err(
+                SandboxError::Io(_)
+                | SandboxError::PathCanonicalizeFailed { .. }
+                | SandboxError::SpawnFailed(_)
+                | SandboxError::TimeoutExceeded { .. },
+            ) => (SandboxDecision::Deny, None),
         };
 
         Self {
@@ -592,6 +689,8 @@ pub enum SandboxError {
         path: PathBuf,
         message: String,
     },
+    SpawnFailed(String),
+    TimeoutExceeded { timeout_ms: u64 },
 }
 
 impl fmt::Display for SandboxError {
@@ -616,6 +715,10 @@ impl fmt::Display for SandboxError {
             Self::PathCanonicalizeFailed { path, message } => {
                 write!(f, "failed to canonicalize {}: {message}", path.display())
             }
+            Self::SpawnFailed(message) => write!(f, "failed to spawn process: {message}"),
+            Self::TimeoutExceeded { timeout_ms } => {
+                write!(f, "process timed out after {timeout_ms} ms")
+            }
         }
     }
 }
@@ -624,7 +727,10 @@ impl std::error::Error for SandboxError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Io(error) => Some(error),
-            Self::Denied { .. } | Self::PathCanonicalizeFailed { .. } => None,
+            Self::Denied { .. }
+            | Self::PathCanonicalizeFailed { .. }
+            | Self::SpawnFailed(_)
+            | Self::TimeoutExceeded { .. } => None,
         }
     }
 }
@@ -654,6 +760,11 @@ impl PartialEq for SandboxError {
             (Self::Io(error), Self::Io(other_error)) => {
                 error.kind() == other_error.kind() && error.to_string() == other_error.to_string()
             }
+            (Self::SpawnFailed(a), Self::SpawnFailed(b)) => a == b,
+            (
+                Self::TimeoutExceeded { timeout_ms: a },
+                Self::TimeoutExceeded { timeout_ms: b },
+            ) => a == b,
             _ => false,
         }
     }

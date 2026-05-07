@@ -12,6 +12,9 @@ categories = ["development-tools"]
 [lib]
 path = "src/lib.rs"
 
+[dependencies]
+seaki-policy = { path = "../seaki-policy" }
+
 [dev-dependencies]
 tempfile.workspace = true
 
