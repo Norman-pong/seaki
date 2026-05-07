@@ -17,7 +17,10 @@ seaki-core = { path = "../seaki-core" }
 seaki-dto = { path = "../seaki-dto" }
 seaki-policy = { path = "../seaki-policy" }
 sha2.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+toml = "0.8"
+wasmtime = { version = "29.0", default-features = false, features = ["cranelift", "runtime", "wat"] }
 
 [dev-dependencies]
 tempfile.workspace = true
-
