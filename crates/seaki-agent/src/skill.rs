@@ -61,6 +61,7 @@ impl PartialEq for SkillMatch {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct SkillRegistry {
     skills: HashMap<String, SkillManifest>,
 }
@@ -245,6 +246,7 @@ fn levenshtein_within(a: &str, b: &str, max: usize) -> bool {
 // ---------------------------------------------------------------------------
 
 /// Validates whether a skill can be dispatched given current actor capabilities and memory.
+#[derive(Debug, Clone, Copy)]
 pub struct SkillAdmission;
 
 impl SkillAdmission {

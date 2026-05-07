@@ -52,6 +52,7 @@ impl std::fmt::Display for DispatchError {
 impl std::error::Error for DispatchError {}
 
 /// Dispatches user intent to a skill and produces an executable pipeline.
+#[derive(Debug, Clone)]
 pub struct SkillDispatcher {
     pub registry: SkillRegistry,
     pub admission: SkillAdmission,
