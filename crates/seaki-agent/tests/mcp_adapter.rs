@@ -44,6 +44,7 @@ fn empty_ctx() -> ExecutionContext {
         pipeline_id: "p1".to_string(),
         audit: Vec::new(),
         resource_used: Default::default(),
+        checkpoint_outputs: std::collections::HashMap::new(),
     }
 }
 

@@ -29,6 +29,7 @@ pub fn test_context() -> ExecutionContext {
         pipeline_id: "pipe-1".to_string(),
         audit: Vec::new(),
         resource_used: ResourceUsage::default(),
+        checkpoint_outputs: HashMap::new(),
     }
 }
 

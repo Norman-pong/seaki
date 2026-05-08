@@ -9,7 +9,7 @@ use seaki_pipe::compose;
 use seaki_pipe::dry_run::{dry_run, DryRunResult, FrameEnvelope};
 use seaki_pipe::registry::CommandRegistry;
 use seaki_pipe::run::{
-    run, AuditRecord, CommandExecutor, ExecutionContext, ResourceUsage, StepPolicy,
+    run, run_resume, AuditRecord, CommandExecutor, ExecutionContext, ResourceUsage, StepPolicy,
 };
 use seaki_policy::ApprovalStatus;
 
@@ -176,6 +176,7 @@ impl AgentRuntime {
             pipeline_id: composed.pipeline_id.clone(),
             audit: Vec::new(),
             resource_used: ResourceUsage::default(),
+            checkpoint_outputs: HashMap::new(),
         };
 
         let run_result = run(
@@ -211,25 +212,29 @@ impl AgentRuntime {
 
                 match status {
                     ApprovalStatus::Approved => {
+                        let checkpoint_outputs = std::mem::take(&mut ctx.checkpoint_outputs);
                         let mut retry_ctx = ExecutionContext {
                             workspace_id: session.workspace_id.clone(),
                             actor_id: session.actor_id.clone(),
                             pipeline_id: composed.pipeline_id.clone(),
-                            audit: Vec::new(),
-                            resource_used: ResourceUsage::default(),
+                            audit: std::mem::take(&mut ctx.audit),
+                            resource_used: std::mem::take(&mut ctx.resource_used),
+                            checkpoint_outputs: HashMap::new(),
                         };
 
-                        let retry_result = run(
+                        let retry_result = run_resume(
                             &composed,
                             initial_input,
                             &self.command_registry,
                             executors,
                             policy,
                             &mut retry_ctx,
+                            &failed_step_id,
+                            &checkpoint_outputs,
                         );
 
                         match retry_result {
-                            Ok(result) => (result.output, result.audit, true),
+                            Ok(result) => (result.output, retry_ctx.audit, true),
                             Err(e) => {
                                 return Err(AgentExecutionError::ExecutionFailed(format!(
                                     "retry failed: {:?}",

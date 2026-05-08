@@ -171,6 +171,7 @@ impl PipeMcpServer {
             pipeline_id: pipeline.pipeline_id.clone(),
             audit: Vec::new(),
             resource_used: ResourceUsage::default(),
+            checkpoint_outputs: std::collections::HashMap::new(),
         };
 
         let allow_policy = AllowPolicy;

@@ -19,6 +19,10 @@ pub struct ExecutionContext {
     pub pipeline_id: String,
     pub audit: Vec<AuditRecord>,
     pub resource_used: ResourceUsage,
+    /// Step outputs accumulated before an `ApprovalRequired` error.
+    /// Populated by `run()` so that `run_resume()` can continue from the
+    /// failed step without re-executing earlier steps.
+    pub checkpoint_outputs: HashMap<String, Vec<FrameEnvelope>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -118,9 +122,17 @@ pub fn run(
 
     for step in &pipeline.steps {
         let input_frames = resolve_input(step, &previous_output, &step_outputs);
-        let output_frames = execute_step(step, input_frames, registry, executors, policy, ctx)?;
-        previous_output = output_frames.clone();
-        step_outputs.insert(step.step_id.clone(), output_frames);
+        match execute_step(step, input_frames, registry, executors, policy, ctx) {
+            Ok(output_frames) => {
+                previous_output = output_frames.clone();
+                step_outputs.insert(step.step_id.clone(), output_frames);
+            }
+            Err(e) if e.error_kind == ErrorKind::ApprovalRequired => {
+                ctx.checkpoint_outputs = step_outputs;
+                return Err(e);
+            }
+            Err(e) => return Err(e),
+        }
     }
 
     Ok(RunResult {
@@ -209,6 +221,74 @@ fn resource_exceeded(step: &ComposedStep, limit: &str, current: u64) -> Pipeline
             current,
         },
     }
+}
+
+/// Resume a pipeline from a previously failed step.
+///
+/// `previous_step_outputs` must contain the outputs of all steps that
+/// successfully executed before the failure. The function resolves the
+/// input for `resume_from_step_id` from those outputs (or from
+/// `initial_input` if it is the first step) and continues execution.
+///
+/// # Errors
+/// Returns `PipelineError` if the resume step is not found, or if any
+/// subsequent step fails.
+#[allow(clippy::too_many_arguments)]
+pub fn run_resume(
+    pipeline: &ComposedPipeline,
+    initial_input: serde_json::Value,
+    registry: &CommandRegistry,
+    executors: &HashMap<String, Box<dyn CommandExecutor>>,
+    policy: &dyn StepPolicy,
+    ctx: &mut ExecutionContext,
+    resume_from_step_id: &str,
+    previous_step_outputs: &HashMap<String, Vec<FrameEnvelope>>,
+) -> Result<RunResult, PipelineError> {
+    if pipeline.steps.is_empty() {
+        return Err(PipelineError {
+            retryable: false,
+            failed_step_id: String::new(),
+            error_kind: ErrorKind::ComposeFailed,
+        });
+    }
+
+    let resume_idx = pipeline
+        .steps
+        .iter()
+        .position(|s| s.step_id == resume_from_step_id)
+        .ok_or_else(|| PipelineError {
+            retryable: false,
+            failed_step_id: resume_from_step_id.to_string(),
+            error_kind: ErrorKind::ExecutionFailed,
+        })?;
+
+    let mut step_outputs = previous_step_outputs.clone();
+    let mut previous_output = if resume_idx == 0 {
+        vec![FrameEnvelope {
+            seq: 0,
+            step_id: "input".to_string(),
+            frame_type: pipeline.input_type.0,
+            payload: initial_input,
+        }]
+    } else {
+        let prev_step = &pipeline.steps[resume_idx - 1];
+        step_outputs
+            .get(&prev_step.step_id)
+            .cloned()
+            .unwrap_or_default()
+    };
+
+    for step in &pipeline.steps[resume_idx..] {
+        let input_frames = resolve_input(step, &previous_output, &step_outputs);
+        let output_frames = execute_step(step, input_frames, registry, executors, policy, ctx)?;
+        previous_output = output_frames.clone();
+        step_outputs.insert(step.step_id.clone(), output_frames);
+    }
+
+    Ok(RunResult {
+        output: previous_output,
+        audit: ctx.audit.clone(),
+    })
 }
 
 pub(crate) fn now_ms() -> u64 {

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 use seaki_agent::{
     AgentContext, AgentExecutionError, AgentRuntime, AgentRuntimeBuilder, MessageRole,
@@ -12,6 +13,7 @@ use seaki_pipe::run::{
     AdrSummarizeExecutor, CitationResolveExecutor, CommandExecutor, ExecutionContext, SimplePolicy,
     StepPolicy, WikiPatchProposeExecutor, WikiSearchExecutor,
 };
+
 use seaki_policy::{CapabilityStore, PolicyDecision};
 
 fn create_test_skill_registry() -> SkillRegistry {
@@ -235,6 +237,67 @@ impl StepPolicy for RequireApprovalThenDenyPolicy {
         } else {
             PolicyDecision::Deny
         }
+    }
+}
+
+/// Only requires approval for a specific step; allows everything else.
+struct RequireApprovalForStepPolicy {
+    target_step_id: String,
+    count: AtomicUsize,
+}
+
+impl StepPolicy for RequireApprovalForStepPolicy {
+    fn check(&self, step: &ComposedStep, _ctx: &ExecutionContext) -> PolicyDecision {
+        if step.step_id == self.target_step_id {
+            let c = self.count.fetch_add(1, Ordering::SeqCst);
+            if c == 0 {
+                PolicyDecision::RequireApproval
+            } else {
+                PolicyDecision::Allow
+            }
+        } else {
+            PolicyDecision::Allow
+        }
+    }
+}
+
+/// Wraps an executor and counts how many times it is invoked.
+struct CountingExecutor {
+    count: Arc<AtomicUsize>,
+    inner: Box<dyn CommandExecutor>,
+}
+
+impl CommandExecutor for CountingExecutor {
+    fn execute(
+        &self,
+        step: &ComposedStep,
+        input: Vec<seaki_pipe::dry_run::FrameEnvelope>,
+        ctx: &mut ExecutionContext,
+    ) -> Result<Vec<seaki_pipe::dry_run::FrameEnvelope>, seaki_pipe::dry_run::PipelineError> {
+        self.count.fetch_add(1, Ordering::SeqCst);
+        self.inner.execute(step, input, ctx)
+    }
+}
+
+/// Stub executor that simply passes frames through.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PassthroughExecutor;
+
+impl CommandExecutor for PassthroughExecutor {
+    fn execute(
+        &self,
+        step: &ComposedStep,
+        input: Vec<seaki_pipe::dry_run::FrameEnvelope>,
+        _ctx: &mut ExecutionContext,
+    ) -> Result<Vec<seaki_pipe::dry_run::FrameEnvelope>, seaki_pipe::dry_run::PipelineError> {
+        Ok(input
+            .into_iter()
+            .map(|mut f| {
+                f.step_id = step.step_id.clone();
+                f.frame_type = step.output_type.0;
+                f
+            })
+            .collect())
     }
 }
 
@@ -545,6 +608,265 @@ fn agent_response_contains_answer() {
 
     let response = result.unwrap();
     assert!(!response.answer.is_empty());
+}
+
+#[test]
+fn execute_intent_approval_retry_preserves_audit() {
+    let llm = Box::new(MockLlmClient::new());
+    let mut skill_registry = SkillRegistry::new();
+    skill_registry
+        .register(SkillManifest {
+            skill_id: "mixed.pipeline".to_string(),
+            name: "Mixed Pipeline".to_string(),
+            description: "First step allowed, second needs approval".to_string(),
+            trigger_patterns: vec!["mixed".to_string()],
+            required_capabilities: vec![],
+            required_memory_scopes: vec![],
+            required_source_scopes: vec![],
+            pipeline_template: seaki_agent::PipelineTemplate {
+                steps: vec![
+                    TemplateStep {
+                        step_id: "filter".to_string(),
+                        command_id: "filter".to_string(),
+                        args_template: serde_json::json!({"predicate": {}}),
+                        input_binding: "constant".to_string(),
+                    },
+                    TemplateStep {
+                        step_id: "write".to_string(),
+                        command_id: "external.write".to_string(),
+                        args_template: serde_json::json!({}),
+                        input_binding: "previous".to_string(),
+                    },
+                ],
+            },
+            priority: 1,
+            requires_confirmation: false,
+        })
+        .unwrap();
+
+    let mut command_registry = CommandRegistry::new();
+    let passthrough = serde_json::json!({"type": "array"});
+    command_registry
+        .register(seaki_pipe::registry::PipeCommandManifest {
+            command_id: "filter".to_string(),
+            description: "filter".to_string(),
+            input_schema: passthrough.clone(),
+            output_schema: passthrough.clone(),
+            input_frame: (
+                seaki_pipe::ast::FrameType::JsonValue,
+                seaki_pipe::ast::Cardinality::Many,
+            ),
+            output_frame: (
+                seaki_pipe::ast::FrameType::JsonValue,
+                seaki_pipe::ast::Cardinality::Many,
+            ),
+            side_effect_level: seaki_pipe::registry::SideEffectLevel::None,
+            resource_quota: None,
+            schema_hash: seaki_pipe::registry::PipeCommandManifest::compute_schema_hash(
+                &passthrough,
+                &passthrough,
+            ),
+        })
+        .unwrap();
+    command_registry
+        .register(seaki_pipe::registry::PipeCommandManifest {
+            command_id: "external.write".to_string(),
+            description: "external write".to_string(),
+            input_schema: passthrough.clone(),
+            output_schema: passthrough.clone(),
+            input_frame: (
+                seaki_pipe::ast::FrameType::JsonValue,
+                seaki_pipe::ast::Cardinality::Many,
+            ),
+            output_frame: (
+                seaki_pipe::ast::FrameType::JsonValue,
+                seaki_pipe::ast::Cardinality::Many,
+            ),
+            side_effect_level: seaki_pipe::registry::SideEffectLevel::ExternalIrreversible,
+            resource_quota: None,
+            schema_hash: seaki_pipe::registry::PipeCommandManifest::compute_schema_hash(
+                &passthrough,
+                &passthrough,
+            ),
+        })
+        .unwrap();
+
+    let runtime =
+        AgentRuntime::with_components(llm, SkillDispatcher::new(skill_registry), command_registry);
+
+    let mut session = create_test_session();
+    let mut sm = SessionStateMachine::new(session.session_id.clone());
+    let capability_store = create_test_capability_store();
+    let gate = ImmediateApproveGate;
+    let policy = RequireApprovalForStepPolicy {
+        target_step_id: "write".to_string(),
+        count: AtomicUsize::new(0),
+    };
+    let mut executors = HashMap::new();
+    executors.insert(
+        "filter".to_string(),
+        Box::new(seaki_pipe::run::FilterExecutor) as Box<dyn CommandExecutor>,
+    );
+    executors.insert(
+        "external.write".to_string(),
+        Box::new(PassthroughExecutor) as Box<dyn CommandExecutor>,
+    );
+
+    let result = runtime.execute_intent(
+        "mixed pipeline",
+        &mut session,
+        &mut sm,
+        &capability_store,
+        &gate,
+        &policy,
+        &executors,
+    );
+
+    assert!(
+        result.is_ok(),
+        "expected success after approval, got {:?}",
+        result
+    );
+    let response = result.unwrap();
+    assert!(response.approval_required);
+    let audit_step_ids: Vec<_> = response
+        .audit_trail
+        .iter()
+        .map(|a| a.step_id.as_str())
+        .collect();
+    assert!(
+        audit_step_ids.contains(&"filter"),
+        "audit should contain filter step"
+    );
+    assert!(
+        audit_step_ids.contains(&"write"),
+        "audit should contain write step"
+    );
+}
+
+#[test]
+fn execute_intent_approval_retry_does_not_repeat_steps() {
+    let llm = Box::new(MockLlmClient::new());
+    let mut skill_registry = SkillRegistry::new();
+    skill_registry
+        .register(SkillManifest {
+            skill_id: "mixed.pipeline".to_string(),
+            name: "Mixed Pipeline".to_string(),
+            description: "First step allowed, second needs approval".to_string(),
+            trigger_patterns: vec!["mixed".to_string()],
+            required_capabilities: vec![],
+            required_memory_scopes: vec![],
+            required_source_scopes: vec![],
+            pipeline_template: seaki_agent::PipelineTemplate {
+                steps: vec![
+                    TemplateStep {
+                        step_id: "filter".to_string(),
+                        command_id: "filter".to_string(),
+                        args_template: serde_json::json!({"predicate": {}}),
+                        input_binding: "constant".to_string(),
+                    },
+                    TemplateStep {
+                        step_id: "write".to_string(),
+                        command_id: "external.write".to_string(),
+                        args_template: serde_json::json!({}),
+                        input_binding: "previous".to_string(),
+                    },
+                ],
+            },
+            priority: 1,
+            requires_confirmation: false,
+        })
+        .unwrap();
+
+    let mut command_registry = CommandRegistry::new();
+    let passthrough = serde_json::json!({"type": "array"});
+    command_registry
+        .register(seaki_pipe::registry::PipeCommandManifest {
+            command_id: "filter".to_string(),
+            description: "filter".to_string(),
+            input_schema: passthrough.clone(),
+            output_schema: passthrough.clone(),
+            input_frame: (
+                seaki_pipe::ast::FrameType::JsonValue,
+                seaki_pipe::ast::Cardinality::Many,
+            ),
+            output_frame: (
+                seaki_pipe::ast::FrameType::JsonValue,
+                seaki_pipe::ast::Cardinality::Many,
+            ),
+            side_effect_level: seaki_pipe::registry::SideEffectLevel::None,
+            resource_quota: None,
+            schema_hash: seaki_pipe::registry::PipeCommandManifest::compute_schema_hash(
+                &passthrough,
+                &passthrough,
+            ),
+        })
+        .unwrap();
+    command_registry
+        .register(seaki_pipe::registry::PipeCommandManifest {
+            command_id: "external.write".to_string(),
+            description: "external write".to_string(),
+            input_schema: passthrough.clone(),
+            output_schema: passthrough.clone(),
+            input_frame: (
+                seaki_pipe::ast::FrameType::JsonValue,
+                seaki_pipe::ast::Cardinality::Many,
+            ),
+            output_frame: (
+                seaki_pipe::ast::FrameType::JsonValue,
+                seaki_pipe::ast::Cardinality::Many,
+            ),
+            side_effect_level: seaki_pipe::registry::SideEffectLevel::ExternalIrreversible,
+            resource_quota: None,
+            schema_hash: seaki_pipe::registry::PipeCommandManifest::compute_schema_hash(
+                &passthrough,
+                &passthrough,
+            ),
+        })
+        .unwrap();
+
+    let runtime =
+        AgentRuntime::with_components(llm, SkillDispatcher::new(skill_registry), command_registry);
+
+    let mut session = create_test_session();
+    let mut sm = SessionStateMachine::new(session.session_id.clone());
+    let capability_store = create_test_capability_store();
+    let gate = ImmediateApproveGate;
+    let policy = RequireApprovalForStepPolicy {
+        target_step_id: "write".to_string(),
+        count: AtomicUsize::new(0),
+    };
+
+    let filter_count = Arc::new(AtomicUsize::new(0));
+    let mut executors = HashMap::new();
+    executors.insert(
+        "filter".to_string(),
+        Box::new(CountingExecutor {
+            count: Arc::clone(&filter_count),
+            inner: Box::new(seaki_pipe::run::FilterExecutor),
+        }) as Box<dyn CommandExecutor>,
+    );
+    executors.insert(
+        "external.write".to_string(),
+        Box::new(PassthroughExecutor) as Box<dyn CommandExecutor>,
+    );
+
+    let result = runtime.execute_intent(
+        "mixed pipeline",
+        &mut session,
+        &mut sm,
+        &capability_store,
+        &gate,
+        &policy,
+        &executors,
+    );
+
+    assert!(result.is_ok(), "expected success, got {:?}", result);
+    assert_eq!(
+        filter_count.load(Ordering::SeqCst),
+        1,
+        "filter step should not be re-executed on retry"
+    );
 }
 
 #[test]
