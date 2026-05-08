@@ -363,3 +363,29 @@ fn dispatch_injected_context_session_summary_from_user_messages() {
         "Hello world How are you"
     );
 }
+
+#[test]
+fn dispatch_session_summary_utf8_boundary() {
+    let registry = test_skill_registry();
+    let dispatcher = SkillDispatcher::new(registry);
+
+    // Build a user message with many emoji so that byte length >> char count.
+    let emoji_block = "🎉".repeat(250);
+    let messages = vec![SessionMessage {
+        seq: 1,
+        role: MessageRole::User,
+        content: emoji_block.clone(),
+        timestamp_ms: 0,
+        metadata: serde_json::Value::Null,
+    }];
+    let session = session_with_messages(messages);
+    let capability_store = CapabilityStore::new();
+    let command_registry = CommandRegistry::builtin();
+
+    let result = dispatcher
+        .dispatch("search", &session, &capability_store, &command_registry)
+        .unwrap();
+
+    // Should truncate to 200 chars without panicking on UTF-8 boundaries.
+    assert_eq!(result.injected_context.session_summary.chars().count(), 200);
+}

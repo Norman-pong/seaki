@@ -135,3 +135,19 @@ fn compaction_summary_truncation() {
         "System message content should reflect truncation"
     );
 }
+
+#[test]
+fn compaction_summary_utf8_boundary() {
+    let mut session = make_session(30);
+    // Overwrite messages with emoji so that byte length >> char count.
+    for msg in session.messages.iter_mut() {
+        msg.content = "🚀".repeat(30);
+    }
+
+    let compactor = SessionCompactor::new();
+    let summary = compactor.compact(&mut session).unwrap();
+
+    // Should truncate to 500 chars without panicking on UTF-8 boundaries.
+    assert_eq!(summary.summary_text.chars().count(), 500);
+    assert_eq!(session.messages[0].role, MessageRole::System);
+}

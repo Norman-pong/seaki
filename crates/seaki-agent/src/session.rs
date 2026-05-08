@@ -253,8 +253,8 @@ impl SessionCompactor {
             summary_parts.push(format!("{:?}:{}", msg.role, msg.content));
         }
         let full_summary = summary_parts.join("\n");
-        let summary_text = if full_summary.len() > 500 {
-            full_summary[..500].to_string()
+        let summary_text = if full_summary.chars().count() > 500 {
+            crate::safe_truncate(&full_summary, 500)
         } else {
             full_summary
         };

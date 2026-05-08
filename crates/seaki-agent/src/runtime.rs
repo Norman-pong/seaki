@@ -219,23 +219,12 @@ impl AgentRuntime {
                             resource_used: ResourceUsage::default(),
                         };
 
-                        struct AllowPolicy;
-                        impl StepPolicy for AllowPolicy {
-                            fn check(
-                                &self,
-                                _step: &seaki_pipe::ast::ComposedStep,
-                                _ctx: &ExecutionContext,
-                            ) -> seaki_policy::PolicyDecision {
-                                seaki_policy::PolicyDecision::Allow
-                            }
-                        }
-
                         let retry_result = run(
                             &composed,
                             initial_input,
                             &self.command_registry,
                             executors,
-                            &AllowPolicy,
+                            policy,
                             &mut retry_ctx,
                         );
 

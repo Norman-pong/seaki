@@ -1,16 +1,18 @@
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use seaki_agent::{
     AgentContext, AgentExecutionError, AgentRuntime, AgentRuntimeBuilder, MessageRole,
     MockLlmClient, Session, SessionMessage, SessionState, SessionStateMachine, SkillDispatcher,
     SkillManifest, SkillRegistry, TemplateStep,
 };
+use seaki_pipe::ast::ComposedStep;
 use seaki_pipe::registry::CommandRegistry;
 use seaki_pipe::run::{
-    AdrSummarizeExecutor, CitationResolveExecutor, CommandExecutor, SimplePolicy,
-    WikiPatchProposeExecutor, WikiSearchExecutor,
+    AdrSummarizeExecutor, CitationResolveExecutor, CommandExecutor, ExecutionContext, SimplePolicy,
+    StepPolicy, WikiPatchProposeExecutor, WikiSearchExecutor,
 };
-use seaki_policy::CapabilityStore;
+use seaki_policy::{CapabilityStore, PolicyDecision};
 
 fn create_test_skill_registry() -> SkillRegistry {
     let mut registry = SkillRegistry::new();
@@ -206,6 +208,36 @@ impl seaki_pipe::approval_gate::ApprovalGate for ImmediateDenyGate {
     }
 }
 
+struct RequireApprovalThenAllowPolicy {
+    count: AtomicUsize,
+}
+
+impl StepPolicy for RequireApprovalThenAllowPolicy {
+    fn check(&self, _step: &ComposedStep, _ctx: &ExecutionContext) -> PolicyDecision {
+        let c = self.count.fetch_add(1, Ordering::SeqCst);
+        if c == 0 {
+            PolicyDecision::RequireApproval
+        } else {
+            PolicyDecision::Allow
+        }
+    }
+}
+
+struct RequireApprovalThenDenyPolicy {
+    count: AtomicUsize,
+}
+
+impl StepPolicy for RequireApprovalThenDenyPolicy {
+    fn check(&self, _step: &ComposedStep, _ctx: &ExecutionContext) -> PolicyDecision {
+        let c = self.count.fetch_add(1, Ordering::SeqCst);
+        if c == 0 {
+            PolicyDecision::RequireApproval
+        } else {
+            PolicyDecision::Deny
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -335,7 +367,9 @@ fn execute_intent_approval_required_then_approved() {
     let mut sm = SessionStateMachine::new(session.session_id.clone());
     let capability_store = create_test_capability_store();
     let gate = ImmediateApproveGate;
-    let policy = SimplePolicy;
+    let policy = RequireApprovalThenAllowPolicy {
+        count: AtomicUsize::new(0),
+    };
     let mut executors = HashMap::new();
     executors.insert(
         "wiki.patch.propose".to_string(),
@@ -391,6 +425,44 @@ fn execute_intent_approval_denied() {
     );
 
     assert!(matches!(result, Err(AgentExecutionError::ApprovalDenied)));
+}
+
+#[test]
+fn execute_intent_approval_then_policy_denies() {
+    let llm = Box::new(MockLlmClient::new());
+    let skill_registry = create_patch_skill_registry();
+    let command_registry = create_test_command_registry();
+    let runtime =
+        AgentRuntime::with_components(llm, SkillDispatcher::new(skill_registry), command_registry);
+
+    let mut session = create_test_session();
+    let mut sm = SessionStateMachine::new(session.session_id.clone());
+    let capability_store = create_test_capability_store();
+    let gate = ImmediateApproveGate;
+    let policy = RequireApprovalThenDenyPolicy {
+        count: AtomicUsize::new(0),
+    };
+    let mut executors = HashMap::new();
+    executors.insert(
+        "wiki.patch.propose".to_string(),
+        Box::new(WikiPatchProposeExecutor) as Box<dyn CommandExecutor>,
+    );
+
+    let result = runtime.execute_intent(
+        "patch the wiki",
+        &mut session,
+        &mut sm,
+        &capability_store,
+        &gate,
+        &policy,
+        &executors,
+    );
+
+    assert!(
+        matches!(result, Err(AgentExecutionError::ExecutionFailed(_))),
+        "expected execution failed due to policy deny after approval, got {:?}",
+        result
+    );
 }
 
 #[test]

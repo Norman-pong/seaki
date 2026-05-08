@@ -177,8 +177,8 @@ fn build_injected_context(session: &Session) -> InjectedContext {
         .collect::<Vec<_>>()
         .join(" ");
 
-    let session_summary = if summary_raw.len() > 200 {
-        summary_raw[..200].to_string()
+    let session_summary = if summary_raw.chars().count() > 200 {
+        crate::safe_truncate(&summary_raw, 200)
     } else {
         summary_raw
     };
