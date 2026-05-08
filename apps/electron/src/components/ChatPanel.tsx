@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils";
 import type { ChatSession, ChatMessage, ChatCard, SkillType } from "@/models/chatModel";
 import { SKILLS } from "@/models/chatModel";
 import { PipelinePanel } from "./PipelinePanel";
-import { createMockPipelineRun } from "@/models/pipelineModel";
+import type { PipelineRun } from "@/models/pipelineModel";
 
 const SKILL_ICON: Record<SkillType, React.ReactNode> = {
   "wiki-search": <Search size={12} />,
@@ -51,14 +51,19 @@ interface ChatPanelProps {
   readonly session: ChatSession;
   readonly onSendMessage?: (sessionId: string, content: string, skill?: string) => void;
   readonly onOpenReviewTab?: () => void;
+  readonly onApprovalAction?: (sessionId: string, messageId: string, action: "approve" | "reject") => void;
 }
 
 const ChatCardItem = React.memo(function ChatCardItem({
   card,
   onOpenReviewTab,
+  onApprove,
+  onReject,
 }: {
   readonly card: ChatCard;
   readonly onOpenReviewTab?: (() => void) | undefined;
+  readonly onApprove?: (() => void) | undefined;
+  readonly onReject?: (() => void) | undefined;
 }) {
   const isDone = card.status === "committed" || card.status === "ready";
   const isApproval = card.type === "approval";
@@ -97,6 +102,7 @@ const ChatCardItem = React.memo(function ChatCardItem({
                 variant="secondary"
                 size="sm"
                 className="h-7 text-xs"
+                onClick={onApprove}
                 data-testid="approval-approve-btn"
               >
                 <ThumbsUp size={12} className="mr-1" />
@@ -106,6 +112,7 @@ const ChatCardItem = React.memo(function ChatCardItem({
                 variant="destructive"
                 size="sm"
                 className="h-7 text-xs"
+                onClick={onReject}
                 data-testid="approval-reject-btn"
               >
                 <XCircle size={12} className="mr-1" />
@@ -132,9 +139,11 @@ const ChatCardItem = React.memo(function ChatCardItem({
 const ChatMessageItem = React.memo(function ChatMessageItem({
   message,
   onOpenReviewTab,
+  onApprovalAction,
 }: {
   readonly message: ChatMessage;
   readonly onOpenReviewTab?: (() => void) | undefined;
+  readonly onApprovalAction?: ((messageId: string, action: "approve" | "reject") => void) | undefined;
 }) {
   const isUser = message.role === "user";
 
@@ -171,6 +180,8 @@ const ChatMessageItem = React.memo(function ChatMessageItem({
                   key={`${message.id}_card_${card.type}_${index}`}
                   card={card}
                   onOpenReviewTab={onOpenReviewTab}
+                  onApprove={card.type === "approval" ? () => onApprovalAction?.(message.id, "approve") : undefined}
+                  onReject={card.type === "approval" ? () => onApprovalAction?.(message.id, "reject") : undefined}
                 />
               ))}
             </div>
@@ -192,11 +203,20 @@ const ChatMessageItem = React.memo(function ChatMessageItem({
   );
 });
 
-export function ChatPanel({ session, onSendMessage, onOpenReviewTab }: ChatPanelProps) {
+export function ChatPanel({ session, onSendMessage, onOpenReviewTab, onApprovalAction }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [selectedSkill, setSelectedSkill] = useState<SkillType | null>(null);
   const [showPipeline, setShowPipeline] = useState(false);
+  const [devMockPipeline, setDevMockPipeline] = useState<PipelineRun | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      import("@/__mocks__/pipelineModel").then((mod) => {
+        setDevMockPipeline(mod.createMockPipelineRun());
+      });
+    }
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -256,9 +276,9 @@ export function ChatPanel({ session, onSendMessage, onOpenReviewTab }: ChatPanel
         </div>
       </div>
 
-      {showPipeline && (
+      {showPipeline && import.meta.env.DEV && devMockPipeline && (
         <PipelinePanel
-          pipeline={createMockPipelineRun()}
+          pipeline={devMockPipeline}
           onTriggerDryRun={() => {
             /* TODO: wire to backend */
           }}
@@ -273,6 +293,12 @@ export function ChatPanel({ session, onSendMessage, onOpenReviewTab }: ChatPanel
           }}
         />
       )}
+      {showPipeline && !import.meta.env.DEV && (
+        <div className="flex items-center justify-center gap-2 border-b bg-background px-5 py-4 text-sm text-muted-foreground" data-testid="pipeline-panel-placeholder">
+          <Zap size={14} />
+          Pipeline 数据需要在生产环境中接入后端
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4" aria-live="polite" aria-atomic="false">
         {session.messages.map((message) => (
@@ -280,6 +306,7 @@ export function ChatPanel({ session, onSendMessage, onOpenReviewTab }: ChatPanel
             key={message.id}
             message={message}
             onOpenReviewTab={onOpenReviewTab}
+            onApprovalAction={onApprovalAction ? (messageId, action) => onApprovalAction(session.id, messageId, action) : undefined}
           />
         ))}
         <div ref={messagesEndRef} />

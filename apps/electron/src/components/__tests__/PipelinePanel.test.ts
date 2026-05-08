@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createMockPipelineRun } from "../../models/pipelineModel";
+import { createMockPipelineRun } from "../../__mocks__/pipelineModel";
 
 describe("Pipeline model and components", () => {
   it("renders_pipeline_steps", () => {

@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { useState } from "react";
 import "@testing-library/jest-dom/vitest";
 
 import { ChatPanel } from "../ChatPanel";
-import type { ChatSession } from "@/models/chatModel";
+import type { ChatSession, ChatMessage } from "@/models/chatModel";
 
 const mockSession: ChatSession = {
   id: "session_test",
@@ -48,6 +49,30 @@ const mockSessionWithPipeline: ChatSession = {
     },
   ],
 };
+
+function ChatPanelWithApprovalState({ initialSession }: { readonly initialSession: ChatSession }) {
+  const [session, setSession] = useState(initialSession);
+
+  function handleApprovalAction(_sessionId: string, messageId: string, action: "approve" | "reject") {
+    setSession((prev) => ({
+      ...prev,
+      messages: prev.messages.map((msg): ChatMessage => {
+        if (msg.id !== messageId) return msg;
+        const updatedCards = msg.cards?.map((card) =>
+          card.type === "approval"
+            ? { ...card, status: action === "approve" ? "approved" : "rejected" }
+            : card,
+        );
+        return {
+          ...msg,
+          ...(updatedCards !== undefined ? { cards: updatedCards } : {}),
+        };
+      }),
+    }));
+  }
+
+  return <ChatPanel session={session} onApprovalAction={handleApprovalAction} />;
+}
 
 describe("ChatPanel", () => {
   it("selects_skill_on_click", () => {
@@ -139,5 +164,43 @@ describe("ChatPanel", () => {
     fireEvent.click(screen.getByTestId("skill-btn-pipeline-run"));
     const input = screen.getByTestId("chat-input");
     expect(input).toHaveAttribute("placeholder", "输入 pipeline 意图...");
+  });
+
+  it("updates_card_status_to_approved_when_approve_clicked", () => {
+    render(<ChatPanelWithApprovalState initialSession={mockSession} />);
+
+    expect(screen.getByText("requires_approval")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("approval-approve-btn"));
+
+    expect(screen.getByText("approved")).toBeInTheDocument();
+    expect(screen.queryByText("requires_approval")).not.toBeInTheDocument();
+  });
+
+  it("updates_card_status_to_rejected_when_reject_clicked", () => {
+    render(<ChatPanelWithApprovalState initialSession={mockSession} />);
+
+    expect(screen.getByText("requires_approval")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("approval-reject-btn"));
+
+    expect(screen.getByText("rejected")).toBeInTheDocument();
+    expect(screen.queryByText("requires_approval")).not.toBeInTheDocument();
+  });
+
+  it("calls_onApprovalAction_with_correct_arguments", () => {
+    const onApprovalAction = vi.fn<() => void>();
+    render(
+      <ChatPanel
+        session={mockSession}
+        onApprovalAction={onApprovalAction}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("approval-approve-btn"));
+    expect(onApprovalAction).toHaveBeenCalledWith("session_test", "msg_1", "approve");
+
+    fireEvent.click(screen.getByTestId("approval-reject-btn"));
+    expect(onApprovalAction).toHaveBeenCalledWith("session_test", "msg_1", "reject");
   });
 });
