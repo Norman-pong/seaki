@@ -1,0 +1,18 @@
+id = "channel.feishu"
+name = "Feishu Channel"
+version = "0.1.0"
+runtime = "native"
+entry = "seaki_channel::feishu"
+
+[capabilities]
+receive_message = true
+send_message = true
+send_file = true
+thread_reply = true
+drive_comment = false
+interactive_card = false
+
+[permissions]
+network = ["open.feishu.cn", "open.larksuite.com"]
+local_files = []
+brokered_secret_scopes = ["feishu.app:message.send", "feishu.drive:file.read"]

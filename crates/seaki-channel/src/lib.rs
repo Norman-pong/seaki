@@ -1,5 +1,6 @@
 pub mod broker;
 pub mod fake_provider;
+pub mod feishu;
 pub mod grant;
 pub mod ingress;
 pub mod outbox;
