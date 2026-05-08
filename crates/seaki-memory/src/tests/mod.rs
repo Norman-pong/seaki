@@ -1,7 +1,10 @@
 mod conflict_detector;
+mod frozen_snapshot;
 mod memory_collector;
 mod memory_item;
 mod memory_store;
 mod note;
+mod propose_pipeline;
 mod redaction;
+mod session_memory;
 mod session_search;
