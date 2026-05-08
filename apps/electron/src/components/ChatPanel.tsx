@@ -11,13 +11,31 @@ import {
   Sparkles,
   Paperclip,
   SlidersHorizontal,
+  Zap,
+  Brain,
+  FilePlus,
+  MessageCircle,
+  GitCompare,
+  ThumbsUp,
+  XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import type { ChatSession, ChatMessage, ChatCard } from "@/models/chatModel";
+import type { ChatSession, ChatMessage, ChatCard, SkillType } from "@/models/chatModel";
+import { SKILLS } from "@/models/chatModel";
+import { PipelinePanel } from "./PipelinePanel";
+import { createMockPipelineRun } from "@/models/pipelineModel";
+
+const SKILL_ICON: Record<SkillType, React.ReactNode> = {
+  "wiki-search": <Search size={12} />,
+  "source-ingest": <FilePlus size={12} />,
+  "pipeline-run": <Zap size={12} />,
+  "memory-review": <Brain size={12} />,
+  "channel-send": <MessageCircle size={12} />,
+};
 
 const ICON_MAP: Record<ChatCard["type"], React.ReactNode> = {
   wiki: <FileText size={14} />,
@@ -25,14 +43,25 @@ const ICON_MAP: Record<ChatCard["type"], React.ReactNode> = {
   approval: <AlertCircle size={14} />,
   citation: <Link2 size={14} />,
   link: <Link2 size={14} />,
+  pipeline: <Zap size={14} />,
+  skill: <Sparkles size={14} />,
 };
 
 interface ChatPanelProps {
   readonly session: ChatSession;
+  readonly onSendMessage?: (sessionId: string, content: string, skill?: string) => void;
+  readonly onOpenReviewTab?: () => void;
 }
 
-const ChatCardItem = React.memo(function ChatCardItem({ card }: { readonly card: ChatCard }) {
+const ChatCardItem = React.memo(function ChatCardItem({
+  card,
+  onOpenReviewTab,
+}: {
+  readonly card: ChatCard;
+  readonly onOpenReviewTab?: (() => void) | undefined;
+}) {
   const isDone = card.status === "committed" || card.status === "ready";
+  const isApproval = card.type === "approval";
 
   return (
     <Card size="sm" className="mt-2 chat-card shadow-none">
@@ -62,13 +91,51 @@ const ChatCardItem = React.memo(function ChatCardItem({ card }: { readonly card:
               ))}
             </div>
           )}
+          {isApproval && (
+            <div className="flex items-center gap-2 mt-3">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-7 text-xs"
+                data-testid="approval-approve-btn"
+              >
+                <ThumbsUp size={12} className="mr-1" />
+                批准
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="h-7 text-xs"
+                data-testid="approval-reject-btn"
+              >
+                <XCircle size={12} className="mr-1" />
+                拒绝
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={onOpenReviewTab}
+                data-testid="approval-view-diff-btn"
+              >
+                <GitCompare size={12} className="mr-1" />
+                查看 diff
+              </Button>
+            </div>
+          )}
         </CardContent>
       )}
     </Card>
   );
 });
 
-const ChatMessageItem = React.memo(function ChatMessageItem({ message }: { readonly message: ChatMessage }) {
+const ChatMessageItem = React.memo(function ChatMessageItem({
+  message,
+  onOpenReviewTab,
+}: {
+  readonly message: ChatMessage;
+  readonly onOpenReviewTab?: (() => void) | undefined;
+}) {
   const isUser = message.role === "user";
 
   return (
@@ -100,7 +167,11 @@ const ChatMessageItem = React.memo(function ChatMessageItem({ message }: { reado
           {message.cards && message.cards.length > 0 && (
             <div className="flex flex-col gap-2 mt-3">
               {message.cards.map((card, index) => (
-                <ChatCardItem key={`${message.id}_card_${card.type}_${index}`} card={card} />
+                <ChatCardItem
+                  key={`${message.id}_card_${card.type}_${index}`}
+                  card={card}
+                  onOpenReviewTab={onOpenReviewTab}
+                />
               ))}
             </div>
           )}
@@ -121,13 +192,38 @@ const ChatMessageItem = React.memo(function ChatMessageItem({ message }: { reado
   );
 });
 
-export function ChatPanel({ session }: ChatPanelProps) {
+export function ChatPanel({ session, onSendMessage, onOpenReviewTab }: ChatPanelProps) {
   const [input, setInput] = useState("");
+  const [selectedSkill, setSelectedSkill] = useState<SkillType | null>(null);
+  const [showPipeline, setShowPipeline] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [session.messages]);
+
+  function handleSend() {
+    if (!input.trim()) return;
+    if (onSendMessage) {
+      onSendMessage(session.id, input, selectedSkill ?? undefined);
+    }
+    setInput("");
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  }
+
+  function toggleSkill(skillId: SkillType) {
+    setSelectedSkill((prev) => (prev === skillId ? null : skillId));
+  }
+
+  const placeholder = selectedSkill === "pipeline-run"
+    ? "输入 pipeline 意图..."
+    : "输入消息...";
 
   return (
     <section className="flex flex-col h-full bg-background" aria-label="chat flow">
@@ -147,22 +243,83 @@ export function ChatPanel({ session }: ChatPanelProps) {
           <span>context 29%</span>
           <span>citations 2</span>
           <span>risk low</span>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 border border-border rounded-md bg-card px-2 py-0.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted transition-colors"
+            onClick={() => setShowPipeline((prev) => !prev)}
+            aria-expanded={showPipeline}
+            aria-label="切换 Pipeline 面板"
+          >
+            <Zap size={11} />
+            Pipeline
+          </button>
         </div>
       </div>
 
+      {showPipeline && (
+        <PipelinePanel
+          pipeline={createMockPipelineRun()}
+          onTriggerDryRun={() => {
+            /* TODO: wire to backend */
+          }}
+          onTriggerRun={() => {
+            /* TODO: wire to backend */
+          }}
+          onApprove={() => {
+            /* TODO: wire to backend */
+          }}
+          onCancel={() => {
+            /* TODO: wire to backend */
+          }}
+        />
+      )}
+
       <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4" aria-live="polite" aria-atomic="false">
         {session.messages.map((message) => (
-          <ChatMessageItem key={message.id} message={message} />
+          <ChatMessageItem
+            key={message.id}
+            message={message}
+            onOpenReviewTab={onOpenReviewTab}
+          />
         ))}
         <div ref={messagesEndRef} />
       </div>
 
       <div className="chat-composer">
         <div className="composer-shell">
+          {/* Skill selector */}
+          <div className="flex items-center gap-1.5 px-3 py-2 border-b overflow-x-auto">
+            {SKILLS.map((skill) => {
+              const isSelected = selectedSkill === skill.id;
+              return (
+                <button
+                  key={skill.id}
+                  type="button"
+                  onClick={() => toggleSkill(skill.id)}
+                  data-testid={`skill-btn-${skill.id}`}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors border",
+                    isSelected
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background text-muted-foreground border-border hover:bg-muted"
+                  )}
+                >
+                  {SKILL_ICON[skill.id]}
+                  <span>{skill.name}</span>
+                </button>
+              );
+            })}
+          </div>
+
           <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Sparkles size={13} />
               <span>agent draft</span>
+              {selectedSkill && (
+                <Badge variant="outline" className="text-[10px] h-5 ml-1">
+                  @{selectedSkill}
+                </Badge>
+              )}
             </div>
             <div className="flex items-center gap-1">
               <Button variant="ghost" size="icon" className="size-7 text-muted-foreground" aria-label="attach source">
@@ -176,23 +333,20 @@ export function ChatPanel({ session }: ChatPanelProps) {
           <div className="flex items-end gap-2.5 px-3 py-2.5">
             <Textarea
               className="chat-textarea min-h-12 max-h-[120px] flex-1 resize-none border-0 bg-transparent px-0 py-0 text-sm leading-relaxed shadow-none outline-none focus-visible:ring-0"
-              placeholder="输入消息..."
+              placeholder={placeholder}
               rows={2}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  setInput("");
-                }
-              }}
+              onKeyDown={handleKeyDown}
+              data-testid="chat-input"
             />
             <Button
               size="icon"
               type="button"
               className="size-8 flex-shrink-0 rounded-lg"
-              onClick={() => setInput("")}
+              onClick={handleSend}
               aria-label="send"
+              data-testid="chat-send-btn"
             >
               <Send data-icon="icon" />
             </Button>

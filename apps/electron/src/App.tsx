@@ -10,7 +10,12 @@ import type { CommandPaletteAction } from "@/components/CommandPalette";
 
 import { createChatSessions, createInitialSession } from "@/models/chatModel";
 import { createWikiTree } from "@/models/wikiTreeModel";
-import type { ChatSession } from "@/models/chatModel";
+import type { ChatSession, ChatMessage } from "@/models/chatModel";
+import {
+  createMockMemoryCards,
+  createMockChannels,
+  createMockChannelEvents,
+} from "@/models/memoryModel";
 
 import {
   createElectronAppModel,
@@ -29,6 +34,9 @@ export function App() {
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [rightCollapsed, setRightCollapsed] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [memoryCards] = useState(() => createMockMemoryCards());
+  const [channels] = useState(() => createMockChannels());
+  const [channelEvents] = useState(() => createMockChannelEvents());
   const leftPanelRef = usePanelRef();
   const rightPanelRef = usePanelRef();
 
@@ -96,6 +104,26 @@ export function App() {
     if (activeSessionId === sessionId) {
       setActiveSessionId(next[0]!.id);
     }
+  }
+
+  function handleSendMessage(sessionId: string, content: string, skill?: string) {
+    setSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== sessionId) return s;
+        const newMessage: ChatMessage = {
+          id: `msg_${Date.now()}`,
+          role: "user",
+          content: skill ? `[@${skill}] ${content}` : content,
+          timestamp: new Date().toISOString(),
+        };
+        return { ...s, messages: [...s.messages, newMessage] };
+      }),
+    );
+  }
+
+  function handleOpenReviewTab() {
+    setRightCollapsed(false);
+    rightPanelRef.current?.resize("32%");
   }
 
   function toggleLeftPanel() {
@@ -166,7 +194,13 @@ export function App() {
 
           {/* Center: Chat Panel */}
           <Panel defaultSize="50%" minSize="30%" className="app-center-panel">
-            {activeSession ? <ChatPanel session={activeSession} /> : null}
+            {activeSession ? (
+              <ChatPanel
+                session={activeSession}
+                onSendMessage={handleSendMessage}
+                onOpenReviewTab={handleOpenReviewTab}
+              />
+            ) : null}
           </Panel>
 
           <Separator className="app-resize-handle" />
@@ -187,6 +221,11 @@ export function App() {
               approval={approval}
               onApprovalChange={setApproval}
               isCollapsed={rightCollapsed}
+              memoryCards={memoryCards}
+              onGradeCard={() => {/* TODO: wire to backend */}}
+              channels={channels}
+              channelEvents={channelEvents}
+              onToggleChannel={() => {/* TODO: wire to backend */}}
             />
           </Panel>
         </Group>

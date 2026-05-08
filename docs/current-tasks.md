@@ -5,45 +5,73 @@
 ## 项目阶段
 
 - **M0（本机纵切）**：✅ 已全部交付（4/28 ~ 4/29）
-- **M1（Pipeline / Memory / Channel）**：✅ 已全部交付（4/29）
+- **M1（Pipeline / Memory / Channel 骨架）**：✅ 已全部交付（4/29）
 - **M1 完成后前端优化迭代**：✅ 已完成（4/30 ~ 5/2）
+- **M2（Pipeline / Agent / Channel / Memory 纵切）**：✅ 已全部交付（5/3 ~ 5/6）
 
-## 最近完成的迭代（M1 后前端优化）
+## M2 交付摘要
 
-### 核心变更
-- 13-panel grid → `react-resizable-panels` 三列可调整布局
-- 自定义 BEM CSS → Tailwind + shadcn/ui（button/badge/card/textarea/tabs/separator）
-- 新增组件：`TitleBar`、`SessionSidebar`、`ChatPanel`、`WikiSidebar`、`CommandPalette`
-- 面板折叠/展开（`usePanelRef` + CSS transition 抽屉动画）
-- Codex 式交互收敛（中置 CommandPalette，`Ctrl/Cmd+K`，降低边框存在感）
+### Backend（17/17 完成）
 
-### 可访问性修复
-- `focus-visible:opacity-100`（删除按钮键盘可见）
-- `aria-live="polite"` + `aria-label`（聊天区）
-- `aria-expanded` + `aria-controls`（Approval 折叠按钮）
-- shadcn/ui Tabs 替换自研 tab（完整 ARIA）
+| 模块 | 任务 | 状态 |
+|------|------|------|
+| Pipeline P01~P05 | 意图编译、类型检查、真实执行、DAG 控制流、Approval Gate | ✅ |
+| Agent A01~A04 | LLM 调用、Session 管理、Skills 调度、MCP 双向适配 | ✅ |
+| Channel C01~C05 | WASM 插件、Ingress、Quarantine、Outbox、飞书插件 | ✅ |
+| Memory M01~M04 | 自动收集、Frozen Snapshot、遗忘曲线、卡片生成与聚类 | ✅ |
 
-### 性能优化
-- `ChatCardItem` / `ChatMessageItem` 包裹 `React.memo`
-- `useState` 惰性初始化 `() => createChatSessions()`
-- `ICON_MAP` 提升到模块顶层
+### Frontend（3/3 完成）
 
-### 代码清理
-- 移除 `ChatSession.active` 冗余派生状态
-- `TreeNodeItem` `expanded` 同步 `node.expanded` prop
-- 滚动条样式包裹 `@media (hover: hover)`
-- `App.tsx` 删除无意义 `setSessions` 浅拷贝
+| 任务 | 状态 |
+|------|------|
+| F01 Pipeline Designer UI（步骤列表、dry-run 预览、事件流） | ✅ |
+| F02 Agent Chat + Memory Review + Channel 面板 | ✅ |
+| F03 E2E 验收 + M2 操作手册 | ✅ |
 
-### 提交记录（按时间顺序）
+### 质量门禁
+
+| 检查项 | 状态 |
+|--------|------|
+| `cargo fmt --check` | ✅ |
+| `cargo clippy --workspace --tests -- -D warnings` | ✅ |
+| `cargo test --workspace` | ✅ 551+ tests, 44 suites |
+| `pnpm typecheck` | ✅ |
+| `pnpm lint` | ✅ 0 warnings |
+| `pnpm test` | ✅ 62 tests |
+| `pnpm dto:check` | ✅ |
+
+## 最近完成的迭代（M2 前端配套）
+
+### F01 Pipeline Designer UI
+- 新增 `PipelinePanel` / `PipelineStepCard` / `PipelineEventStream`
+- ChatPanel header 集成 Pipeline 按钮（Zap 图标）
+- Dry-run 预览区：输入摘要、预估成本、所需权限
+- 执行状态监视：JSONL 终端风格事件流，`aria-live="polite"`
+
+### F02 Agent 会话与 Memory 界面
+- ChatPanel 增强：Skill 选择器（5 个 skill badge）、消息实际发送、Approval 交互按钮
+- WikiSidebar 新增 `memory` 和 `channel` tab
+- `MemoryReviewPanel`：到期卡片、显示答案、Again/Hard/Good/Easy Grading
+- `ChannelPanel`：频道列表（feishu/slack/wecom）、状态 badge、事件日志
+
+### F03 E2E 验收
+- 前端组件测试 62 个用例全部通过
+- M2 操作手册：`docs/plans/m2-operation-manual.md`
+- Happy Path 与 Reject Path 回归测试清单
+
+## 提交记录（按时间顺序，M2 阶段）
+
 ```
-d3f6573  收敛桌面工作台到 Codex 式交互
-da38ae8  修复审核发现的代码异味与文档滞后（当前 HEAD）
-dffbaff  修正阶段标记 — M1 完成后迭代，非 M0-09
-21e276f  移除 ChatSession.active 冗余派生状态
-89b5fb7  TreeNode 状态同步、滚动条媒体查询、消息列表 memo
-90c975e  三列可调整布局重构与可访问性修复
-e78ad72  参照 AI 工作台设计图升级视觉与交互细节
-1a8f30a  将 MVP 网格改造为 Trae Solo 风格的三栏 AI Wiki 工作站
+69146b9  对齐飞书 Open Platform API 的事件格式、加密与签名验证语义
+b3e2a9a  实现卡片生成与 Topic Clustering，完成 M2-M04 交付
+f74c58c  实现遗忘曲线与复习调度，完成 M2-M03 交付
+2f52b50  实现 Memory Frozen Snapshot 与写入管道，完成 M2-M02 交付
+830e1c4  实现飞书协议适配器以支持消息收发、附件与线程回复
+223b075  实现 Outbox 调度器与真实 Provider 驱动，完成 M2-C04 交付
+fb8eaa0  实现自动 Memory 收集基础设施，完成 M2-M01 交付
+e7e70d9  实现远程附件导入的 Quarantine 管道与资源授权扩展，完成 M2-C03 交付
+1e6b591  实现 Channel Bridge Ingress 归一化与身份映射，完成 M2-C02 交付
+d0ab784  实现 Channel Bridge WASM 插件运行时与 Secret Broker，完成 M2-C01 交付
 ```
 
 ## 质量门禁状态
@@ -51,49 +79,39 @@ e78ad72  参照 AI 工作台设计图升级视觉与交互细节
 | 检查项 | 状态 |
 |--------|------|
 | `pnpm build`（Vite 客户端 + Electron） | ✅ |
-| `pnpm e2e`（Playwright） | ✅ 15 passed |
-| `cargo test --workspace` | ✅ 191 passed |
+| `cargo test --workspace` | ✅ 551+ passed |
 | `pnpm dto:check` | ✅ |
 | `oxlint src/` | ✅ 0 warnings |
-
-## M2 阶段计划（已制定，Pipeline + Agent 优先）
-
-详见 [`docs/plans/m2-task-plan.md`](plans/m2-task-plan.md)。
-
-**执行策略**：Pipeline + Agent 优先，Channel Bridge 次之，Memory 智能化最后。
-
-| 阶段 | 任务范围 | 状态 |
-|------|----------|------|
-| 阶段一 M2-P | Pipeline Designer + Pipe Runtime（真实执行） | 🔄 待启动（M2-P01） |
-| 阶段二 M2-A | Agent Runtime + MCP 适配 | ⏳ 等待 P 阶段完成 |
-| 阶段三 M2-C | Channel Bridge 真实化 + 飞书插件 | ⏳ 等待 A 阶段完成 |
-| 阶段四 M2-M | 自动 Memory + Review Learning | ⏳ 等待 C 阶段完成 |
-| 阶段五 M2-F | 前端配套 + E2E 验收 | ⏳ 等待后端完成 |
+| `pnpm typecheck` | ✅ |
+| `pnpm test` | ✅ 62 passed |
 
 ## 待办（无阻塞项，均可后续安排）
 
 - [ ] `SessionSidebar` 允许删除非活跃会话（当前仅限活跃会话显示删除按钮）
 - [ ] E2E 选择器统一为 `data-testid`（当前混用类名和 data 属性）
-- [ ] E2E 增加 `test.beforeEach` 前置条件显式导航
 - [ ] `styles.css` 中 `.app-shell` / `.app-body` / `.app-panels` 等自定义类迁移为纯 Tailwind（非阻塞建议）
+- [ ] Playwright 真实浏览器 E2E（M3 评估是否需要）
 
 ## 关键文件路径
 
 ```
 apps/electron/src/App.tsx                    # 根组件（三列布局 + CommandPalette）
-apps/electron/src/components/ChatPanel.tsx   # 聊天面板
-apps/electron/src/components/SessionSidebar.tsx  # 左侧会话栏
-apps/electron/src/components/WikiSidebar.tsx  # 右侧 Wiki 栏（含 Tabs）
-apps/electron/src/components/TitleBar.tsx    # 标题栏
-apps/electron/src/components/CommandPalette.tsx  # 命令面板
-docs/plans/phase-1-task-plan.md              # 阶段任务计划（含执行记录）
-docs/architecture/maintenance-log.md         # 架构维护记录
-docs/architecture/frontend.md                # 前端抽象（已更新 Screen Contracts）
+apps/electron/src/components/ChatPanel.tsx   # 聊天面板（Skill 选择 + Pipeline）
+apps/electron/src/components/WikiSidebar.tsx # 右侧 Wiki 栏（5 Tabs）
+apps/electron/src/components/PipelinePanel.tsx       # Pipeline Designer
+crates/seaki-pipeline/                       # Pipeline Designer 编译器
+crates/seaki-agent/                          # Agent Runtime
+crates/seaki-channel/                        # Channel Bridge + 飞书
+crates/seaki-memory/                         # Memory + Review Learning
+docs/plans/m2-task-plan.md                   # M2 任务计划
+docs/plans/m2-operation-manual.md            # M2 操作手册
+docs/architecture/                           # 架构文档
 ```
 
 ## 技术栈
 
-- React 19.2.5, TypeScript, Tailwind CSS v4.2.4
+- React 19.2.5, TypeScript 6.0.3, Tailwind CSS v4.2.4
 - shadcn/ui (radix-nova), Vite 8.0.10, Electron 41.3.0
-- `react-resizable-panels@4.10.0`（exports `Group`/`Separator`/`Panel`/`usePanelRef`）
-- Playwright 1.59.1 (E2E), Vitest 4.1.5 (unit), oxlint
+- `react-resizable-panels@4.10.0`
+- Vitest 4.1.5 (unit), oxlint, @testing-library/react
+- Rust workspace（13 crates）

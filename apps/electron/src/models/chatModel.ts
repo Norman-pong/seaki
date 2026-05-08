@@ -1,5 +1,61 @@
+export type ChatCardType =
+  | "wiki"
+  | "search"
+  | "approval"
+  | "citation"
+  | "link"
+  | "pipeline"
+  | "skill";
+
+export type SkillType =
+  | "wiki-search"
+  | "source-ingest"
+  | "pipeline-run"
+  | "memory-review"
+  | "channel-send";
+
+export interface SkillOption {
+  readonly id: SkillType;
+  readonly name: string;
+  readonly description: string;
+  readonly icon: string; // lucide icon name
+}
+
+export const SKILLS: readonly SkillOption[] = [
+  {
+    id: "wiki-search",
+    name: "Wiki 搜索",
+    description: "搜索已提交的 wiki 页面",
+    icon: "Search",
+  },
+  {
+    id: "source-ingest",
+    name: "资料导入",
+    description: "导入本机资料到 workspace",
+    icon: "FilePlus",
+  },
+  {
+    id: "pipeline-run",
+    name: "Pipeline",
+    description: "运行 pipeline 执行任务",
+    icon: "Zap",
+  },
+  {
+    id: "memory-review",
+    name: "记忆复习",
+    description: "查看和复习记忆卡片",
+    icon: "Brain",
+  },
+  {
+    id: "channel-send",
+    name: "频道发送",
+    description: "通过 IM 频道发送消息",
+    icon: "Send",
+  },
+];
+
 export interface ChatCard {
-  readonly type: "wiki" | "search" | "approval" | "citation" | "link";
+  readonly type: ChatCardType;
   readonly title: string;
   readonly content?: string;
   readonly snippet?: string;
@@ -76,7 +132,8 @@ const mockSessions: ChatSession[] = [
           {
             type: "approval",
             title: "Patch: patch_decision_record_import",
-            content: "写入 typed wiki page，引用本机 source range；需要人工确认降级 citation。",
+            content:
+              "写入 typed wiki page，引用本机 source range；需要人工确认降级 citation。",
             status: "requires_approval",
           },
         ],
@@ -111,6 +168,62 @@ const mockSessions: ChatSession[] = [
             title: "restricted source hidden",
             snippet: "权限不足，无法查看摘要。",
             status: "filtered",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "session_4",
+    title: "Pipeline 执行",
+    timestamp: "2026-05-08T10:00:00+08:00",
+    messages: [
+      {
+        id: "msg_4_1",
+        role: "user",
+        content: "执行 wiki 导入 pipeline",
+        timestamp: "2026-05-08T10:00:00+08:00",
+      },
+      {
+        id: "msg_4_2",
+        role: "assistant",
+        content:
+          "已启动 Pipeline: Wiki 导入与索引 Pipeline。当前正在重建索引。",
+        timestamp: "2026-05-08T10:00:01+08:00",
+        cards: [
+          {
+            type: "pipeline",
+            title: "Wiki 导入与索引 Pipeline",
+            content:
+              "包含 4 个步骤：source ingest、wiki patch、index rebuild、approval request",
+            status: "running",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "session_5",
+    title: "Skill 使用示例",
+    timestamp: "2026-05-08T11:00:00+08:00",
+    messages: [
+      {
+        id: "msg_5_1",
+        role: "user",
+        content: "[@wiki-search] 搜索架构决策相关 wiki",
+        timestamp: "2026-05-08T11:00:00+08:00",
+      },
+      {
+        id: "msg_5_2",
+        role: "assistant",
+        content: "已使用 Wiki 搜索 skill，找到 3 条相关 wiki 页面。",
+        timestamp: "2026-05-08T11:00:01+08:00",
+        cards: [
+          {
+            type: "skill",
+            title: "wiki-search",
+            content: "搜索关键词：架构决策",
+            status: "completed",
           },
         ],
       },

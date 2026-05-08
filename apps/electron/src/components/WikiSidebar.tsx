@@ -7,6 +7,8 @@ import {
   Folder,
   Eye,
   ShieldCheck,
+  Brain,
+  MessageCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -16,9 +18,12 @@ import { cn } from "@/lib/utils";
 import type { WikiTreeNode, WikiPagePreview } from "@/models/wikiTreeModel";
 import { createWikiPreview } from "@/models/wikiTreeModel";
 import type { ApprovalDiffModel } from "@/appModel";
+import type { ReviewCardDTO, ChannelConnectionDTO, ChannelEventDTO } from "@/models/memoryModel";
 import { TodoPanel } from "./TodoPanel";
 import { ContextPanel } from "./ContextPanel";
 import { ApprovalWidget } from "./ApprovalWidget";
+import { MemoryReviewPanel } from "./MemoryReviewPanel";
+import { ChannelPanel } from "./ChannelPanel";
 
 interface WikiSidebarProps {
   readonly tree: readonly WikiTreeNode[];
@@ -27,6 +32,11 @@ interface WikiSidebarProps {
   readonly approval?: ApprovalDiffModel | null;
   readonly onApprovalChange?: (model: ApprovalDiffModel) => void;
   readonly isCollapsed?: boolean;
+  readonly memoryCards?: readonly ReviewCardDTO[];
+  readonly onGradeCard?: (cardId: string, grade: string) => void;
+  readonly channels?: readonly ChannelConnectionDTO[];
+  readonly channelEvents?: readonly ChannelEventDTO[];
+  readonly onToggleChannel?: (channelId: string) => void;
 }
 
 function TreeNodeItem({
@@ -165,8 +175,13 @@ export function WikiSidebar({
   approval,
   onApprovalChange,
   isCollapsed,
+  memoryCards,
+  onGradeCard,
+  channels,
+  channelEvents,
+  onToggleChannel,
 }: WikiSidebarProps) {
-  const [activeTab, setActiveTab] = useState<"overview" | "pages" | "review">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "pages" | "review" | "memory" | "channel">("overview");
 
   const preview = useMemo(() => createWikiPreview(selectedPageId), [selectedPageId]);
 
@@ -206,6 +221,20 @@ export function WikiSidebar({
           >
             <ShieldCheck size={11} /> 审查
           </TabsTrigger>
+          <TabsTrigger
+            value="memory"
+            className="text-[11px] px-2 py-0.5 h-6 gap-1"
+            data-tab="memory"
+          >
+            <Brain size={11} /> 记忆
+          </TabsTrigger>
+          <TabsTrigger
+            value="channel"
+            className="text-[11px] px-2 py-0.5 h-6 gap-1"
+            data-tab="channel"
+          >
+            <MessageCircle size={11} /> 频道
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="flex-1 overflow-y-auto min-h-0 mt-0">
@@ -230,6 +259,20 @@ export function WikiSidebar({
               暂无审查内容
             </div>
           )}
+        </TabsContent>
+        <TabsContent value="memory" className="flex-1 overflow-y-auto min-h-0 mt-0">
+          <MemoryReviewPanel
+            dueCards={memoryCards ?? []}
+            onGrade={(cardId, grade) => onGradeCard?.(cardId, grade)}
+            onViewAll={() => {/* TODO: navigate to full memory view */}}
+          />
+        </TabsContent>
+        <TabsContent value="channel" className="flex-1 overflow-y-auto min-h-0 mt-0">
+          <ChannelPanel
+            channels={channels ?? []}
+            events={channelEvents ?? []}
+            onToggleChannel={(channelId) => onToggleChannel?.(channelId)}
+          />
         </TabsContent>
       </Tabs>
     </aside>
