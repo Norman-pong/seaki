@@ -13,7 +13,10 @@ pub use broker::*;
 pub use fake_provider::{BindingEntry, ChannelEvent, ChannelMessagePayload, FakeChannelProvider};
 pub use grant::{ChannelResourceGrant, GrantError};
 pub use ingress::*;
-pub use outbox::{FakeProviderQueryAPI, Outbox, OutboxItem, OutboxStatus, ProviderQueryResult};
+pub use outbox::{
+    DispatchResult, FakeProviderDriver, FakeProviderQueryAPI, Outbox, OutboxDispatcher, OutboxItem,
+    OutboxStatus, ProviderDriver, ProviderError, ProviderQueryResult, RetryBackoff,
+};
 pub use plugin::*;
 pub use quarantine::*;
 pub use webhook::{FakeWebhookVerifier, WebhookError};

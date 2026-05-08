@@ -105,11 +105,20 @@ fn outbox_idempotency_and_unknown_flow() {
         id: "o1".to_string(),
         channel_event_id: "evt-1".to_string(),
         payload: "{}".to_string(),
-        idempotency_key: "idem-1".to_string(),
+        provider_idempotency_key: "idem-1".to_string(),
         status: OutboxStatus::Unknown,
         created_at: SystemTime::now(),
         lease_expires_at: None,
         lease_holder: None,
+        transaction_id: "tx-1".to_string(),
+        payload_hash: "hash".to_string(),
+        scope: "scope".to_string(),
+        audience: "audience".to_string(),
+        provider_request_id: None,
+        compensating_action: None,
+        attempt_count: 0,
+        next_attempt_at: None,
+        last_error_code: None,
     };
     outbox.enqueue(item.clone()).unwrap();
 
@@ -137,11 +146,20 @@ fn concurrent_lease_race() {
             id: "o1".to_string(),
             channel_event_id: "evt-1".to_string(),
             payload: "{}".to_string(),
-            idempotency_key: "idem-1".to_string(),
+            provider_idempotency_key: "idem-1".to_string(),
             status: OutboxStatus::Pending,
             created_at: SystemTime::now(),
             lease_expires_at: None,
             lease_holder: None,
+            transaction_id: "tx-1".to_string(),
+            payload_hash: "hash".to_string(),
+            scope: "scope".to_string(),
+            audience: "audience".to_string(),
+            provider_request_id: None,
+            compensating_action: None,
+            attempt_count: 0,
+            next_attempt_at: None,
+            last_error_code: None,
         })
         .unwrap();
 

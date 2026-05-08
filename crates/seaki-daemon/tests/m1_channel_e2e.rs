@@ -102,11 +102,20 @@ fn m1_channel_bridge_webhook_to_outbox_happy_path() {
         id: "o1".to_string(),
         channel_event_id: "evt-1".to_string(),
         payload: String::from_utf8_lossy(payload).to_string(),
-        idempotency_key: "idem-1".to_string(),
+        provider_idempotency_key: "idem-1".to_string(),
         status: OutboxStatus::Pending,
         created_at: SystemTime::now(),
         lease_expires_at: None,
         lease_holder: None,
+        transaction_id: "tx-1".to_string(),
+        payload_hash: "hash".to_string(),
+        scope: "scope".to_string(),
+        audience: "audience".to_string(),
+        provider_request_id: None,
+        compensating_action: None,
+        attempt_count: 0,
+        next_attempt_at: None,
+        last_error_code: None,
     };
     outbox.enqueue(item.clone()).expect("enqueue succeeds");
 
@@ -126,7 +135,7 @@ fn m1_channel_bridge_webhook_to_outbox_happy_path() {
     // 6. 模拟 unknown 状态，调用 FakeProviderQueryAPI 后 retry
     let mut unknown_item = item.clone();
     unknown_item.id = "o3".to_string();
-    unknown_item.idempotency_key = "idem-3".to_string();
+    unknown_item.provider_idempotency_key = "idem-3".to_string();
     unknown_item.status = OutboxStatus::Unknown;
     outbox.enqueue(unknown_item).expect("enqueue unknown");
 
@@ -150,11 +159,20 @@ fn m1_channel_bridge_webhook_to_outbox_happy_path() {
             id: "o4".to_string(),
             channel_event_id: "evt-4".to_string(),
             payload: "{}".to_string(),
-            idempotency_key: "idem-4".to_string(),
+            provider_idempotency_key: "idem-4".to_string(),
             status: OutboxStatus::Pending,
             created_at: SystemTime::now(),
             lease_expires_at: None,
             lease_holder: None,
+            transaction_id: "tx-4".to_string(),
+            payload_hash: "hash".to_string(),
+            scope: "scope".to_string(),
+            audience: "audience".to_string(),
+            provider_request_id: None,
+            compensating_action: None,
+            attempt_count: 0,
+            next_attempt_at: None,
+            last_error_code: None,
         })
         .expect("enqueue for lease race");
 
