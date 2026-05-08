@@ -6,6 +6,18 @@ use std::time::{Duration, SystemTime};
 
 use sha2::{Digest, Sha256};
 
+/// Constant-time comparison of two hex strings to mitigate timing attacks (S6).
+pub(crate) fn constant_time_eq(a: &str, b: &str) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut result = 0u8;
+    for (ca, cb) in a.bytes().zip(b.bytes()) {
+        result |= ca ^ cb;
+    }
+    result == 0
+}
+
 pub const WEBHOOK_SECRET: &str = "seaki-fake-channel-webhook-secret";
 const MAX_SEEN_EVENT_IDS: usize = 10_000;
 
@@ -136,25 +148,29 @@ impl FakeWebhookVerifier {
     ) -> Result<(), WebhookError> {
         self.evict_expired();
 
-        {
-            let seen = self.seen_event_ids.lock().unwrap();
-            if seen.contains_key(event_id) {
-                return Err(WebhookError::EventReplayed);
-            }
-        }
-
         let now = SystemTime::now();
         if now.duration_since(timestamp).unwrap_or(Duration::MAX) > self.ttl {
             return Err(WebhookError::TimestampExpired);
         }
 
+        // S2 fix: perform HMAC verification inside the write lock to prevent
+        // concurrent requests from executing expensive HMAC calculations for
+        // the same new event. Write lock also naturally serializes replay checks.
+        let mut seen = self.seen_event_ids.lock().unwrap();
+        if seen.contains_key(event_id) {
+            return Err(WebhookError::EventReplayed);
+        }
+
         let expected = hmac_sha256(&self.secret, raw_payload);
         let expected_hex = hex_encode(&expected);
-        if expected_hex != signature {
+        if !constant_time_eq(&expected_hex, signature) {
             return Err(WebhookError::SignatureMismatch);
         }
 
-        let mut seen = self.seen_event_ids.lock().unwrap();
+        // S6 fix: use constant-time comparison above instead of !=.
+
+        // Double-check replay under write lock (another thread may have
+        // inserted while we computed HMAC).
         if seen.contains_key(event_id) {
             return Err(WebhookError::EventReplayed);
         }

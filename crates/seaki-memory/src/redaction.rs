@@ -78,8 +78,10 @@ static BEARER_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)(bearer\s+)[^,\n;]+").unwrap());
 
 static SECRET_KV_RE: LazyLock<Regex> = LazyLock::new(|| {
+    // S3: '&' is added to value delimiter so URL query params like
+    // ?password=foo&api_key=bar are handled as separate matches.
     Regex::new(
-        r#"(?i)((?:api[_-]?key|apikey|x[_-]?api[_-]?key|token|password|secret|auth[_-]?token|access[_-]?token|client[_-]?secret|private[_-]?key|aws[_-]?secret[_-]?access[_-]?key)"?\s*[:=]\s*)("[^"]*"|[^\s,;"]+)"#,
+        r#"(?i)((?:api[_-]?key|apikey|x[_-]?api[_-]?key|token|password|secret|auth[_-]?token|access[_-]?token|client[_-]?secret|private[_-]?key|aws[_-]?secret[_-]?access[_-]?key)"?\s*[:=]\s*)("[^"]*"|[^\s,;&"]+)"#,
     )
     .unwrap()
 });
@@ -105,7 +107,7 @@ fn redact_line(line: &str) -> String {
         return result.to_string();
     }
 
-    // key=value / key:value / JSON key:value — 逐段处理，一行多个 secret 都脱敏
+    // key=value / key:value / JSON key:value / URL query param — 逐段处理，一行多个 secret 都脱敏
     let result = SECRET_KV_RE.replace_all(line, "${1}[REDACTED]");
     if result != line {
         return result.to_string();

@@ -146,3 +146,26 @@ fn redaction_detects_jwt_token() {
     assert!(!redacted.contains("eyJhbGciOiJIUzI1NiIs"));
     assert!(redacted.contains("[REDACTED]"));
 }
+
+// S3: URL query parameters with multiple secrets should all be redacted.
+#[test]
+fn redaction_url_query_params_multiple_secrets() {
+    let input = "https://example.com/api?password=foo&api_key=bar&token=baz";
+    let (redacted, status) = redact_transcript(input);
+    assert_eq!(status, RedactionStatus::HasSecrets);
+    assert!(
+        !redacted.contains("foo"),
+        "password value should be redacted: {redacted}"
+    );
+    assert!(
+        !redacted.contains("bar"),
+        "api_key value should be redacted: {redacted}"
+    );
+    assert!(
+        !redacted.contains("baz"),
+        "token value should be redacted: {redacted}"
+    );
+    assert!(redacted.contains("password="), "password key should remain");
+    assert!(redacted.contains("api_key="), "api_key key should remain");
+    assert!(redacted.contains("token="), "token key should remain");
+}

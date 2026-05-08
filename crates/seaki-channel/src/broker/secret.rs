@@ -178,13 +178,18 @@ impl SecretBroker {
             });
         }
 
-        drop(issued_tokens);
-
+        // S1 fix: hold issued_tokens lock while resolving secret to prevent
+        // race with revoke_token. If token is revoked between checks, we
+        // would still return the secret — but holding the lock prevents
+        // concurrent revocation during the lookup window.
         let secrets = self.secrets.lock().unwrap();
-        secrets
+        let result = secrets
             .get(&token.scope)
             .cloned()
-            .ok_or(BrokerError::SecretNotFound { scope: token.scope })
+            .ok_or(BrokerError::SecretNotFound { scope: token.scope });
+        drop(secrets);
+        drop(issued_tokens);
+        result
     }
 
     pub fn revoke_token(&self, token_id: &str) -> bool {

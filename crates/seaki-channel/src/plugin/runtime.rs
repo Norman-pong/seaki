@@ -249,11 +249,17 @@ impl WasmPluginInstance {
         }
 
         // Read output: first 4 bytes as length (little-endian), then data.
+        const MAX_GUEST_RETURN_LEN: usize = 64 * 1024; // 64 KiB
         let mut len_buf = [0u8; 4];
         memory
             .read(&self.store, output_ptr as usize, &mut len_buf)
             .map_err(|e| RuntimeError::ExecutionFailed(e.to_string()))?;
         let len = u32::from_le_bytes(len_buf) as usize;
+        if len > MAX_GUEST_RETURN_LEN {
+            return Err(RuntimeError::ExecutionFailed(format!(
+                "guest returned length {len} exceeds max {MAX_GUEST_RETURN_LEN}"
+            )));
+        }
         let mut buf = vec![0u8; len];
         memory
             .read(&self.store, output_ptr as usize + 4, &mut buf)

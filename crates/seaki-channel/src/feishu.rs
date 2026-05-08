@@ -360,7 +360,7 @@ impl FeishuWebhookVerifier {
         hasher.update(nonce.as_bytes());
         hasher.update(body);
         let signature = hex_encode(&hasher.finalize());
-        if signature != expected_signature {
+        if !crate::webhook::constant_time_eq(&signature, expected_signature) {
             return Err(WebhookError::SignatureMismatch);
         }
         Ok(())
@@ -389,21 +389,20 @@ impl FeishuWebhookVerifier {
     ) -> Result<Vec<u8>, WebhookError> {
         self.evict_expired();
 
-        // Replay check (first gate)
-        {
-            let seen = self.seen_event_ids.lock().unwrap();
-            if seen.contains_key(event_id) {
-                return Err(WebhookError::EventReplayed);
-            }
-        }
-
-        // Timestamp check
+        // Timestamp check (cheap, no lock needed)
         let now = SystemTime::now();
         if now.duration_since(timestamp).unwrap_or(Duration::MAX) > self.ttl {
             return Err(WebhookError::TimestampExpired);
         }
 
-        // Decrypt
+        // S2 fix: hold write lock during entire verification to prevent
+        // concurrent requests from executing expensive decrypt+HMAC.
+        let mut seen = self.seen_event_ids.lock().unwrap();
+        if seen.contains_key(event_id) {
+            return Err(WebhookError::EventReplayed);
+        }
+
+        // Decrypt + verify under write lock
         let encrypt_key = self
             .encrypt_key
             .as_deref()
@@ -411,7 +410,6 @@ impl FeishuWebhookVerifier {
         let body = Self::decrypt_body(encrypt_key, encrypted_payload)
             .map_err(|_| WebhookError::SignatureMismatch)?;
 
-        // Signature verification
         let timestamp_str = timestamp
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
@@ -419,8 +417,7 @@ impl FeishuWebhookVerifier {
             .to_string();
         self.verify_signature(&timestamp_str, nonce, &body, expected_signature)?;
 
-        // Replay check (second gate, after validation)
-        let mut seen = self.seen_event_ids.lock().unwrap();
+        // Double-check replay
         if seen.contains_key(event_id) {
             return Err(WebhookError::EventReplayed);
         }
