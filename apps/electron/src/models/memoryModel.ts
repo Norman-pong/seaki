@@ -15,6 +15,7 @@ export interface ChannelConnectionDTO {
   readonly name: string;
   readonly status: "connected" | "disconnected" | "error";
   readonly workspaceId: string;
+  readonly webhookUrl?: string | undefined;
   readonly lastEventAt?: string;
 }
 

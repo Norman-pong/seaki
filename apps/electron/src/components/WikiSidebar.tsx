@@ -37,6 +37,7 @@ interface WikiSidebarProps {
   readonly channels?: readonly ChannelConnectionDTO[];
   readonly channelEvents?: readonly ChannelEventDTO[];
   readonly onToggleChannel?: (channelId: string) => void;
+  readonly defaultActiveTab?: "overview" | "pages" | "review" | "memory" | "channel";
 }
 
 function TreeNodeItem({
@@ -59,41 +60,57 @@ function TreeNodeItem({
 
   return (
     <div>
-      <button
-        type="button"
+      <div
         className={cn(
-          "tree-node-row w-full flex items-center gap-1.5 py-1.5 rounded-md text-sm transition-colors",
-          isSelected
-            ? "bg-primary/10 text-primary"
-            : "hover:bg-muted text-foreground"
+          "tree-node-row w-full flex items-center gap-1 py-1.5 rounded-md text-sm",
         )}
         style={{ paddingLeft: `${8 + depth * 14}px` }}
-        aria-expanded={hasChildren ? expanded : undefined}
-        onClick={() => {
-          if (hasChildren) setExpanded(!expanded);
-          onSelectPage(node.id);
-        }}
       >
         {hasChildren ? (
-          expanded ? (
-            <ChevronDown size={13} className="text-muted-foreground flex-shrink-0" />
-          ) : (
-            <ChevronRight size={13} className="text-muted-foreground flex-shrink-0" />
-          )
+          <button
+            type="button"
+            className="flex-shrink-0 p-0.5 rounded hover:bg-muted transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpanded(!expanded);
+            }}
+            aria-label={expanded ? "折叠" : "展开"}
+            aria-expanded={expanded}
+            data-testid={`tree-toggle-${node.id}`}
+          >
+            {expanded ? (
+              <ChevronDown size={13} className="text-muted-foreground" />
+            ) : (
+              <ChevronRight size={13} className="text-muted-foreground" />
+            )}
+          </button>
         ) : (
-          <span className="w-[13px] flex-shrink-0" />
+          <span className="w-[21px] flex-shrink-0" />
         )}
-        {hasChildren ? (
-          expanded ? (
-            <FolderOpen size={13} className="flex-shrink-0" />
+        <button
+          type="button"
+          className={cn(
+            "flex-1 flex items-center gap-1.5 py-1 px-1.5 rounded-md text-sm text-left transition-colors min-w-0",
+            isSelected
+              ? "bg-primary/10 text-primary"
+              : "hover:bg-muted text-foreground"
+          )}
+          onClick={() => onSelectPage(node.id)}
+          aria-current={isSelected ? "true" : undefined}
+          data-testid={`tree-select-${node.id}`}
+        >
+          {hasChildren ? (
+            expanded ? (
+              <FolderOpen size={13} className="flex-shrink-0" />
+            ) : (
+              <Folder size={13} className="flex-shrink-0" />
+            )
           ) : (
-            <Folder size={13} className="flex-shrink-0" />
-          )
-        ) : (
-          <FileText size={13} className="flex-shrink-0" />
-        )}
-        <span className="truncate">{node.title}</span>
-      </button>
+            <FileText size={13} className="flex-shrink-0" />
+          )}
+          <span className="truncate">{node.title}</span>
+        </button>
+      </div>
       {hasChildren && expanded && (
         <div>
           {node.children.map((child) => (
@@ -180,8 +197,9 @@ export function WikiSidebar({
   channels,
   channelEvents,
   onToggleChannel,
+  defaultActiveTab = "overview",
 }: WikiSidebarProps) {
-  const [activeTab, setActiveTab] = useState<"overview" | "pages" | "review" | "memory" | "channel">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "pages" | "review" | "memory" | "channel">(defaultActiveTab);
 
   const preview = useMemo(() => createWikiPreview(selectedPageId), [selectedPageId]);
 

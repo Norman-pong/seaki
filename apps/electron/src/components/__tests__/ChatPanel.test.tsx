@@ -50,6 +50,27 @@ const mockSessionWithPipeline: ChatSession = {
   ],
 };
 
+const mockEmptySession: ChatSession = {
+  id: "session_empty",
+  title: "空会话",
+  timestamp: "2026-05-08T10:00:00+08:00",
+  messages: [],
+};
+
+const mockSessionWithMultiline: ChatSession = {
+  id: "session_multiline",
+  title: "换行测试",
+  timestamp: "2026-05-08T10:00:00+08:00",
+  messages: [
+    {
+      id: "msg_ml1",
+      role: "assistant",
+      content: "第一行\n第二行\n第三行",
+      timestamp: "2026-05-08T10:01:00+08:00",
+    },
+  ],
+};
+
 function ChatPanelWithApprovalState({ initialSession }: { readonly initialSession: ChatSession }) {
   const [session, setSession] = useState(initialSession);
 
@@ -202,5 +223,21 @@ describe("ChatPanel", () => {
 
     fireEvent.click(screen.getByTestId("approval-reject-btn"));
     expect(onApprovalAction).toHaveBeenCalledWith("session_test", "msg_1", "reject");
+  });
+
+  it("renders_empty_session_without_crashing", () => {
+    render(<ChatPanel session={mockEmptySession} />);
+
+    expect(screen.getByText("空会话")).toBeInTheDocument();
+    expect(screen.getByText("0 条消息")).toBeInTheDocument();
+  });
+
+  it("preserves_line_breaks_in_message_content", () => {
+    render(<ChatPanel session={mockSessionWithMultiline} />);
+
+    const message = screen.getByText(/第一行/);
+    expect(message).toBeInTheDocument();
+    // The parent should preserve whitespace
+    expect(message.closest("p")).toHaveClass("whitespace-pre-wrap");
   });
 });

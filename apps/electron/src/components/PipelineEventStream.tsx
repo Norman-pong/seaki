@@ -21,7 +21,13 @@ export const PipelineEventStream = React.memo(function PipelineEventStream({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    const el = scrollRef.current;
+    if (!el) return;
+    try {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    } catch {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [events.length]);
 
   return (

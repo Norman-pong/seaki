@@ -87,4 +87,33 @@ describe("MemoryReviewPanel", () => {
     expect(screen.getByTestId("memory-empty-state")).toBeInTheDocument();
     expect(screen.getByText("暂无到期卡片 🎉")).toBeInTheDocument();
   });
+
+  it("shows_empty_state_after_grading_all_cards", () => {
+    render(
+      <MemoryReviewPanel
+        dueCards={[mockCards[0]!]}
+        onGrade={vi.fn<() => void>()}
+        onViewAll={vi.fn<() => void>()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("memory-reveal-btn"));
+    fireEvent.click(screen.getByTestId("memory-grade-good"));
+
+    expect(screen.getByTestId("memory-empty-state")).toBeInTheDocument();
+  });
+
+  it("calls_onViewAll_when_view_all_button_clicked", () => {
+    const onViewAll = vi.fn<() => void>();
+    render(
+      <MemoryReviewPanel
+        dueCards={mockCards}
+        onGrade={vi.fn<() => void>()}
+        onViewAll={onViewAll}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId("memory-view-all-btn"));
+    expect(onViewAll).toHaveBeenCalled();
+  });
 });

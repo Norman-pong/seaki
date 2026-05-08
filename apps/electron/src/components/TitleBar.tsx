@@ -96,6 +96,7 @@ export function TitleBar({
           size="icon"
           className="size-7 text-muted-foreground"
           aria-label="layout"
+          disabled
         >
           <Layout data-icon="icon" />
         </Button>
@@ -105,6 +106,7 @@ export function TitleBar({
           size="icon"
           className="size-7 text-muted-foreground"
           aria-label="fullscreen"
+          disabled
         >
           <Maximize2 data-icon="icon" />
         </Button>

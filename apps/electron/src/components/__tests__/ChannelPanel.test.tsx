@@ -43,6 +43,17 @@ const mockEvents: readonly ChannelEventDTO[] = [
   },
 ];
 
+function generateEvents(count: number): readonly ChannelEventDTO[] {
+  return Array.from({ length: count }, (_, i) => ({
+    eventId: `evt_bulk_${i}`,
+    channelId: "ch_feishu_01",
+    eventType: "message.received" as const,
+    summary: `消息 ${i}`,
+    timestamp: `2026-05-08T${String(i % 24).padStart(2, "0")}:00:00+08:00`,
+    status: "success" as const,
+  }));
+}
+
 describe("ChannelPanel", () => {
   it("renders_channel_list", () => {
     render(
@@ -101,5 +112,28 @@ describe("ChannelPanel", () => {
 
     fireEvent.click(screen.getByTestId("channel-toggle-ch_slack_01"));
     expect(onToggleChannel).toHaveBeenCalledWith("ch_slack_01");
+  });
+
+  it("loads_more_events_on_click", () => {
+    const manyEvents = generateEvents(60);
+    render(
+      <ChannelPanel
+        channels={mockChannels}
+        events={manyEvents}
+        onToggleChannel={vi.fn<() => void>()}
+      />,
+    );
+
+    // Events are sorted by timestamp descending.
+    // evt_bulk_59 has the latest timestamp (23:00) and should be visible.
+    expect(screen.getByTestId("channel-event-evt_bulk_59")).toBeInTheDocument();
+    // evt_bulk_0 has the earliest timestamp (00:00) and should NOT be in first 50.
+    expect(screen.queryByTestId("channel-event-evt_bulk_0")).not.toBeInTheDocument();
+
+    // Click load more
+    fireEvent.click(screen.getByTestId("channel-load-more"));
+
+    // Now evt_bulk_0 should be visible (total 100, but we only have 60)
+    expect(screen.getByTestId("channel-event-evt_bulk_0")).toBeInTheDocument();
   });
 });

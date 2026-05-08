@@ -50,7 +50,7 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
   ).length;
 
   return (
-    <Card size="sm" className="m-3 border-0 bg-transparent shadow-none" aria-label="model widget">
+    <Card size="sm" className="m-3 border-0 bg-transparent shadow-none" aria-label="approval widget">
       <button
         type="button"
         className="w-full flex items-center justify-between px-2 py-2 text-sm hover:bg-muted/60 rounded-md transition-colors"
@@ -115,9 +115,12 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
               const draft = model.rejectionDrafts[claim.claimId] ?? "";
               const canApprove = claim.status === "pending" && claim.citationState !== "invalid";
               const canReject = claim.status !== "committed";
+              const rejectReasonId = `reject-reason-${claim.claimId}`;
+              const rejectErrorId = `reject-error-${claim.claimId}`;
+              const isInvalid = canReject && draft.trim().length === 0;
 
               return (
-                <Card key={claim.claimId} size="sm" className="model-claim-item">
+                <Card key={claim.claimId} size="sm" className="approval-claim-item">
                   <CardContent className="py-3 space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-semibold text-sm truncate">
@@ -149,6 +152,7 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
                     </div>
                     <div className="space-y-2 pt-1">
                       <Textarea
+                        id={rejectReasonId}
                         className="min-h-[32px] text-xs py-1.5 px-2 resize-none"
                         placeholder="拒绝原因"
                         rows={1}
@@ -158,12 +162,20 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
                             updateRejectionDraft(
                               model,
                               claim.claimId,
-                              event.currentTarget.value
-                            )
+                              event.currentTarget.value,
+                            ),
                           );
                         }}
                         disabled={!canReject}
+                        aria-label="拒绝原因"
+                        aria-invalid={isInvalid ? "true" : "false"}
+                        aria-describedby={isInvalid ? rejectErrorId : undefined}
                       />
+                      {isInvalid && (
+                        <span id={rejectErrorId} className="text-[11px] text-destructive">
+                          请输入拒绝原因
+                        </span>
+                      )}
                       <div className="flex gap-2">
                         <Button
                           variant="secondary"

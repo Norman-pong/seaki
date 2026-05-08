@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Brain,
   Eye,
@@ -40,20 +40,12 @@ export function MemoryReviewPanel({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
 
-  const currentCard = dueCards[currentIndex];
-
-  function handleReveal() {
-    setRevealed(true);
-  }
-
-  function handleGrade(grade: "again" | "hard" | "good" | "easy") {
-    if (!currentCard) return;
-    onGrade(currentCard.cardId, grade);
+  useEffect(() => {
+    setCurrentIndex(0);
     setRevealed(false);
-    setCurrentIndex((prev) => prev + 1);
-  }
+  }, [dueCards]);
 
-  if (dueCards.length === 0 || !currentCard) {
+  if (dueCards.length === 0 || currentIndex >= dueCards.length) {
     return (
       <div
         className="flex flex-col items-center justify-center h-full gap-3 text-sm text-muted-foreground"
@@ -65,9 +57,25 @@ export function MemoryReviewPanel({
     );
   }
 
+  const currentCard = dueCards[currentIndex]!;
+
+  function handleReveal() {
+    setRevealed(true);
+  }
+
+  function handleGrade(grade: "again" | "hard" | "good" | "easy") {
+    onGrade(currentCard.cardId, grade);
+    setRevealed(false);
+    setCurrentIndex((prev) => prev + 1);
+  }
+
   return (
     <div className="flex flex-col h-full p-3 gap-3" data-testid="memory-review-panel">
-      {/* Header */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        第 {currentIndex + 1} 张卡片，共 {dueCards.length} 张
+        {revealed ? "，答案已显示" : ""}
+      </div>
+
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Brain size={14} className="text-muted-foreground" />
@@ -86,7 +94,6 @@ export function MemoryReviewPanel({
         </Button>
       </div>
 
-      {/* Current Card */}
       <Card className="flex-1 flex flex-col shadow-none" data-testid="memory-current-card">
         <CardHeader className="py-3 flex flex-row items-center justify-between gap-2">
           <Badge variant={DIFFICULTY_VARIANT[currentCard.difficulty]} className="text-[10px] h-5">
@@ -102,7 +109,12 @@ export function MemoryReviewPanel({
               {currentCard.question}
             </p>
             {revealed && (
-              <div className="mt-4 p-3 rounded-lg bg-muted/60" data-testid="memory-answer">
+              <div
+                className="mt-4 p-3 rounded-lg bg-muted/60"
+                data-testid="memory-answer"
+                aria-live="polite"
+                aria-atomic="true"
+              >
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   {currentCard.answer}
                 </p>
@@ -169,7 +181,6 @@ export function MemoryReviewPanel({
         </CardContent>
       </Card>
 
-      {/* Card Meta */}
       <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
         <span className="bg-muted px-2 py-0.5 rounded">
           稳定度: {currentCard.stabilityDays} 天

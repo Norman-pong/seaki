@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { FilePlus2, GitCompare, RefreshCw, Search, Terminal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,17 +23,15 @@ interface CommandItem {
   readonly detail: string;
   readonly icon: typeof RefreshCw;
   readonly shortcut: string;
-  readonly selected?: boolean;
 }
 
-const commands: readonly CommandItem[] = [
+const ALL_COMMANDS: readonly CommandItem[] = [
   {
     id: "index-rebuild",
     title: "重建 stale workspace index",
     detail: "index.rebuild · 后台安全任务",
     icon: RefreshCw,
     shortcut: "Enter",
-    selected: true,
   },
   {
     id: "approval-review",
@@ -65,6 +64,89 @@ const commands: readonly CommandItem[] = [
 ];
 
 export function CommandPalette({ open, onClose, onSelectCommand }: CommandPaletteProps) {
+  const [query, setQuery] = useState("");
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const commands = useMemo(() => {
+    if (!query.trim()) return ALL_COMMANDS;
+    const q = query.toLowerCase();
+    return ALL_COMMANDS.filter(
+      (cmd) =>
+        cmd.title.toLowerCase().includes(q) || cmd.detail.toLowerCase().includes(q),
+    );
+  }, [query]);
+
+  useEffect(() => {
+    if (!open) return;
+    setQuery("");
+    setSelectedIndex(0);
+    const id = requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [open]);
+
+  useEffect(() => {
+    setSelectedIndex((prev) => (prev >= commands.length ? 0 : prev));
+  }, [commands.length]);
+
+  const handleSelect = useCallback(
+    (action: CommandPaletteAction) => {
+      onSelectCommand(action);
+      onClose();
+    },
+    [onSelectCommand, onClose],
+  );
+
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setSelectedIndex((prev) => (prev + 1 >= commands.length ? 0 : prev + 1));
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setSelectedIndex((prev) => (prev - 1 < 0 ? commands.length - 1 : prev - 1));
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const cmd = commands[selectedIndex];
+        if (cmd) {
+          handleSelect(cmd.id);
+        }
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key === "Tab") {
+        const container = containerRef.current;
+        if (!container) return;
+        const focusables = container.querySelectorAll<HTMLElement>(
+          "button, input, [tabindex]:not([tabindex='-1'])",
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0]!;
+        const last = focusables[focusables.length - 1]!;
+        if (!first || !last) return;
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    },
+    [commands, selectedIndex, handleSelect, onClose],
+  );
+
   if (!open) return null;
 
   return (
@@ -77,9 +159,12 @@ export function CommandPalette({ open, onClose, onSelectCommand }: CommandPalett
       onMouseDown={onClose}
     >
       <Card
+        ref={containerRef}
         size="sm"
         className="command-palette-card"
         onMouseDown={(event) => event.stopPropagation()}
+        onKeyDown={handleKeyDown}
+        data-testid="command-palette-card"
       >
         <CardHeader className="gap-1 pb-3">
           <div className="flex items-start justify-between gap-3">
@@ -97,19 +182,34 @@ export function CommandPalette({ open, onClose, onSelectCommand }: CommandPalett
           </div>
           <div className="command-palette-input" role="search">
             <Search data-icon="inline-start" />
-            <span>rebuild index</span>
+            <input
+              ref={inputRef}
+              type="text"
+              className="flex-1 bg-transparent outline-none text-sm"
+              placeholder="搜索命令…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              data-testid="command-palette-input"
+              aria-label="搜索命令"
+            />
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-1.5 pt-0">
-          {commands.map((command) => {
+          {commands.length === 0 && (
+            <p className="text-sm text-muted-foreground py-4 text-center">无匹配命令</p>
+          )}
+          {commands.map((command, index) => {
             const Icon = command.icon;
+            const isSelected = index === selectedIndex;
             return (
               <button
                 key={command.id}
                 type="button"
                 className="command-row"
-                data-selected={command.selected ? "true" : undefined}
-                onClick={() => onSelectCommand(command.id)}
+                data-selected={isSelected ? "true" : undefined}
+                data-testid={`command-row-${command.id}`}
+                onClick={() => handleSelect(command.id)}
+                onMouseEnter={() => setSelectedIndex(index)}
               >
                 <span className="command-row__icon">
                   <Icon data-icon="icon" />

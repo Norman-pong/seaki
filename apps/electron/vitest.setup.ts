@@ -7,3 +7,4 @@ afterEach(() => {
 });
 
 Element.prototype.scrollIntoView = vi.fn<() => void>();
+Element.prototype.scrollTo = vi.fn<() => void>();

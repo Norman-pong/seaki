@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   Send,
   FileText,
@@ -28,6 +28,7 @@ import type { ChatSession, ChatMessage, ChatCard, SkillType } from "@/models/cha
 import { SKILLS } from "@/models/chatModel";
 import { PipelinePanel } from "./PipelinePanel";
 import type { PipelineRun } from "@/models/pipelineModel";
+import { useVirtualList } from "@/hooks/useVirtualList";
 
 const SKILL_ICON: Record<SkillType, React.ReactNode> = {
   "wiki-search": <Search size={12} />,
@@ -153,6 +154,7 @@ const ChatMessageItem = React.memo(function ChatMessageItem({
         "chat-message flex gap-3 max-w-[92%]",
         isUser ? "self-end flex-row-reverse" : "self-start"
       )}
+      style={{ contain: "content", willChange: "transform" }}
     >
       <div
         className={cn(
@@ -172,7 +174,7 @@ const ChatMessageItem = React.memo(function ChatMessageItem({
               : "bg-card ring-1 ring-border rounded-bl-sm"
           )}
         >
-          <p>{message.content}</p>
+          <p className="whitespace-pre-wrap">{message.content}</p>
           {message.cards && message.cards.length > 0 && (
             <div className="flex flex-col gap-2 mt-3">
               {message.cards.map((card, index) => (
@@ -210,6 +212,13 @@ export function ChatPanel({ session, onSendMessage, onOpenReviewTab, onApprovalA
   const [devMockPipeline, setDevMockPipeline] = useState<PipelineRun | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const handleApprovalAction = useCallback(
+    (messageId: string, action: "approve" | "reject") => {
+      onApprovalAction?.(session.id, messageId, action);
+    },
+    [onApprovalAction, session.id],
+  );
+
   useEffect(() => {
     if (import.meta.env.DEV) {
       import("@/__mocks__/pipelineModel").then((mod) => {
@@ -244,6 +253,12 @@ export function ChatPanel({ session, onSendMessage, onOpenReviewTab, onApprovalA
   const placeholder = selectedSkill === "pipeline-run"
     ? "输入 pipeline 意图..."
     : "输入消息...";
+
+  const { containerRef, visibleItems, totalHeight, offsetTop } = useVirtualList(
+    session.messages,
+    80,
+    3,
+  );
 
   return (
     <section className="flex flex-col h-full bg-background" aria-label="chat flow">
@@ -300,15 +315,24 @@ export function ChatPanel({ session, onSendMessage, onOpenReviewTab, onApprovalA
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4" aria-live="polite" aria-atomic="false">
-        {session.messages.map((message) => (
-          <ChatMessageItem
-            key={message.id}
-            message={message}
-            onOpenReviewTab={onOpenReviewTab}
-            onApprovalAction={onApprovalAction ? (messageId, action) => onApprovalAction(session.id, messageId, action) : undefined}
-          />
-        ))}
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-y-auto p-5 flex flex-col gap-4"
+        aria-live="polite"
+        aria-atomic="false"
+      >
+        <div style={{ height: totalHeight }}>
+          <div style={{ paddingTop: offsetTop }}>
+            {visibleItems.map((message) => (
+              <ChatMessageItem
+                key={message.id}
+                message={message}
+                onOpenReviewTab={onOpenReviewTab}
+                onApprovalAction={handleApprovalAction}
+              />
+            ))}
+          </div>
+        </div>
         <div ref={messagesEndRef} />
       </div>
 
