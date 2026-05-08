@@ -323,7 +323,7 @@ impl RetryBackoff {
         if attempt_count >= self.max_retries {
             return None;
         }
-        let delay = self.base_delay * 2_u32.pow(attempt_count);
+        let delay = self.base_delay * 2_u32.saturating_pow(attempt_count);
         Some(delay.min(self.max_delay))
     }
 }

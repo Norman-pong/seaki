@@ -7,6 +7,7 @@ use std::time::{Duration, SystemTime};
 use sha2::{Digest, Sha256};
 
 pub const WEBHOOK_SECRET: &str = "seaki-fake-channel-webhook-secret";
+const MAX_SEEN_EVENT_IDS: usize = 10_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WebhookError {
@@ -106,7 +107,7 @@ impl FakeWebhookVerifier {
         Self {
             secret: secret.into().into_bytes(),
             seen_event_ids: Mutex::new(HashMap::new()),
-            ttl: Duration::from_mins(5), // 5 minutes
+            ttl: Duration::from_secs(300), // 5 minutes
         }
     }
 
@@ -156,6 +157,13 @@ impl FakeWebhookVerifier {
         let mut seen = self.seen_event_ids.lock().unwrap();
         if seen.contains_key(event_id) {
             return Err(WebhookError::EventReplayed);
+        }
+        // Enforce size bound by evicting the oldest entry when at capacity.
+        if seen.len() >= MAX_SEEN_EVENT_IDS {
+            let oldest = seen.iter().min_by_key(|(_, t)| *t).map(|(k, _)| k.clone());
+            if let Some(k) = oldest {
+                seen.remove(&k);
+            }
         }
         seen.insert(event_id.to_string(), now);
         Ok(())

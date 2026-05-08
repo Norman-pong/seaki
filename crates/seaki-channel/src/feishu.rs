@@ -20,6 +20,8 @@ use crate::grant::ChannelAttachmentRef;
 use crate::ingress::ResolvedIdentity;
 use crate::webhook::{WebhookError, WebhookVerifier};
 
+const MAX_SEEN_EVENT_IDS: usize = 10_000;
+
 // ---------------------------------------------------------------------------
 // Errors
 // ---------------------------------------------------------------------------
@@ -422,6 +424,13 @@ impl FeishuWebhookVerifier {
         if seen.contains_key(event_id) {
             return Err(WebhookError::EventReplayed);
         }
+        // Enforce size bound by evicting the oldest entry when at capacity.
+        if seen.len() >= MAX_SEEN_EVENT_IDS {
+            let oldest = seen.iter().min_by_key(|(_, t)| *t).map(|(k, _)| k.clone());
+            if let Some(k) = oldest {
+                seen.remove(&k);
+            }
+        }
         seen.insert(event_id.to_string(), now);
 
         Ok(body)
@@ -477,6 +486,13 @@ impl WebhookVerifier for FeishuWebhookVerifier {
         let mut seen = self.seen_event_ids.lock().unwrap();
         if seen.contains_key(event_id) {
             return Err(WebhookError::EventReplayed);
+        }
+        // Enforce size bound by evicting the oldest entry when at capacity.
+        if seen.len() >= MAX_SEEN_EVENT_IDS {
+            let oldest = seen.iter().min_by_key(|(_, t)| *t).map(|(k, _)| k.clone());
+            if let Some(k) = oldest {
+                seen.remove(&k);
+            }
         }
         seen.insert(event_id.to_string(), now);
 

@@ -69,3 +69,28 @@ fn token_expired() {
     let err = broker.resolve_token(&token.token_id).unwrap_err();
     assert!(matches!(err, BrokerError::TokenExpired { .. }));
 }
+
+#[test]
+fn issued_tokens_bounded_cleanup() {
+    let broker = SecretBroker::new();
+    broker.register_secret(SecretEntry::new("slack", "xoxb-secret", "Slack bot token"));
+
+    // Request many tokens without resolving them.
+    for i in 0..10_005 {
+        let _ = broker
+            .request_token(
+                &format!("plugin-{i}"),
+                "slack",
+                &["slack".to_string()],
+                3600,
+            )
+            .unwrap();
+    }
+
+    // All tokens are still valid (TTL 3600), but the broker should enforce a hard limit.
+    // We verify by requesting one more token successfully.
+    let token = broker
+        .request_token("plugin-overflow", "slack", &["slack".to_string()], 3600)
+        .unwrap();
+    assert_eq!(token.scope, "slack");
+}

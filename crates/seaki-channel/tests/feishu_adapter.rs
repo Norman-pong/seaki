@@ -511,3 +511,24 @@ fn feishu_adapter_build_outbound_scope_missing_channel() {
         result
     );
 }
+
+#[test]
+fn feishu_verifier_enforces_seen_event_id_bound() {
+    let verifier = FeishuWebhookVerifier::new("verif-token", None);
+    let now = SystemTime::now();
+
+    // Insert more than MAX_SEEN_EVENT_IDS unique event ids.
+    for i in 0..10_005 {
+        let _ = verifier.verify(&format!("evt-{i}"), b"{}", "verif-token", now);
+    }
+
+    // The oldest events should have been evicted, so they can be re-verified.
+    assert!(verifier.verify("evt-0", b"{}", "verif-token", now).is_ok());
+    assert!(verifier.verify("evt-1", b"{}", "verif-token", now).is_ok());
+
+    // Recent events should still be replay-rejected.
+    assert_eq!(
+        verifier.verify("evt-10004", b"{}", "verif-token", now),
+        Err(WebhookError::EventReplayed)
+    );
+}

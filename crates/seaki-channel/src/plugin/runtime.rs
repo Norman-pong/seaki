@@ -1,7 +1,12 @@
 use std::sync::Arc;
-use wasmtime::{Caller, Engine, Instance, Linker, Module, Store};
+use wasmtime::{Caller, Engine, Instance, Linker, Module, Store, StoreLimitsBuilder};
 
 use crate::broker::secret::{BrokerError, SecretBroker};
+
+const DEFAULT_FUEL_LIMIT: u64 = 10_000_000;
+const DEFAULT_MAX_WASM_STACK: usize = 1 << 20; // 1MB
+const DEFAULT_MAX_MEMORY: usize = 64 * 1024 * 1024; // 64MB
+const MAX_HOST_BUFFER: i32 = 64 * 1024; // 64KB
 
 pub struct WasmPluginRuntime {
     engine: Engine,
@@ -19,6 +24,27 @@ pub struct PluginHostState {
     pub secret_broker: Arc<SecretBroker>,
     pub allowed_secret_scopes: Vec<String>,
     pub logs: Vec<(i32, String)>,
+    pub limits: wasmtime::StoreLimits,
+}
+
+impl PluginHostState {
+    pub fn new(
+        plugin_id: impl Into<String>,
+        allowed_network_hosts: Vec<String>,
+        secret_broker: Arc<SecretBroker>,
+        allowed_secret_scopes: Vec<String>,
+    ) -> Self {
+        Self {
+            plugin_id: plugin_id.into(),
+            allowed_network_hosts,
+            secret_broker,
+            allowed_secret_scopes,
+            logs: vec![],
+            limits: StoreLimitsBuilder::new()
+                .memory_size(DEFAULT_MAX_MEMORY)
+                .build(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,7 +70,12 @@ impl std::error::Error for RuntimeError {}
 
 impl WasmPluginRuntime {
     pub fn new() -> Result<Self, RuntimeError> {
-        let engine = Engine::default();
+        let mut config = wasmtime::Config::new();
+        config.consume_fuel(true);
+        config.max_wasm_stack(DEFAULT_MAX_WASM_STACK);
+        config.epoch_interruption(true);
+        let engine =
+            Engine::new(&config).map_err(|e| RuntimeError::WasmLoadFailed(e.to_string()))?;
         Ok(Self { engine })
     }
 
@@ -59,6 +90,8 @@ impl WasmPluginRuntime {
         host_state: PluginHostState,
     ) -> Result<WasmPluginInstance, RuntimeError> {
         let mut store = Store::new(&self.engine, host_state);
+        store.limiter(|state| &mut state.limits);
+        store.set_epoch_deadline(1);
         let mut linker = Linker::new(&self.engine);
 
         // Register seaki_host_log
@@ -67,6 +100,9 @@ impl WasmPluginRuntime {
                 "env",
                 "seaki_host_log",
                 |mut caller: Caller<PluginHostState>, level: i32, ptr: i32, len: i32| {
+                    if !(0..=MAX_HOST_BUFFER).contains(&len) {
+                        return;
+                    }
                     let memory = match caller.get_export("memory").and_then(|e| e.into_memory()) {
                         Some(m) => m,
                         None => return,
@@ -92,6 +128,11 @@ impl WasmPluginRuntime {
                  out_ptr: i32,
                  out_len: i32|
                  -> i32 {
+                    if !(0..=MAX_HOST_BUFFER).contains(&scope_len)
+                        || !(0..=MAX_HOST_BUFFER).contains(&out_len)
+                    {
+                        return -7;
+                    }
                     let memory = match caller.get_export("memory").and_then(|e| e.into_memory()) {
                         Some(m) => m,
                         None => return -1,
@@ -142,6 +183,11 @@ impl WasmPluginRuntime {
 impl WasmPluginInstance {
     /// Call the guest `init()` export function if it exists.
     pub fn call_init(&mut self) -> Result<(), RuntimeError> {
+        self.store
+            .set_fuel(DEFAULT_FUEL_LIMIT)
+            .map_err(|e| RuntimeError::ExecutionFailed(e.to_string()))?;
+        self.store.set_epoch_deadline(1);
+
         let init = self
             .instance
             .get_func(&mut self.store, "init")
@@ -155,6 +201,11 @@ impl WasmPluginInstance {
     /// Call the guest `handle_event(ptr: i32, len: i32) -> i32` export function.
     /// The guest receives a JSON string pointer and returns a response pointer.
     pub fn call_handle_event(&mut self, event_json: &str) -> Result<String, RuntimeError> {
+        self.store
+            .set_fuel(DEFAULT_FUEL_LIMIT)
+            .map_err(|e| RuntimeError::ExecutionFailed(e.to_string()))?;
+        self.store.set_epoch_deadline(1);
+
         let handle_event = self
             .instance
             .get_func(&mut self.store, "handle_event")
@@ -215,5 +266,12 @@ impl WasmPluginInstance {
     /// Get the logs collected from host function calls.
     pub fn logs(&self) -> &Vec<(i32, String)> {
         &self.store.data().logs
+    }
+
+    /// Get the remaining fuel in the store.
+    pub fn remaining_fuel(&self) -> Result<u64, RuntimeError> {
+        self.store
+            .get_fuel()
+            .map_err(|e| RuntimeError::ExecutionFailed(e.to_string()))
     }
 }

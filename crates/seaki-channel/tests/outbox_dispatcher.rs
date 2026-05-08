@@ -401,3 +401,17 @@ fn outbox_enqueue_rejects_duplicate_idempotency() {
     let r = outbox.enqueue(it);
     assert_eq!(r, Err("idempotency key already sent"));
 }
+
+#[test]
+fn retry_backoff_no_u32_overflow() {
+    let b = RetryBackoff {
+        base_delay: Duration::from_secs(1),
+        max_delay: Duration::from_secs(3600),
+        max_retries: 100,
+    };
+    // attempt_count >= 32 used to overflow with 2_u32.pow(attempt_count).
+    // With saturating_pow it should return max_delay.
+    assert_eq!(b.compute_next(31), Some(Duration::from_secs(3600)));
+    assert_eq!(b.compute_next(32), Some(Duration::from_secs(3600)));
+    assert_eq!(b.compute_next(100), None);
+}

@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
+const MAX_ISSUED_TOKENS: usize = 10_000;
+
 /// A secret stored in the broker. The raw value is never exposed to plugins.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecretEntry {
@@ -126,6 +128,23 @@ impl SecretBroker {
         };
 
         let mut issued_tokens = self.issued_tokens.lock().unwrap();
+
+        // Periodic cleanup of expired tokens when approaching capacity.
+        if issued_tokens.len().is_multiple_of(100) || issued_tokens.len() >= MAX_ISSUED_TOKENS {
+            let now = SystemTime::now();
+            issued_tokens.retain(|_, t| now <= t.expires_at);
+        }
+
+        // Hard limit: evict arbitrary entries if still over capacity after cleanup.
+        while issued_tokens.len() >= MAX_ISSUED_TOKENS {
+            let key_to_remove = issued_tokens.keys().next().cloned();
+            if let Some(key) = key_to_remove {
+                issued_tokens.remove(&key);
+            } else {
+                break;
+            }
+        }
+
         issued_tokens.insert(token_id, token.clone());
 
         Ok(token)
