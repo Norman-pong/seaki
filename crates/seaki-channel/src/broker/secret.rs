@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
+use tracing::info;
+
 const MAX_ISSUED_TOKENS: usize = 10_000;
 
 /// A secret stored in the broker. The raw value is never exposed to plugins.
@@ -30,7 +32,17 @@ impl SecretEntry {
     ///
     /// Callers must declare the purpose of access. This provides an audit hook
     /// point for future integration with an audit log sink.
-    pub fn expose_for(&self, _purpose: &str) -> &str {
+    #[track_caller]
+    pub fn expose_for(&self, purpose: &str) -> &str {
+        let location = std::panic::Location::caller();
+        info!(
+            scope = %self.scope,
+            purpose = %purpose,
+            timestamp = ?SystemTime::now(),
+            caller_file = %location.file(),
+            caller_line = %location.line(),
+            "secret_exposed"
+        );
         &self.raw_value
     }
 }
@@ -189,8 +201,10 @@ impl SecretBroker {
 #[cfg(test)]
 mod tests {
     use super::{SecretBroker, SecretEntry};
-    use std::sync::{Arc, Barrier};
+    use std::sync::{Arc, Barrier, Mutex};
     use std::thread;
+    use tracing::field::{Field, Visit};
+    use tracing::{span, Event, Id, Metadata, Subscriber};
 
     #[test]
     fn token_id_no_collisions_under_high_concurrency() {
@@ -234,5 +248,68 @@ mod tests {
             }
         }
         assert_eq!(all_tokens.len(), thread_count * tokens_per_thread);
+    }
+
+    type EventList = Vec<Vec<(String, String)>>;
+
+    #[derive(Debug, Clone, Default)]
+    struct AuditCapture {
+        events: Arc<Mutex<EventList>>,
+    }
+
+    struct AuditVisitor {
+        fields: Vec<(String, String)>,
+    }
+
+    impl Visit for AuditVisitor {
+        fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+            self.fields
+                .push((field.name().to_string(), format!("{value:?}")));
+        }
+    }
+
+    impl Subscriber for AuditCapture {
+        fn enabled(&self, _metadata: &Metadata<'_>) -> bool {
+            true
+        }
+        fn new_span(&self, _span: &span::Attributes<'_>) -> Id {
+            Id::from_u64(1)
+        }
+        fn record(&self, _span: &Id, _values: &span::Record<'_>) {}
+        fn record_follows_from(&self, _span: &Id, _follows: &Id) {}
+        fn event(&self, event: &Event<'_>) {
+            let mut visitor = AuditVisitor { fields: Vec::new() };
+            event.record(&mut visitor);
+            self.events.lock().unwrap().push(visitor.fields);
+        }
+        fn enter(&self, _span: &Id) {}
+        fn exit(&self, _span: &Id) {}
+    }
+
+    #[test]
+    fn expose_for_records_audit_log() {
+        let capture = AuditCapture::default();
+        let events = capture.events.clone();
+        tracing::subscriber::with_default(capture, || {
+            let entry = SecretEntry::new("scope1", "secret1", "desc");
+            let value = entry.expose_for("test_purpose");
+            assert_eq!(value, "secret1");
+        });
+
+        let logs = events.lock().unwrap();
+        assert_eq!(logs.len(), 1, "expected exactly one audit event");
+        let fields: std::collections::HashMap<String, String> = logs[0].iter().cloned().collect();
+        assert_eq!(fields.get("message"), Some(&"secret_exposed".to_string()));
+        assert_eq!(fields.get("scope"), Some(&"scope1".to_string()));
+        assert_eq!(fields.get("purpose"), Some(&"test_purpose".to_string()));
+        assert!(fields.contains_key("timestamp"), "expected timestamp field");
+        assert!(
+            fields.contains_key("caller_file"),
+            "expected caller_file field"
+        );
+        assert!(
+            fields.contains_key("caller_line"),
+            "expected caller_line field"
+        );
     }
 }

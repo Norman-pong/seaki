@@ -22,7 +22,7 @@ fn dummy_card(card_id: &str, next_review_at: u64) -> ReviewCard {
 
 #[test]
 fn review_queue_enqueue_and_due() {
-    let mut q = ReviewQueue::new();
+    let q = ReviewQueue::new();
     q.enqueue(dummy_card("c1", 100));
     q.enqueue(dummy_card("c2", 200));
     q.enqueue(dummy_card("c3", 50));
@@ -37,7 +37,7 @@ fn review_queue_enqueue_and_due() {
 
 #[test]
 fn review_queue_next_due_sorted() {
-    let mut q = ReviewQueue::new();
+    let q = ReviewQueue::new();
     q.enqueue(dummy_card("c1", 500));
     q.enqueue(dummy_card("c2", 100));
     q.enqueue(dummy_card("c3", 300));
@@ -51,7 +51,7 @@ fn review_queue_next_due_sorted() {
 
 #[test]
 fn review_queue_upcoming_preview() {
-    let mut q = ReviewQueue::new();
+    let q = ReviewQueue::new();
     q.enqueue(dummy_card("c1", 3600)); // 1 小时后
     q.enqueue(dummy_card("c2", 7200)); // 2 小时后
     q.enqueue(dummy_card("c3", 10800)); // 3 小时后
@@ -65,7 +65,7 @@ fn review_queue_upcoming_preview() {
 
 #[test]
 fn review_queue_update_card() {
-    let mut q = ReviewQueue::new();
+    let q = ReviewQueue::new();
     q.enqueue(dummy_card("c1", 100));
 
     let mut updated = dummy_card("c1", 100);
@@ -80,7 +80,7 @@ fn review_queue_update_card() {
 
 #[test]
 fn review_queue_update_card_not_found() {
-    let mut q = ReviewQueue::new();
+    let q = ReviewQueue::new();
     q.enqueue(dummy_card("c1", 100));
 
     let err = q.update_card(dummy_card("missing", 200)).unwrap_err();
@@ -89,7 +89,7 @@ fn review_queue_update_card_not_found() {
 
 #[test]
 fn review_queue_remove() {
-    let mut q = ReviewQueue::new();
+    let q = ReviewQueue::new();
     q.enqueue(dummy_card("c1", 100));
     q.enqueue(dummy_card("c2", 200));
 
@@ -99,4 +99,27 @@ fn review_queue_remove() {
 
     let missing = q.remove("c1");
     assert!(missing.is_none());
+}
+
+#[test]
+fn review_queue_concurrent_enqueue_and_due() {
+    use std::thread;
+
+    let q = std::sync::Arc::new(ReviewQueue::new());
+    let mut handles = vec![];
+
+    for i in 0..100 {
+        let q = q.clone();
+        handles.push(thread::spawn(move || {
+            q.enqueue(dummy_card(&format!("c{i}"), i as u64 * 10));
+        }));
+    }
+
+    for h in handles {
+        h.join().unwrap();
+    }
+
+    assert_eq!(q.len(), 100);
+    let due = q.due_cards(500);
+    assert!(due.len() >= 51); // 0..=50 are <= 500
 }

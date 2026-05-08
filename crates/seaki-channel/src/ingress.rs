@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::SystemTime;
 
+const MAX_AUDIT_LOG_SIZE: usize = 10_000;
+
 use crate::fake_provider::{ChannelEvent, ChannelMessagePayload};
 use crate::webhook::{WebhookError, WebhookVerifier};
 
@@ -339,6 +341,9 @@ impl<V: WebhookVerifier, R: IdentityResolver> IngressNormalizer<V, R> {
             timestamp: SystemTime::now(),
         };
         let mut log = self.audit_log.lock().unwrap();
+        if log.len() >= MAX_AUDIT_LOG_SIZE {
+            log.remove(0);
+        }
         log.push(record);
     }
 }

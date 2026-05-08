@@ -88,3 +88,61 @@ fn manifest_defaults_ttl_to_30_days() {
     assert_eq!(manifest.session_id, "s-1");
     assert_eq!(manifest.original_transcript_ref, "ref://original");
 }
+
+#[test]
+fn redaction_detects_auth_token() {
+    let input = "auth_token=secret123";
+    let (redacted, status) = redact_transcript(input);
+    assert_eq!(status, RedactionStatus::HasSecrets);
+    assert!(redacted.contains("auth_token=[REDACTED]"));
+}
+
+#[test]
+fn redaction_detects_access_token() {
+    let input = "access-token: secret123";
+    let (redacted, status) = redact_transcript(input);
+    assert_eq!(status, RedactionStatus::HasSecrets);
+    assert!(redacted.contains("access-token: [REDACTED]"));
+}
+
+#[test]
+fn redaction_detects_client_secret() {
+    let input = "client_secret=shh";
+    let (redacted, status) = redact_transcript(input);
+    assert_eq!(status, RedactionStatus::HasSecrets);
+    assert!(redacted.contains("client_secret=[REDACTED]"));
+}
+
+#[test]
+fn redaction_detects_private_key() {
+    let input = "private-key=hidden";
+    let (redacted, status) = redact_transcript(input);
+    assert_eq!(status, RedactionStatus::HasSecrets);
+    assert!(redacted.contains("private-key=[REDACTED]"));
+}
+
+#[test]
+fn redaction_detects_aws_secret_access_key() {
+    let input = "aws_secret_access_key=AKIAIOSFODNN7EXAMPLE";
+    let (redacted, status) = redact_transcript(input);
+    assert_eq!(status, RedactionStatus::HasSecrets);
+    assert!(redacted.contains("aws_secret_access_key=[REDACTED]"));
+}
+
+#[test]
+fn redaction_detects_aws_access_key_id() {
+    let input = "Key is AKIAIOSFODNN7EXAMPLE and done";
+    let (redacted, status) = redact_transcript(input);
+    assert_eq!(status, RedactionStatus::HasSecrets);
+    assert!(!redacted.contains("AKIAIOSFODNN7EXAMPLE"));
+    assert!(redacted.contains("[REDACTED]"));
+}
+
+#[test]
+fn redaction_detects_jwt_token() {
+    let input = "token is eyJhbGciOiJIUzI1NiIs.eyJpc3MiOiJ0ZXN0In0.signature";
+    let (redacted, status) = redact_transcript(input);
+    assert_eq!(status, RedactionStatus::HasSecrets);
+    assert!(!redacted.contains("eyJhbGciOiJIUzI1NiIs"));
+    assert!(redacted.contains("[REDACTED]"));
+}

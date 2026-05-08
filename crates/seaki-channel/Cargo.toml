@@ -23,6 +23,7 @@ sha2.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 toml = "0.8"
+tracing = "0.1"
 uuid = { version = "1.8", features = ["v7"] }
 wasmtime = { version = "29.0", default-features = false, features = ["cranelift", "runtime", "wat"] }
 

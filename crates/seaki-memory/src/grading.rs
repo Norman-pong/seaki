@@ -59,7 +59,12 @@ impl GradingEngine {
             (_, Grade::Easy) => 2.5 + 0.2 * f64::from(card.review_count),
         };
 
-        let new_stability = (card.stability_days * multiplier).max(0.01);
+        let raw_stability = card.stability_days * multiplier;
+        let new_stability = if raw_stability.is_finite() {
+            raw_stability.clamp(0.01, 3650.0)
+        } else {
+            3650.0
+        };
 
         let next_review = if grade == Grade::Again {
             now + 600

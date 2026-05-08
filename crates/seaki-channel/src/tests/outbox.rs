@@ -1,7 +1,10 @@
 use super::*;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, SystemTime};
+use tracing::field::{Field, Visit};
+use tracing::{span, Event, Id, Metadata, Subscriber};
 
 struct MockQueryAPI {
     result: ProviderQueryResult,
@@ -138,4 +141,92 @@ fn concurrent_lease_only_one_wins() {
 
     let item = outbox.item("i1").unwrap();
     assert!(item.lease_holder.is_some());
+}
+
+type WarnEventList = Vec<Vec<(String, String)>>;
+
+#[derive(Debug, Clone, Default)]
+struct WarnCapture {
+    events: Arc<Mutex<WarnEventList>>,
+}
+
+struct WarnVisitor {
+    fields: Vec<(String, String)>,
+}
+
+impl Visit for WarnVisitor {
+    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+        self.fields
+            .push((field.name().to_string(), format!("{value:?}")));
+    }
+}
+
+impl Subscriber for WarnCapture {
+    fn enabled(&self, _metadata: &Metadata<'_>) -> bool {
+        true
+    }
+    fn new_span(&self, _span: &span::Attributes<'_>) -> Id {
+        Id::from_u64(1)
+    }
+    fn record(&self, _span: &Id, _values: &span::Record<'_>) {}
+    fn record_follows_from(&self, _span: &Id, _follows: &Id) {}
+    fn event(&self, event: &Event<'_>) {
+        let mut visitor = WarnVisitor { fields: Vec::new() };
+        event.record(&mut visitor);
+        self.events.lock().unwrap().push(visitor.fields);
+    }
+    fn enter(&self, _span: &Id) {}
+    fn exit(&self, _span: &Id) {}
+}
+
+#[test]
+fn record_attempt_failure_not_silently_discarded() {
+    use crate::outbox::TEST_FORCE_RECORD_ATTEMPT_FAIL;
+    use std::sync::atomic::Ordering;
+
+    let capture = WarnCapture::default();
+    let events = capture.events.clone();
+
+    TEST_FORCE_RECORD_ATTEMPT_FAIL.store(true, Ordering::Relaxed);
+
+    tracing::subscriber::with_default(capture, || {
+        let outbox = Outbox::new();
+        outbox.enqueue(item("i1", "k1")).unwrap();
+
+        let dispatcher = OutboxDispatcher;
+        let backoff = RetryBackoff {
+            base_delay: Duration::from_secs(1),
+            max_delay: Duration::from_secs(60),
+            max_retries: 3,
+        };
+        let provider = FakeProviderDriver::new();
+
+        let results = dispatcher.dispatch_round(
+            &outbox,
+            &provider,
+            "worker-1",
+            Duration::from_secs(30),
+            &backoff,
+            SystemTime::now(),
+        );
+
+        // The item should still be sent (record_attempt failure is warned, not aborted)
+        assert!(results
+            .iter()
+            .any(|r| matches!(r, DispatchResult::Sent(id) if id == "i1")));
+    });
+
+    TEST_FORCE_RECORD_ATTEMPT_FAIL.store(false, Ordering::Relaxed);
+
+    let logs = events.lock().unwrap();
+    assert!(
+        logs.iter().any(|fields| {
+            let map: std::collections::HashMap<String, String> = fields.iter().cloned().collect();
+            map.get("message") == Some(&"record_attempt failed".to_string())
+                && map.contains_key("error")
+                && map.get("error") == Some(&"injected test failure".to_string())
+        }),
+        "expected a warning log when record_attempt fails, got logs: {:?}",
+        *logs
+    );
 }

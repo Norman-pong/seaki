@@ -129,3 +129,18 @@ fn grading_stability_minimum_floor() {
     // 0.01 * 0.3 = 0.003, but floor is 0.01
     assert_eq!(result.new_stability_days, 0.01);
 }
+
+#[test]
+fn grading_stability_overflow_saturates_to_cap() {
+    let engine = GradingEngine::new();
+    let mut card = dummy_card(CardDifficulty::Medium, 1.0e200, 0);
+    // Easy multiplier = 2.5, 1.0e200 * 2.5 = inf
+    let result = engine.grade(&card, Grade::Easy, 1000);
+    assert!(result.new_stability_days.is_finite());
+    assert_eq!(result.new_stability_days, 3650.0);
+
+    // Also test with a very large but finite stability that would exceed cap
+    card.stability_days = 5000.0;
+    let result = engine.grade(&card, Grade::Easy, 1000);
+    assert_eq!(result.new_stability_days, 3650.0);
+}

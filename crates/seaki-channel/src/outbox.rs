@@ -4,6 +4,14 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
+use tracing::warn;
+
+#[cfg(test)]
+use std::sync::atomic::{AtomicBool, Ordering};
+
+#[cfg(test)]
+pub(crate) static TEST_FORCE_RECORD_ATTEMPT_FAIL: AtomicBool = AtomicBool::new(false);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OutboxStatus {
     Pending,
@@ -221,7 +229,7 @@ impl OutboxDispatcher {
                     .unwrap_or_else(|_| Duration::from_secs(0))
                     .as_millis()
             );
-            let _ = outbox.record_attempt(ChannelSendAttempt {
+            if let Err(e) = outbox.record_attempt(ChannelSendAttempt {
                 attempt_id,
                 outbox_item_id: item_id.clone(),
                 status: OutboxStatus::Sending,
@@ -232,7 +240,9 @@ impl OutboxDispatcher {
                 attempt_count: current_item.attempt_count,
                 next_attempt_at: current_item.next_attempt_at,
                 last_error_code: current_item.last_error_code.clone(),
-            });
+            }) {
+                warn!(error = %e, item_id = %item_id, "record_attempt failed");
+            }
 
             match provider.send(&current_item) {
                 Ok(()) => {
@@ -518,6 +528,10 @@ impl Outbox {
     ///
     /// Currently infallible; returns `Ok(())`.
     pub fn record_attempt(&self, attempt: ChannelSendAttempt) -> Result<(), &'static str> {
+        #[cfg(test)]
+        if TEST_FORCE_RECORD_ATTEMPT_FAIL.load(Ordering::Relaxed) {
+            return Err("injected test failure");
+        }
         let mut attempts = self.attempts.lock().unwrap();
         attempts.push(attempt);
         Ok(())

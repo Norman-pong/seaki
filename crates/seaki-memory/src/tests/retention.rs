@@ -33,3 +33,46 @@ fn retention_days_to_threshold() {
     let days = RetentionScheduler::days_to_threshold(2.0, 0.5);
     assert!((days - 1.386_294_361_12).abs() < 1e-10);
 }
+
+#[test]
+fn retention_days_to_threshold_invalid() {
+    // stability <= 0
+    assert_eq!(RetentionScheduler::days_to_threshold(0.0, 0.5), 0.0);
+    assert_eq!(RetentionScheduler::days_to_threshold(-1.0, 0.5), 0.0);
+
+    // threshold <= 0 -> saturate to MAX
+    assert_eq!(RetentionScheduler::days_to_threshold(1.0, 0.0), f64::MAX);
+    assert_eq!(RetentionScheduler::days_to_threshold(1.0, -0.1), f64::MAX);
+
+    // threshold >= 1 -> 0
+    assert_eq!(RetentionScheduler::days_to_threshold(1.0, 1.0), 0.0);
+    assert_eq!(RetentionScheduler::days_to_threshold(1.0, 1.5), 0.0);
+}
+
+#[test]
+fn retention_is_due_boundary_threshold() {
+    let now = 1_000_000u64;
+    let last = now - 86400;
+
+    // threshold <= 0 -> always false
+    assert!(!RetentionScheduler::is_due(last, 1.0, 0.0, now));
+    assert!(!RetentionScheduler::is_due(last, 1.0, -0.5, now));
+
+    // threshold >= 1 -> always true
+    assert!(RetentionScheduler::is_due(last, 10.0, 1.0, now));
+    assert!(RetentionScheduler::is_due(last, 10.0, 1.5, now));
+}
+
+#[test]
+fn retention_negative_stability() {
+    // negative stability should not panic and return clamped values
+    let r = RetentionScheduler::retention(1.0, -1.0);
+    assert_eq!(r, 0.0);
+}
+
+#[test]
+fn retention_next_review_at_negative_stability() {
+    let last = 1_000_000u64;
+    // negative stability should act like 0
+    assert_eq!(RetentionScheduler::next_review_at(last, -5.0), last);
+}
