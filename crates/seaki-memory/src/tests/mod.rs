@@ -1,3 +1,4 @@
+mod card_generator;
 mod conflict_detector;
 mod frozen_snapshot;
 mod grading;
@@ -10,5 +11,7 @@ mod redaction;
 mod retention;
 mod review_card;
 mod review_queue;
+mod runbook_index;
 mod session_memory;
 mod session_search;
+mod topic_clustering;

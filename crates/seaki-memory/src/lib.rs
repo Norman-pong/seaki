@@ -1,3 +1,4 @@
+pub mod card_generator;
 pub mod conflict_detector;
 pub mod frozen_snapshot;
 pub mod grading;
@@ -10,11 +11,14 @@ pub mod redaction;
 pub mod retention;
 pub mod review_card;
 pub mod review_queue;
+pub mod runbook_index;
 pub mod session_memory;
 pub mod session_search;
+pub mod topic_clustering;
 
 pub const SCHEMA_VERSION: u32 = 1;
 
+pub use card_generator::*;
 pub use conflict_detector::*;
 pub use frozen_snapshot::*;
 pub use grading::*;
@@ -29,11 +33,13 @@ pub use redaction::{redact_and_summarize, RedactedSessionManifest, RedactionStat
 pub use retention::*;
 pub use review_card::*;
 pub use review_queue::*;
+pub use runbook_index::*;
 pub use session_memory::*;
 pub use session_search::{
     session_scope, SessionCleanupAction, SessionIndexStatus, SessionManifestEntry,
     SessionSearchCandidate, SessionSearchError, SessionSearchIndex,
 };
+pub use topic_clustering::*;
 
 #[cfg(test)]
 mod tests;
