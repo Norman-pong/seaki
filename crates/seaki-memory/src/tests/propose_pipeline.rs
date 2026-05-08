@@ -170,3 +170,63 @@ fn pipeline_allows_valid_memory() {
     assert_eq!(processed.memory_id, "m1");
     assert_eq!(processed.status, MemoryStatus::Proposed);
 }
+
+#[test]
+fn pipeline_audit_record_created() {
+    let scope = IndexScope::new("ws1", "acc1");
+    let store = MemoryStore::new(100);
+    let pipeline = MemoryProposePipeline::with_scope(scope.clone());
+    let checker = DefaultMemoryPolicyChecker::new();
+
+    let content = "audit me please";
+    let mut item = make_item(
+        "m-audit",
+        MemoryKind::ProjectConvention,
+        &scope,
+        content,
+        TrustLevel::Confirmed,
+        MemoryStatus::Proposed,
+        Some("source".to_string()),
+    );
+    item.confirmed_by = Some("tester".to_string());
+
+    let result = pipeline.process(item, &store, &checker, 42_000);
+    assert!(result.is_ok());
+
+    let audits = pipeline.take_audit_log();
+    assert_eq!(audits.len(), 1);
+
+    let record = &audits[0];
+    assert_eq!(record.actor, "tester");
+    assert_eq!(record.timestamp, 42_000);
+    assert_eq!(record.memory_id, "m-audit");
+    // SHA-256 of "audit me please"
+    assert!(!record.proposed_content_hash.is_empty());
+    assert_eq!(record.proposed_content_hash.len(), 64);
+}
+
+#[test]
+fn pipeline_audit_uses_origin_when_no_confirmed_by() {
+    let scope = IndexScope::new("ws1", "acc1");
+    let store = MemoryStore::new(100);
+    let pipeline = MemoryProposePipeline::new();
+    let checker = DefaultMemoryPolicyChecker::new();
+
+    let item = make_item(
+        "m-origin",
+        MemoryKind::ProjectConvention,
+        &scope,
+        "content without confirmed_by",
+        TrustLevel::Confirmed,
+        MemoryStatus::Proposed,
+        Some("source".to_string()),
+    );
+
+    let result = pipeline.process(item, &store, &checker, 1000);
+    assert!(result.is_ok());
+
+    let audits = pipeline.take_audit_log();
+    assert_eq!(audits.len(), 1);
+    assert_eq!(audits[0].actor, "UserExplicit");
+    assert_eq!(audits[0].memory_id, "m-origin");
+}

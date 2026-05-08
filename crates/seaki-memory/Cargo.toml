@@ -14,6 +14,8 @@ path = "src/lib.rs"
 
 [dependencies]
 seaki-index = { path = "../seaki-index" }
+sha2 = { workspace = true }
+tracing = "0.1"
 
 [dev-dependencies]
 tempfile.workspace = true

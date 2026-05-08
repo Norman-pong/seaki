@@ -1,7 +1,7 @@
 use crate::memory_item::{
     MemoryItem, MemoryKind, MemoryOrigin, MemoryProvenance, MemoryStatus, TrustLevel,
 };
-use crate::memory_store::{CapacityStatus, MemoryStore, MemoryStoreError};
+use crate::memory_store::{CapacityStatus, EvictionReason, MemoryStore, MemoryStoreError};
 use seaki_index::IndexScope;
 
 fn scope() -> IndexScope {
@@ -48,13 +48,20 @@ fn memory_store_capacity_limit_enforced() {
     store.propose(dummy_item("mem-1", 100)).unwrap();
     store.propose(dummy_item("mem-2", 200)).unwrap();
 
-    // 第 3 个插入时触发淘汰：最旧的 mem-1（Proposed）被 Archive
+    // 第 3 个插入时触发淘汰：最旧的 mem-1（Proposed）被彻底移除
     store.propose(dummy_item("mem-3", 300)).unwrap();
 
-    assert_eq!(store.len(), 3);
-    assert_eq!(store.get("mem-1").unwrap().status, MemoryStatus::Archived);
-    // 3/2 = 150% >= 100%，容量状态为 Full（evict 只改状态不移除）
+    assert_eq!(store.len(), 2);
+    assert!(store.get("mem-1").is_none());
+    // 2/2 = 100%，容量状态为 Full
     assert_eq!(store.check_capacity(), CapacityStatus::Full);
+
+    // 验证 audit trail
+    let log = store.eviction_log();
+    assert_eq!(log.len(), 1);
+    assert_eq!(log[0].memory_id, "mem-1");
+    assert_eq!(log[0].reason, EvictionReason::CapacityLimit);
+    assert!(log[0].evicted_at > 0);
 }
 
 #[test]
@@ -102,7 +109,13 @@ fn memory_store_evict_lru_when_full() {
     // 此时已满（3/3），再插入应淘汰最旧的非关键项 mem-old
     store.propose(dummy_item("mem-extra", 300)).unwrap();
 
-    assert_eq!(store.get("mem-old").unwrap().status, MemoryStatus::Archived);
+    assert!(store.get("mem-old").is_none());
+    assert_eq!(store.len(), 3);
+
+    let log = store.eviction_log();
+    assert_eq!(log.len(), 1);
+    assert_eq!(log[0].memory_id, "mem-old");
+    assert_eq!(log[0].reason, EvictionReason::CapacityLimit);
 }
 
 #[test]
@@ -190,4 +203,40 @@ fn memory_store_capacity_status() {
     store.propose(dummy_item("mem-9", 9)).unwrap();
     // 10/10 = 100%，Full
     assert_eq!(store.check_capacity(), CapacityStatus::Full);
+}
+
+#[test]
+fn memory_store_evict_removes_data_and_leaves_audit() {
+    let mut store = MemoryStore::new(1);
+    let item = dummy_item("mem-1", 100);
+    store.propose(item).unwrap();
+
+    // 容量为 1，再插入必须淘汰 mem-1
+    store.propose(dummy_item("mem-2", 200)).unwrap();
+
+    assert!(store.get("mem-1").is_none());
+    assert!(store.get("mem-2").is_some());
+    assert_eq!(store.len(), 1);
+
+    let log = store.eviction_log();
+    assert_eq!(log.len(), 1);
+    assert_eq!(log[0].memory_id, "mem-1");
+    assert_eq!(log[0].reason, EvictionReason::CapacityLimit);
+    assert!(log[0].evicted_at > 0);
+}
+
+#[test]
+fn memory_store_evict_all_critical_returns_error() {
+    let mut store = MemoryStore::new(2);
+    let mut a = dummy_item("mem-a", 100);
+    a.status = MemoryStatus::Active;
+    let mut b = dummy_item("mem-b", 200);
+    b.status = MemoryStatus::Active;
+
+    store.propose(a).unwrap();
+    store.propose(b).unwrap();
+
+    // 两个都是 Active，无法再插入
+    let result = store.propose(dummy_item("mem-c", 300));
+    assert!(matches!(result, Err(MemoryStoreError::CapacityExceeded)));
 }

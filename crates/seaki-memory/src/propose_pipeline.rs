@@ -2,9 +2,21 @@
 
 use crate::{MemoryItem, MemoryStatus, MemoryStore, TrustLevel};
 use seaki_index::IndexScope;
+use sha2::{Digest, Sha256};
+use std::fmt::Write;
+use std::sync::Mutex;
 
 pub struct MemoryProposePipeline {
     expected_scope: Option<IndexScope>,
+    audit_log: Mutex<Vec<MemoryProposeAuditRecord>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MemoryProposeAuditRecord {
+    pub actor: String,
+    pub timestamp: u64,
+    pub memory_id: String,
+    pub proposed_content_hash: String,
 }
 
 impl MemoryProposePipeline {
@@ -12,6 +24,7 @@ impl MemoryProposePipeline {
     pub fn new() -> Self {
         Self {
             expected_scope: None,
+            audit_log: Mutex::new(Vec::new()),
         }
     }
 
@@ -19,6 +32,7 @@ impl MemoryProposePipeline {
     pub fn with_scope(expected_scope: IndexScope) -> Self {
         Self {
             expected_scope: Some(expected_scope),
+            audit_log: Mutex::new(Vec::new()),
         }
     }
 
@@ -28,7 +42,7 @@ impl MemoryProposePipeline {
         item: MemoryItem,
         store: &MemoryStore,
         policy_check: &dyn MemoryPolicyChecker,
-        _now: u64,
+        now: u64,
     ) -> Result<MemoryItem, ProposePipelineError> {
         // 1. Policy check
         policy_check
@@ -58,13 +72,40 @@ impl MemoryProposePipeline {
             }
         }
 
-        // 5. Audit (simplified stub)
-        let _audit_record = format!(
-            "[AUDIT] memory_id={} kind={:?} proposed_at={} status={:?}",
-            item.memory_id, item.kind, item.proposed_at, item.status
+        // 5. Audit
+        let actor = item
+            .confirmed_by
+            .clone()
+            .unwrap_or_else(|| format!("{:?}", item.provenance.origin));
+        let proposed_content_hash = hash_content(&item.content);
+        let record = MemoryProposeAuditRecord {
+            actor: actor.clone(),
+            timestamp: now,
+            memory_id: item.memory_id.clone(),
+            proposed_content_hash: proposed_content_hash.clone(),
+        };
+
+        {
+            let mut log = self.audit_log.lock().expect("audit log mutex poisoned");
+            log.push(record.clone());
+        }
+
+        tracing::info!(
+            actor = %actor,
+            timestamp = now,
+            memory_id = %item.memory_id,
+            proposed_content_hash = %proposed_content_hash,
+            "memory_propose_audited"
         );
 
         Ok(item)
+    }
+
+    /// 取出当前累积的 audit log 并清空内部缓存。
+    #[must_use]
+    pub fn take_audit_log(&self) -> Vec<MemoryProposeAuditRecord> {
+        let mut log = self.audit_log.lock().expect("audit log mutex poisoned");
+        std::mem::take(&mut *log)
     }
 }
 
@@ -167,4 +208,13 @@ fn find_duplicate(store: &MemoryStore, item: &MemoryItem) -> Option<String> {
         }
     }
     None
+}
+
+fn hash_content(content: &str) -> String {
+    let digest = Sha256::digest(content.as_bytes());
+    let mut output = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        write!(output, "{byte:02x}").unwrap();
+    }
+    output
 }

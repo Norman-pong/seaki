@@ -3,11 +3,13 @@
 use crate::memory_item::{MemoryItem, MemoryKind, MemoryStatus};
 use seaki_index::IndexScope;
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug)]
 pub struct MemoryStore {
     items: HashMap<String, MemoryItem>,
     capacity_limit: usize,
+    eviction_log: Vec<EvictionRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,12 +31,25 @@ pub enum CapacityStatus {
     Full,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvictionRecord {
+    pub memory_id: String,
+    pub evicted_at: u64,
+    pub reason: EvictionReason,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EvictionReason {
+    CapacityLimit,
+}
+
 impl MemoryStore {
     #[must_use]
     pub fn new(capacity_limit: usize) -> Self {
         Self {
             items: HashMap::new(),
             capacity_limit,
+            eviction_log: Vec::new(),
         }
     }
 
@@ -132,9 +147,17 @@ impl MemoryStore {
         }
     }
 
-    /// 按 LRU（以 `proposed_at` 近似）淘汰最旧的非关键项到 `Archived`，
+    #[must_use]
+    pub fn eviction_log(&self) -> &[EvictionRecord] {
+        &self.eviction_log
+    }
+
+    /// 按 LRU（以 `proposed_at` 近似）淘汰最旧的非关键项，
     /// 直到容量低于上限。若全部项均为关键状态（Active / Approved）且无法淘汰，
     /// 则返回容量超限错误。
+    ///
+    /// 被淘汰的项会从 `items` 中彻底移除，并生成 [`EvictionRecord`] 写入
+    /// `eviction_log` 以供审计。
     ///
     /// # Errors
     ///
@@ -153,8 +176,16 @@ impl MemoryStore {
             .map(|i| i.memory_id.clone());
 
         if let Some(id) = candidate {
-            if let Some(item) = self.items.get_mut(&id) {
-                item.status = MemoryStatus::Archived;
+            if let Some(item) = self.items.remove(&id) {
+                let evicted_at = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                self.eviction_log.push(EvictionRecord {
+                    memory_id: item.memory_id,
+                    evicted_at,
+                    reason: EvictionReason::CapacityLimit,
+                });
             }
             return Ok(());
         }
@@ -168,8 +199,16 @@ impl MemoryStore {
             .map(|i| i.memory_id.clone());
 
         if let Some(id) = candidate {
-            if let Some(item) = self.items.get_mut(&id) {
-                item.status = MemoryStatus::Archived;
+            if let Some(item) = self.items.remove(&id) {
+                let evicted_at = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                self.eviction_log.push(EvictionRecord {
+                    memory_id: item.memory_id,
+                    evicted_at,
+                    reason: EvictionReason::CapacityLimit,
+                });
             }
             return Ok(());
         }
