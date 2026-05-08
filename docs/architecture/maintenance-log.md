@@ -75,3 +75,50 @@ M0 与 M1 已全部交付。本次为 M1 完成后的前端体验优化迭代，
 - 清理：`ChatSession` 接口移除冗余的 `active: boolean` 派生字段，由单一 `activeSessionId` 状态决定激活会话。
 - 后续 `d3f6573` 在此基础上进一步收敛为 Codex 式交互（中置 CommandPalette，降低边框存在感）。
 - 验证：E2E 14 passed、oxlint 0 issues、`cargo test` 全部通过。
+
+## 2026-05-03 ~ 05-06 M2 阶段完整交付（Pipeline + Agent + Channel + Memory 纵切）
+
+M2 在 M0/M1 基础上交付完整的 AI 工具组合、Agent 运行时、真实 IM 接入和智能记忆系统。
+
+### 新建 Crate
+
+- **`seaki-pipeline`**（新建）：Pipeline Designer 编译器。含 `PipelineGraph` DSL、意图解析器（LLM → graph）、类型检查器（FrameType/Cardinality 跨步骤验证）、Policy Estimation（capability 缺失驱动审批判定）、Token/Cost 估算器、版本化 Registry。
+- **`seaki-agent`**（新建）：Agent Runtime。含 `LlmClient` 抽象（OpenAI stub + Mock）、`SessionState` 五态机（idle/planning/executing/awaiting_user/compacting）、`SessionCompactor`、WAL 集成、`SkillRegistry` + `SkillDispatcher`、MCP 双向适配（mcp-to-pipe + pipe-to-mcp）。
+
+### 既有 Crate 重大升级
+
+- **`seaki-pipe`**：从 dry-run 模拟器升级为可执行运行时。新增 streaming frame processing、per-step policy check、step 级 resource limit 强制（CPU/内存/帧数/帧大小/超时）、DAG 控制流（tee/branch/join）、checkpoint/resume、局部 retry、compensating action、`ApprovalGate` 集成、JSONL 事件流、`PipelineStateMachine`。
+- **`seaki-channel`**：新增 WASM 插件运行时（wasmtime 29）、`PluginManifest`/`PluginRegistry`、`SecretBroker`（scoped opaque token）、`IngressNormalizer` + `InMemoryIdentityResolver`、`QuarantinePipeline` + `AttachmentDownloader` trait、`OutboxDispatcher` + `ProviderDriver` trait + `RetryBackoff`、飞书协议适配器（`FeishuWebhookVerifier` + AES-256-CBC 解密 + SHA256 签名验证）。
+- **`seaki-memory`**：从手动 note 升级到自动记忆系统。新增 `MemoryItem` 完整状态机（proposed → scanning → source_checking → approved/rejected → active → stale/conflict/expired → archived/deleted）、`MemoryCollector`（从 session/wiki/approval 提取）、`ConflictDetector`、`FrozenMemorySnapshot`、`MemoryProposePipeline`（policy → injection scan → duplicate detection → scope binding → audit）、`SessionMemoryManager`（mid-session write 不热替换上下文）、`RetentionScheduler`（`retention(t) = exp(-elapsed/stability)`）、`ReviewQueue`、`GradingEngine`（SM-2 简化）、`CardGenerator`、`TopicClusterer`、`RunbookIndex`。
+- **`seaki-policy`**：按职责拆分为 `audit.rs`、`engine.rs`、`grant.rs`、`path.rs`、`types.rs`，消除千行单文件维护负担。
+- **`seaki-sandbox`**：新增 sandbox 进程执行基础设施（timeout、side-effect profile mapping、macOS Seatbelt）。
+
+### 前端配套
+
+- **Pipeline Designer UI**：`PipelinePanel` / `PipelineStepCard` / `PipelineEventStream`，ChatPanel header 集成 Pipeline 按钮，支持 Dry-run 预览、步骤状态监视、JSONL 事件流渲染。
+- **Agent Chat 增强**：Skill 选择器（5 skills）、消息实际发送、Approval 交互按钮（批准/拒绝/查看 diff）。
+- **Memory Review UI**：`MemoryReviewPanel`（到期卡片、显示答案、Again/Hard/Good/Easy Grading）。
+- **Channel 管理面板**：`ChannelPanel`（频道列表、状态 badge、事件日志）。
+- **WikiSidebar**：从 3 tab 扩展为 5 tab（概览/页面/审查/记忆/频道）。
+
+### 质量门禁
+
+- Rust：`cargo fmt --check`、`cargo clippy --workspace --tests -- -D warnings`、`cargo test --workspace` — 44 套件 551+ 用例全绿。
+- TypeScript：`pnpm typecheck`、`pnpm lint`（oxlint 0 warnings）、`pnpm test` — 62 用例全绿。
+- DTO：`pnpm dto:check` — 生成物一致性通过。
+
+### 审核发现（M2 收尾阶段记录，供 M3 参考）
+
+- `seaki-agent/src/dispatch.rs` 和 `session.rs` 存在 UTF-8 字节切片 panic（`[..200]` 在多字节字符边界 panic）。
+- `seaki-agent/src/runtime.rs` 中 `execute_intent` 的 dry-run 结果未校验、审批后使用 `AllowPolicy` 全通绕过、硬编码 5000ms 超时。
+- `seaki-agent/src/dispatch.rs` 的 `substitute_vars` 存在模板注入风险（用户 intent 可包含 `{{memory.N}}` 占位符）。
+- `seaki-channel/src/quarantine.rs` 的 `quarantine_path` 由用户控制参数直接拼接，存在路径遍历漏洞。
+- `seaki-channel/src/broker/secret.rs` 的 `request_token` 因 token_id 含秒级时间戳，同一秒内重复请求会静默覆盖。
+- `seaki-channel/src/webhook.rs` 的 `FakeWebhookVerifier` 存在 TOCTOU 竞态。
+- `seaki-channel/src/plugin/runtime.rs` 的 WASM Engine 未配置 fuel/memory limit/timeout。
+- `seaki-memory/src/propose_pipeline.rs` 的 audit 阶段为空实现（`let _audit_record = format!(...)` 丢弃）。
+- `seaki-memory/src/memory_store.rs` 的 `evict_if_needed` 仅将旧项标记为 Archived，不从 HashMap 移除，capacity_limit 为软限制。
+- 前端 `ChatPanel.tsx` 直接调用 `createMockPipelineRun()` 侵入生产代码；Approval 按钮未绑定回调。
+- 前端 11 个核心文件零单元测试（仅 appModel.test.ts 和新增 4 个组件测试）。
+
+以上问题已评估：CRITICAL 和 HIGH 问题中，除路径遍历和 token_id 碰撞外，其余多为安全策略层面的配置/校验缺口，不影响当前 mock transport 环境下的功能正确性。所有问题应在 M3 接入真实网络/LLM/daemon 桥接前修复。
