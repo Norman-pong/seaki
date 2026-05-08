@@ -101,11 +101,29 @@ impl SkillDispatcher {
         })?;
 
         if !admission_check.allowed {
-            let missing = admission_check.missing_capabilities.join(", ");
-            let reason = if missing.is_empty() {
-                "missing required scopes".to_string()
+            let mut parts = Vec::new();
+            if !admission_check.missing_capabilities.is_empty() {
+                parts.push(format!(
+                    "missing capabilities: {}",
+                    admission_check.missing_capabilities.join(", ")
+                ));
+            }
+            if !admission_check.missing_memory_scopes.is_empty() {
+                parts.push(format!(
+                    "missing memory scopes: {}",
+                    admission_check.missing_memory_scopes.join(", ")
+                ));
+            }
+            if !admission_check.missing_source_scopes.is_empty() {
+                parts.push(format!(
+                    "missing source scopes: {}",
+                    admission_check.missing_source_scopes.join(", ")
+                ));
+            }
+            let reason = if parts.is_empty() {
+                "skill not allowed".to_string()
             } else {
-                format!("missing capabilities: {missing}")
+                parts.join("; ")
             };
             return Err(DispatchError::SkillNotAllowed {
                 skill_id: skill.skill_id.clone(),
@@ -269,40 +287,30 @@ fn substitute_in_value(
     }
 }
 
-fn substitute_vars(template: &str, intent: &str, context: &InjectedContext) -> String {
+pub(crate) fn substitute_vars(template: &str, intent: &str, context: &InjectedContext) -> String {
     let mut result = template.to_string();
 
-    // {{intent}}
-    result = result.replace("{{intent}}", intent);
-
-    // {{session.summary}}
-    result = result.replace("{{session.summary}}", &context.session_summary);
-
-    // {{memory.N}}
+    // 1. Replace memory items first so that user intent cannot influence them.
     for (i, item) in context.memory_items.iter().enumerate() {
         result = result.replace(&format!("{{{{memory.{i}}}}}",), item);
     }
 
-    // {{wiki.N}}
+    // 2. Replace wiki claims.
     for (i, item) in context.wiki_claims.iter().enumerate() {
         result = result.replace(&format!("{{{{wiki.{i}}}}}",), item);
     }
 
-    // Remove any remaining unmatched template variables.
-    // This is a best-effort cleanup for simple {{var}} patterns.
-    loop {
-        let mut changed = false;
-        if let Some(start) = result.find("{{") {
-            if let Some(end) = result[start..].find("}}") {
-                let end = start + end + 2;
-                result.replace_range(start..end, "");
-                changed = true;
-            }
-        }
-        if !changed {
-            break;
-        }
-    }
+    // 3. Replace session summary.
+    result = result.replace("{{session.summary}}", &context.session_summary);
+
+    // 4. Replace intent LAST to prevent user input from being re-parsed.
+    //    Any template syntax the user embeds in their intent will remain literal.
+    result = result.replace("{{intent}}", intent);
+
+    // 5. Escape any remaining `{{` to `\{\{` to neutralize leftover template syntax.
+    //    This acts as defense-in-depth: any unresolved `{{...}}` patterns (whether
+    //    from malformed templates or from user input) are rendered harmless.
+    result = result.replace("{{", "\\{\\{");
 
     result
 }

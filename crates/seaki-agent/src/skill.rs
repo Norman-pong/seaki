@@ -283,11 +283,35 @@ impl SkillAdmission {
             }
         }
 
-        // Memory and source scope validation are placeholders for M2-M01 / M2-M02.
-        let missing_memory_scopes = Vec::new();
-        let missing_source_scopes = Vec::new();
+        let mut missing_memory_scopes = Vec::new();
+        for scope in &skill.required_memory_scopes {
+            match capability_store.has_memory_scope(actor_id, workspace_id, scope) {
+                Ok(true) => {}
+                Ok(false) => {
+                    missing_memory_scopes.push(scope.clone());
+                }
+                Err(e) => {
+                    return Err(AdmissionError::MemoryScopeCheckFailed(e.to_string()));
+                }
+            }
+        }
 
-        let allowed = missing_capabilities.is_empty();
+        let mut missing_source_scopes = Vec::new();
+        for scope in &skill.required_source_scopes {
+            match capability_store.has_source_scope(actor_id, workspace_id, scope) {
+                Ok(true) => {}
+                Ok(false) => {
+                    missing_source_scopes.push(scope.clone());
+                }
+                Err(e) => {
+                    return Err(AdmissionError::SourceScopeCheckFailed(e.to_string()));
+                }
+            }
+        }
+
+        let allowed = missing_capabilities.is_empty()
+            && missing_memory_scopes.is_empty()
+            && missing_source_scopes.is_empty();
 
         Ok(AdmissionCheck {
             skill_id: skill.skill_id.clone(),
@@ -311,6 +335,8 @@ pub struct AdmissionCheck {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AdmissionError {
     CapabilityCheckFailed(String),
+    MemoryScopeCheckFailed(String),
+    SourceScopeCheckFailed(String),
 }
 
 impl fmt::Display for AdmissionError {
@@ -318,6 +344,12 @@ impl fmt::Display for AdmissionError {
         match self {
             Self::CapabilityCheckFailed(msg) => {
                 write!(f, "capability check failed: {msg}")
+            }
+            Self::MemoryScopeCheckFailed(msg) => {
+                write!(f, "memory scope check failed: {msg}")
+            }
+            Self::SourceScopeCheckFailed(msg) => {
+                write!(f, "source scope check failed: {msg}")
             }
         }
     }

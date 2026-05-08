@@ -169,6 +169,141 @@ fn skill_admission_missing_capability() {
 }
 
 #[test]
+fn skill_admission_missing_memory_scope() {
+    let store = CapabilityStore::new();
+    store
+        .issue_capability_grant(
+            "grant1".to_string(),
+            "actor1".to_string(),
+            "ws1".to_string(),
+            "file.read".to_string(),
+            "agent".to_string(),
+            "execute".to_string(),
+            None,
+            None,
+            1,
+            "admin".to_string(),
+        )
+        .unwrap()
+        .unwrap();
+    store
+        .set_memory_scopes("actor1", "ws1", vec!["user.preference".to_string()])
+        .unwrap();
+
+    let mut skill = sample_skill("sk-001");
+    skill.required_capabilities = vec!["file.read".to_string()];
+    skill.required_memory_scopes = vec![
+        "user.preference".to_string(),
+        "project.convention".to_string(),
+    ];
+
+    let check = SkillAdmission::check(&skill, &store, "actor1", "ws1").unwrap();
+    assert!(!check.allowed);
+    assert!(check.missing_capabilities.is_empty());
+    assert_eq!(check.missing_memory_scopes, vec!["project.convention"]);
+    assert!(check.missing_source_scopes.is_empty());
+}
+
+#[test]
+fn skill_admission_missing_source_scope() {
+    let store = CapabilityStore::new();
+    store
+        .issue_capability_grant(
+            "grant1".to_string(),
+            "actor1".to_string(),
+            "ws1".to_string(),
+            "file.read".to_string(),
+            "agent".to_string(),
+            "execute".to_string(),
+            None,
+            None,
+            1,
+            "admin".to_string(),
+        )
+        .unwrap()
+        .unwrap();
+    store
+        .set_source_scopes("actor1", "ws1", vec!["wiki.public".to_string()])
+        .unwrap();
+
+    let mut skill = sample_skill("sk-001");
+    skill.required_capabilities = vec!["file.read".to_string()];
+    skill.required_source_scopes = vec!["wiki.public".to_string(), "wiki.internal".to_string()];
+
+    let check = SkillAdmission::check(&skill, &store, "actor1", "ws1").unwrap();
+    assert!(!check.allowed);
+    assert!(check.missing_capabilities.is_empty());
+    assert!(check.missing_memory_scopes.is_empty());
+    assert_eq!(check.missing_source_scopes, vec!["wiki.internal"]);
+}
+
+#[test]
+fn skill_admission_all_scopes_present() {
+    let store = CapabilityStore::new();
+    store
+        .issue_capability_grant(
+            "grant1".to_string(),
+            "actor1".to_string(),
+            "ws1".to_string(),
+            "file.read".to_string(),
+            "agent".to_string(),
+            "execute".to_string(),
+            None,
+            None,
+            1,
+            "admin".to_string(),
+        )
+        .unwrap()
+        .unwrap();
+    store
+        .set_memory_scopes(
+            "actor1",
+            "ws1",
+            vec![
+                "user.preference".to_string(),
+                "project.convention".to_string(),
+            ],
+        )
+        .unwrap();
+    store
+        .set_source_scopes(
+            "actor1",
+            "ws1",
+            vec!["wiki.public".to_string(), "wiki.internal".to_string()],
+        )
+        .unwrap();
+
+    let mut skill = sample_skill("sk-001");
+    skill.required_capabilities = vec!["file.read".to_string()];
+    skill.required_memory_scopes = vec![
+        "user.preference".to_string(),
+        "project.convention".to_string(),
+    ];
+    skill.required_source_scopes = vec!["wiki.public".to_string(), "wiki.internal".to_string()];
+
+    let check = SkillAdmission::check(&skill, &store, "actor1", "ws1").unwrap();
+    assert!(check.allowed);
+    assert!(check.missing_capabilities.is_empty());
+    assert!(check.missing_memory_scopes.is_empty());
+    assert!(check.missing_source_scopes.is_empty());
+}
+
+#[test]
+fn skill_admission_no_scopes_set() {
+    let store = CapabilityStore::new();
+    // No memory/source scopes set for actor1
+
+    let mut skill = sample_skill("sk-001");
+    skill.required_memory_scopes = vec!["mem.a".to_string()];
+    skill.required_source_scopes = vec!["src.b".to_string()];
+
+    let check = SkillAdmission::check(&skill, &store, "actor1", "ws1").unwrap();
+    assert!(!check.allowed);
+    assert_eq!(check.missing_memory_scopes, vec!["mem.a"]);
+    assert_eq!(check.missing_source_scopes, vec!["src.b"]);
+}
+
+#[test]
 fn skill_manifest_serialize_roundtrip() {
     let skill = SkillManifest {
         skill_id: "sk-001".to_string(),

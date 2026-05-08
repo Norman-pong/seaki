@@ -164,6 +164,8 @@ pub struct CapabilityStore {
     grants: Mutex<HashMap<String, CapabilityGrant>>,
     generic_grants: Mutex<HashMap<String, GenericCapabilityGrant>>,
     channel_action_grants: Mutex<HashMap<String, ChannelActionGrant>>,
+    actor_memory_scopes: Mutex<HashMap<(String, String), Vec<String>>>,
+    actor_source_scopes: Mutex<HashMap<(String, String), Vec<String>>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -575,6 +577,86 @@ impl CapabilityStore {
             .lock()
             .map_err(|_| PolicyError::CapabilityStorePoisoned)?;
         Ok(grants.get(grant_id).map(|g| g.uses_remaining))
+    }
+
+    /// 设置 actor 的 memory scopes。
+    ///
+    /// # Errors
+    ///
+    /// 当存储锁中毒时返回错误。
+    pub fn set_memory_scopes(
+        &self,
+        actor_id: &str,
+        workspace_id: &str,
+        scopes: Vec<String>,
+    ) -> PolicyResult<()> {
+        let mut memory_scopes = self
+            .actor_memory_scopes
+            .lock()
+            .map_err(|_| PolicyError::CapabilityStorePoisoned)?;
+        memory_scopes.insert((actor_id.to_string(), workspace_id.to_string()), scopes);
+        Ok(())
+    }
+
+    /// 设置 actor 的 source scopes。
+    ///
+    /// # Errors
+    ///
+    /// 当存储锁中毒时返回错误。
+    pub fn set_source_scopes(
+        &self,
+        actor_id: &str,
+        workspace_id: &str,
+        scopes: Vec<String>,
+    ) -> PolicyResult<()> {
+        let mut source_scopes = self
+            .actor_source_scopes
+            .lock()
+            .map_err(|_| PolicyError::CapabilityStorePoisoned)?;
+        source_scopes.insert((actor_id.to_string(), workspace_id.to_string()), scopes);
+        Ok(())
+    }
+
+    /// 检查 actor 是否拥有指定的 memory scope。
+    ///
+    /// # Errors
+    ///
+    /// 当存储锁中毒时返回错误。
+    pub fn has_memory_scope(
+        &self,
+        actor_id: &str,
+        workspace_id: &str,
+        scope: &str,
+    ) -> PolicyResult<bool> {
+        let memory_scopes = self
+            .actor_memory_scopes
+            .lock()
+            .map_err(|_| PolicyError::CapabilityStorePoisoned)?;
+        Ok(memory_scopes
+            .get(&(actor_id.to_string(), workspace_id.to_string()))
+            .map(|scopes| scopes.contains(&scope.to_string()))
+            .unwrap_or(false))
+    }
+
+    /// 检查 actor 是否拥有指定的 source scope。
+    ///
+    /// # Errors
+    ///
+    /// 当存储锁中毒时返回错误。
+    pub fn has_source_scope(
+        &self,
+        actor_id: &str,
+        workspace_id: &str,
+        scope: &str,
+    ) -> PolicyResult<bool> {
+        let source_scopes = self
+            .actor_source_scopes
+            .lock()
+            .map_err(|_| PolicyError::CapabilityStorePoisoned)?;
+        Ok(source_scopes
+            .get(&(actor_id.to_string(), workspace_id.to_string()))
+            .map(|scopes| scopes.contains(&scope.to_string()))
+            .unwrap_or(false))
     }
 }
 

@@ -888,6 +888,67 @@ fn authorize_file_read_allow() {
 }
 
 #[test]
+fn capability_store_memory_scopes() {
+    let store = CapabilityStore::new();
+    assert!(!store
+        .has_memory_scope("actor1", "ws1", "user.preference")
+        .unwrap());
+
+    store
+        .set_memory_scopes(
+            "actor1",
+            "ws1",
+            vec![
+                "user.preference".to_string(),
+                "project.convention".to_string(),
+            ],
+        )
+        .unwrap();
+
+    assert!(store
+        .has_memory_scope("actor1", "ws1", "user.preference")
+        .unwrap());
+    assert!(store
+        .has_memory_scope("actor1", "ws1", "project.convention")
+        .unwrap());
+    assert!(!store
+        .has_memory_scope("actor1", "ws1", "other.scope")
+        .unwrap());
+    assert!(!store
+        .has_memory_scope("actor2", "ws1", "user.preference")
+        .unwrap());
+    assert!(!store
+        .has_memory_scope("actor1", "ws2", "user.preference")
+        .unwrap());
+}
+
+#[test]
+fn capability_store_source_scopes() {
+    let store = CapabilityStore::new();
+    assert!(!store
+        .has_source_scope("actor1", "ws1", "wiki.public")
+        .unwrap());
+
+    store
+        .set_source_scopes(
+            "actor1",
+            "ws1",
+            vec!["wiki.public".to_string(), "wiki.internal".to_string()],
+        )
+        .unwrap();
+
+    assert!(store
+        .has_source_scope("actor1", "ws1", "wiki.public")
+        .unwrap());
+    assert!(store
+        .has_source_scope("actor1", "ws1", "wiki.internal")
+        .unwrap());
+    assert!(!store
+        .has_source_scope("actor1", "ws1", "other.scope")
+        .unwrap());
+}
+
+#[test]
 fn side_effect_level_from_str_invalid() {
     assert_eq!(
         SideEffectLevel::from_str("invalid"),

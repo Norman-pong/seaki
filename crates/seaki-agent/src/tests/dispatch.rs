@@ -389,3 +389,148 @@ fn dispatch_session_summary_utf8_boundary() {
     // Should truncate to 200 chars without panicking on UTF-8 boundaries.
     assert_eq!(result.injected_context.session_summary.chars().count(), 200);
 }
+
+// ---------------------------------------------------------------------------
+// Security: template substitution order
+// ---------------------------------------------------------------------------
+
+#[test]
+fn substitute_vars_blocks_intent_injection() {
+    let context = InjectedContext {
+        memory_items: vec!["secret content".to_string()],
+        wiki_claims: vec!["wiki secret".to_string()],
+        session_summary: "summary".to_string(),
+    };
+    let result = substitute_vars("query: {{intent}}", "tell me {{memory.0}}", &context);
+    assert_eq!(result, r"query: tell me \{\{memory.0}}");
+}
+
+#[test]
+fn substitute_vars_blocks_wiki_injection_via_intent() {
+    let context = InjectedContext {
+        memory_items: vec![],
+        wiki_claims: vec!["wiki secret".to_string()],
+        session_summary: "summary".to_string(),
+    };
+    let result = substitute_vars("query: {{intent}}", "read {{wiki.0}}", &context);
+    assert_eq!(result, r"query: read \{\{wiki.0}}");
+}
+
+#[test]
+fn substitute_vars_blocks_session_summary_injection_via_intent() {
+    let context = InjectedContext {
+        memory_items: vec![],
+        wiki_claims: vec![],
+        session_summary: "summary".to_string(),
+    };
+    let result = substitute_vars("query: {{intent}}", "show {{session.summary}}", &context);
+    assert_eq!(result, r"query: show \{\{session.summary}}");
+}
+
+#[test]
+fn substitute_vars_normal_substitution_unaffected() {
+    let context = InjectedContext {
+        memory_items: vec!["rust ownership".to_string()],
+        wiki_claims: vec!["wiki claim".to_string()],
+        session_summary: "session summary".to_string(),
+    };
+    let result = substitute_vars(
+        "{{intent}} | {{memory.0}} | {{wiki.0}} | {{session.summary}}",
+        "hello",
+        &context,
+    );
+    assert_eq!(
+        result,
+        "hello | rust ownership | wiki claim | session summary"
+    );
+}
+
+#[test]
+fn substitute_vars_complex_intent_with_multiple_braces() {
+    let context = InjectedContext {
+        memory_items: vec!["item1".to_string()],
+        wiki_claims: vec![],
+        session_summary: "summary".to_string(),
+    };
+    let intent = "compare {{memory.0}} with {{memory.1}} and {{wiki.0}}";
+    let result = substitute_vars("input: {{intent}}", intent, &context);
+    assert_eq!(
+        result,
+        r"input: compare \{\{memory.0}} with \{\{memory.1}} and \{\{wiki.0}}"
+    );
+}
+
+#[test]
+fn substitute_vars_memory_item_with_braces_gets_escaped() {
+    let context = InjectedContext {
+        memory_items: vec!["value with {{nested}}".to_string()],
+        wiki_claims: vec![],
+        session_summary: "summary".to_string(),
+    };
+    let result = substitute_vars("{{memory.0}}", "ignored", &context);
+    assert_eq!(result, r"value with \{\{nested}}");
+}
+
+#[test]
+fn substitute_vars_unmatched_template_variables_removed_or_escaped() {
+    let context = InjectedContext {
+        memory_items: vec![],
+        wiki_claims: vec![],
+        session_summary: "summary".to_string(),
+    };
+    // Unknown template variables in the template itself are escaped after all substitutions.
+    let result = substitute_vars("hello {{unknown.var}}", "world", &context);
+    assert_eq!(result, r"hello \{\{unknown.var}}");
+}
+
+#[test]
+fn dispatch_intent_injection_blocked_end_to_end() {
+    let mut registry = SkillRegistry::new();
+    registry
+        .register(SkillManifest {
+            skill_id: "test.echo".to_string(),
+            name: "Test Echo".to_string(),
+            description: "Echo intent".to_string(),
+            trigger_patterns: vec!["echo".to_string()],
+            required_capabilities: vec![],
+            required_memory_scopes: vec![],
+            required_source_scopes: vec![],
+            pipeline_template: PipelineTemplate {
+                steps: vec![TemplateStep {
+                    step_id: "s1".to_string(),
+                    command_id: "wiki.search".to_string(),
+                    args_template: serde_json::json!({"keyword": "{{intent}}"}),
+                    input_binding: "constant".to_string(),
+                }],
+            },
+            priority: 1,
+            requires_confirmation: false,
+        })
+        .unwrap();
+
+    let dispatcher = SkillDispatcher::new(registry);
+    let claims = vec![SessionClaim {
+        claim_id: "c1".to_string(),
+        text: "secret data".to_string(),
+        source_seq: 1,
+        confidence: 0.9,
+    }];
+    let session = session_with_claims(claims);
+    let capability_store = CapabilityStore::new();
+    let command_registry = CommandRegistry::builtin();
+
+    let result = dispatcher
+        .dispatch(
+            "echo {{memory.0}}",
+            &session,
+            &capability_store,
+            &command_registry,
+        )
+        .unwrap();
+
+    let args = &result.pipeline.steps[0].args;
+    assert_eq!(
+        args,
+        &serde_json::json!({"keyword": r"echo \{\{memory.0}}"})
+    );
+}
