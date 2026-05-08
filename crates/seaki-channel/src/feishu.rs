@@ -7,7 +7,13 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
+use aes::Aes256;
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
+use cbc::cipher::{BlockDecryptMut, KeyIvInit};
+use cbc::Decryptor;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::fake_provider::{ChannelEvent, ChannelMessagePayload};
 use crate::grant::ChannelAttachmentRef;
@@ -71,12 +77,46 @@ impl std::error::Error for FeishuAdapterError {
 }
 
 // ---------------------------------------------------------------------------
+// URL verification
+// ---------------------------------------------------------------------------
+
+/// Feishu URL verification challenge request body.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FeishuUrlVerification {
+    pub challenge: String,
+    pub token: String,
+    #[serde(rename = "type")]
+    pub type_: String,
+}
+
+/// Handle Feishu URL verification challenge.
+///
+/// If the body is a `url_verification` type request, returns `Some` with the
+/// JSON response `{"challenge":"xxx"}` that must be returned verbatim.
+/// Otherwise returns `None` so the caller can proceed with normal event parsing.
+///
+/// # Errors
+///
+/// Returns `FeishuParseError::InvalidJson` if the body is not valid JSON.
+pub fn handle_url_verification(body: &[u8]) -> Result<Option<String>, FeishuParseError> {
+    if let Ok(req) = serde_json::from_slice::<FeishuUrlVerification>(body) {
+        if req.type_ == "url_verification" {
+            let response = serde_json::json!({ "challenge": req.challenge }).to_string();
+            return Ok(Some(response));
+        }
+    }
+    Ok(None)
+}
+
+// ---------------------------------------------------------------------------
 // Inbound event model
 // ---------------------------------------------------------------------------
 
 /// Top-level Feishu webhook event envelope.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FeishuEvent {
+    #[serde(default)]
+    pub schema: String,
     pub header: FeishuEventHeader,
     pub event: FeishuEventBody,
 }
@@ -125,6 +165,8 @@ pub struct FeishuMessage {
     pub content: String,
     #[serde(default)]
     pub parent_message_id: Option<String>,
+    #[serde(default)]
+    pub root_id: Option<String>,
     pub create_time: String,
 }
 
@@ -140,8 +182,8 @@ pub enum ParsedMessageContent {
     },
     File {
         file_key: String,
-        file_name: String,
-        file_size: u64,
+        file_name: Option<String>,
+        file_size: Option<u64>,
     },
     Image {
         image_key: String,
@@ -179,9 +221,8 @@ pub fn parse_message_content(
             let file_name = value
                 .get("file_name")
                 .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let file_size = value.get("file_size").and_then(|v| v.as_u64()).unwrap_or(0);
+                .map(String::from);
+            let file_size = value.get("file_size").and_then(|v| v.as_u64());
             Ok(ParsedMessageContent::File {
                 file_key,
                 file_name,
@@ -210,10 +251,12 @@ pub fn parse_message_content(
 /// - `verification_token` comparison (the `signature` parameter is treated as the token)
 /// - Timestamp tolerance (±5 minutes by default)
 /// - Event-id deduplication (replay protection)
+///
+/// When `encrypt_key` is configured, full verification (AES-256-CBC decryption +
+/// SHA-256 signature validation) is available via [`Self::verify_with_encrypt_key`].
 #[derive(Debug)]
 pub struct FeishuWebhookVerifier {
     verification_token: String,
-    #[allow(dead_code)]
     encrypt_key: Option<String>,
     seen_event_ids: Mutex<HashMap<String, SystemTime>>,
     ttl: Duration,
@@ -243,9 +286,165 @@ impl FeishuWebhookVerifier {
         let mut seen = self.seen_event_ids.lock().unwrap();
         seen.retain(|_, &mut t| now.duration_since(t).unwrap_or(Duration::MAX) <= self.ttl);
     }
+
+    /// Verify the token included in a URL-verification challenge.
+    ///
+    /// # Errors
+    ///
+    /// Returns `WebhookError::SignatureMismatch` if the token does not match.
+    pub fn verify_challenge_token(&self, token: &str) -> Result<(), WebhookError> {
+        if token != self.verification_token {
+            return Err(WebhookError::SignatureMismatch);
+        }
+        Ok(())
+    }
+
+    /// Decrypt an AES-256-CBC encrypted payload.
+    ///
+    /// Key is derived as `SHA256(encrypt_key)`. The first 16 bytes of the
+    /// base64-decoded payload are the IV; the remainder is the ciphertext.
+    ///
+    /// # Errors
+    ///
+    /// Returns `FeishuParseError` on base64 decode failure, short input, or
+    /// AES decryption failure.
+    pub fn decrypt_body(
+        encrypt_key: &str,
+        encrypted_body: &str,
+    ) -> Result<Vec<u8>, FeishuParseError> {
+        let key = Sha256::digest(encrypt_key.as_bytes());
+        let data = BASE64
+            .decode(encrypted_body)
+            .map_err(|e| FeishuParseError::InvalidJson(format!("base64 decode failed: {e}")))?;
+        if data.len() < 16 {
+            return Err(FeishuParseError::InvalidJson(
+                "encrypted data too short".to_string(),
+            ));
+        }
+        let iv = &data[..16];
+        let ciphertext = &data[16..];
+        let decryptor = Decryptor::<Aes256>::new_from_slices(&key, iv)
+            .map_err(|e| FeishuParseError::InvalidJson(format!("AES init failed: {e}")))?;
+        let plaintext = decryptor
+            .decrypt_padded_vec_mut::<cbc::cipher::block_padding::Pkcs7>(ciphertext)
+            .map_err(|e| FeishuParseError::InvalidJson(format!("AES decrypt failed: {e}")))?;
+        Ok(plaintext)
+    }
+
+    /// Verify a SHA-256 signature produced by Feishu.
+    ///
+    /// Signature is computed as:
+    /// `hex_encode(sha256(encrypt_key || timestamp || nonce || body))`
+    /// where `||` denotes binary concatenation of the UTF-8 bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns `WebhookError::SignatureMismatch` if the computed signature does
+    /// not match `expected_signature` or if no `encrypt_key` is configured.
+    pub fn verify_signature(
+        &self,
+        timestamp: &str,
+        nonce: &str,
+        body: &[u8],
+        expected_signature: &str,
+    ) -> Result<(), WebhookError> {
+        let encrypt_key = self
+            .encrypt_key
+            .as_deref()
+            .ok_or(WebhookError::SignatureMismatch)?;
+        let mut hasher = Sha256::new();
+        hasher.update(encrypt_key.as_bytes());
+        hasher.update(timestamp.as_bytes());
+        hasher.update(nonce.as_bytes());
+        hasher.update(body);
+        let signature = hex_encode(&hasher.finalize());
+        if signature != expected_signature {
+            return Err(WebhookError::SignatureMismatch);
+        }
+        Ok(())
+    }
+
+    /// Full verification mode for encrypted webhooks.
+    ///
+    /// 1. Decrypts the payload using AES-256-CBC.
+    /// 2. Validates the SHA-256 signature.
+    /// 3. Checks timestamp tolerance and replay protection.
+    ///
+    /// On success, returns the decrypted body bytes and records `event_id` to
+    /// prevent replays.
+    ///
+    /// # Errors
+    ///
+    /// Returns `WebhookError` on decryption failure, signature mismatch,
+    /// expired timestamp, or replayed event.
+    pub fn verify_with_encrypt_key(
+        &self,
+        event_id: &str,
+        encrypted_payload: &str,
+        timestamp: SystemTime,
+        nonce: &str,
+        expected_signature: &str,
+    ) -> Result<Vec<u8>, WebhookError> {
+        self.evict_expired();
+
+        // Replay check (first gate)
+        {
+            let seen = self.seen_event_ids.lock().unwrap();
+            if seen.contains_key(event_id) {
+                return Err(WebhookError::EventReplayed);
+            }
+        }
+
+        // Timestamp check
+        let now = SystemTime::now();
+        if now.duration_since(timestamp).unwrap_or(Duration::MAX) > self.ttl {
+            return Err(WebhookError::TimestampExpired);
+        }
+
+        // Decrypt
+        let encrypt_key = self
+            .encrypt_key
+            .as_deref()
+            .ok_or(WebhookError::SignatureMismatch)?;
+        let body = Self::decrypt_body(encrypt_key, encrypted_payload)
+            .map_err(|_| WebhookError::SignatureMismatch)?;
+
+        // Signature verification
+        let timestamp_str = timestamp
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            .to_string();
+        self.verify_signature(&timestamp_str, nonce, &body, expected_signature)?;
+
+        // Replay check (second gate, after validation)
+        let mut seen = self.seen_event_ids.lock().unwrap();
+        if seen.contains_key(event_id) {
+            return Err(WebhookError::EventReplayed);
+        }
+        seen.insert(event_id.to_string(), now);
+
+        Ok(body)
+    }
+}
+
+/// Hex-encode a byte slice.
+fn hex_encode(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        output.push(HEX[(byte >> 4) as usize] as char);
+        output.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    output
 }
 
 impl WebhookVerifier for FeishuWebhookVerifier {
+    /// Simplified verification mode.
+    ///
+    /// Treats the `signature` parameter as the verification token and compares
+    /// it directly with `self.verification_token`. This is the basic mode used
+    /// when Encrypt Key is not enabled.
     fn verify(
         &self,
         event_id: &str,
@@ -310,6 +509,12 @@ pub fn feishu_event_to_channel_event(
     let msg = &event.event.message;
     let parsed = parse_message_content(&msg.msg_type, &msg.content)?;
 
+    let provider_thread_id = msg
+        .root_id
+        .clone()
+        .or_else(|| msg.parent_message_id.clone())
+        .unwrap_or_default();
+
     let (text, attachments) = match parsed {
         ParsedMessageContent::Text { text } => (text, Vec::new()),
         ParsedMessageContent::File {
@@ -323,12 +528,12 @@ pub fn feishu_event_to_channel_event(
                 provider_tenant_id: event.header.tenant_key.clone(),
                 provider_chat_id: msg.chat_id.clone(),
                 provider_message_id: msg.message_id.clone(),
-                provider_thread_id: msg.parent_message_id.clone().unwrap_or_default(),
+                provider_thread_id: provider_thread_id.clone(),
                 provider_file_key: file_key,
                 provider_file_version: "1".to_string(),
-                original_name: file_name,
+                original_name: file_name.unwrap_or_else(|| "unknown".to_string()),
                 declared_mime: "application/octet-stream".to_string(),
-                declared_size: file_size,
+                declared_size: file_size.unwrap_or(0),
                 content_hash: None,
                 download_capability_required: true,
             };
@@ -341,7 +546,7 @@ pub fn feishu_event_to_channel_event(
                 provider_tenant_id: event.header.tenant_key.clone(),
                 provider_chat_id: msg.chat_id.clone(),
                 provider_message_id: msg.message_id.clone(),
-                provider_thread_id: msg.parent_message_id.clone().unwrap_or_default(),
+                provider_thread_id: provider_thread_id.clone(),
                 provider_file_key: image_key,
                 provider_file_version: "1".to_string(),
                 original_name: "image".to_string(),
@@ -391,24 +596,17 @@ pub struct FeishuSendRequest {
     pub content: String,
     pub uuid: String,
     pub reply_in_thread: bool,
+    pub root_id: Option<String>,
 }
 
 /// Build a Feishu text reply payload JSON string.
+///
+/// Returns a plain `{"text":"..."}` object. Thread-reply parameters
+/// (`reply_in_thread` and `root_id`) belong on [`FeishuSendRequest`], not in
+/// the message content.
 #[must_use]
-pub fn build_feishu_reply_payload(text: &str, parent_message_id: Option<&str>) -> String {
-    if let Some(parent) = parent_message_id {
-        serde_json::json!({
-            "text": text,
-            "reply_in_thread": true,
-            "root_id": parent,
-        })
-        .to_string()
-    } else {
-        serde_json::json!({
-            "text": text,
-        })
-        .to_string()
-    }
+pub fn build_feishu_reply_payload(text: &str) -> String {
+    serde_json::json!({ "text": text }).to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -465,6 +663,7 @@ impl FeishuChannelAdapter {
         grant: &seaki_policy::grant::ChannelActionGrant,
         text: &str,
         provenance: &FeishuProvenance,
+        parent_message_id: Option<&str>,
     ) -> Result<FeishuSendRequest, FeishuAdapterError> {
         let reply_text = format_reply_with_provenance(text, provenance);
         let content = serde_json::json!({ "text": reply_text }).to_string();
@@ -487,7 +686,8 @@ impl FeishuChannelAdapter {
             msg_type: "text".to_string(),
             content,
             uuid: grant.idempotency_key.clone(),
-            reply_in_thread: false,
+            reply_in_thread: parent_message_id.is_some(),
+            root_id: parent_message_id.map(|s| s.to_string()),
         })
     }
 }

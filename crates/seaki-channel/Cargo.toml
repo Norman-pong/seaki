@@ -16,6 +16,9 @@ path = "src/lib.rs"
 seaki-core = { path = "../seaki-core" }
 seaki-dto = { path = "../seaki-dto" }
 seaki-policy = { path = "../seaki-policy" }
+aes = "0.8"
+base64 = "0.22"
+cbc = { version = "0.1", features = ["alloc"] }
 sha2.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
