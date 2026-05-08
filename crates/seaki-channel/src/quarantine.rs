@@ -6,6 +6,47 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::SystemTime;
 
+/// Sanitize a single path component to prevent path traversal attacks.
+///
+/// - Rejects empty strings.
+/// - Rejects absolute paths (starting with `/`).
+/// - Rejects paths containing `.` or `..` components.
+/// - Rejects paths with multiple components (i.e. containing path separators).
+pub(crate) fn sanitize_path_component(input: &str) -> Result<String, String> {
+    if input.is_empty() {
+        return Err("empty path component".to_string());
+    }
+    if input.starts_with('/') {
+        return Err("absolute path not allowed".to_string());
+    }
+    if input.contains('\\') {
+        return Err("backslash not allowed in path component".to_string());
+    }
+
+    let path = Path::new(input);
+    let mut components = path.components();
+
+    let first = components
+        .next()
+        .ok_or_else(|| "empty path component".to_string())?;
+    if components.next().is_some() {
+        return Err("multiple path components not allowed".to_string());
+    }
+
+    match first {
+        std::path::Component::Normal(seg) => {
+            let seg = seg
+                .to_str()
+                .ok_or_else(|| "invalid utf-8 in path".to_string())?;
+            if seg == "." || seg == ".." {
+                return Err("reserved path component".to_string());
+            }
+            Ok(seg.to_string())
+        }
+        _ => Err("invalid path component".to_string()),
+    }
+}
+
 use sha2::{Digest, Sha256};
 
 use crate::grant::{ChannelAttachmentRef, MalwareScanStatus, QuarantinedDownload};
@@ -106,11 +147,21 @@ impl<D: AttachmentDownloader> QuarantinePipeline<D> {
     /// 7. Malware scan stub (passes if hash/mime are consistent).
     /// 8. Return `Clean(...)` or the appropriate failure variant.
     pub fn process(&self, attachment: &ChannelAttachmentRef) -> QuarantineResult {
+        let file_key = match sanitize_path_component(&attachment.provider_file_key) {
+            Ok(v) => v,
+            Err(e) => {
+                return QuarantineResult::IOError(format!("invalid provider_file_key: {e}"));
+            }
+        };
+        let file_version = match sanitize_path_component(&attachment.provider_file_version) {
+            Ok(v) => v,
+            Err(e) => {
+                return QuarantineResult::IOError(format!("invalid provider_file_version: {e}"));
+            }
+        };
+
         let dest = {
-            let base = format!(
-                "{}_{}",
-                attachment.provider_file_key, attachment.provider_file_version
-            );
+            let base = format!("{file_key}_{file_version}");
             if let Some(ext) = Path::new(&attachment.original_name)
                 .extension()
                 .and_then(|e| e.to_str())
@@ -318,4 +369,49 @@ fn observed_mime_from_path(path: &Path) -> Option<String> {
             _ => "application/octet-stream",
         })
         .map(|s| s.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_path_component;
+
+    #[test]
+    fn sanitize_accepts_normal_name() {
+        assert_eq!(sanitize_path_component("file.txt").unwrap(), "file.txt");
+        assert_eq!(sanitize_path_component("my-key_123").unwrap(), "my-key_123");
+    }
+
+    #[test]
+    fn sanitize_rejects_empty() {
+        assert!(sanitize_path_component("").is_err());
+    }
+
+    #[test]
+    fn sanitize_rejects_absolute_path() {
+        assert!(sanitize_path_component("/etc/passwd").is_err());
+        assert!(sanitize_path_component("/foo").is_err());
+    }
+
+    #[test]
+    fn sanitize_rejects_dot() {
+        assert!(sanitize_path_component(".").is_err());
+    }
+
+    #[test]
+    fn sanitize_rejects_dotdot() {
+        assert!(sanitize_path_component("..").is_err());
+    }
+
+    #[test]
+    fn sanitize_rejects_traversal() {
+        assert!(sanitize_path_component("../etc/passwd").is_err());
+        assert!(sanitize_path_component("foo/../bar").is_err());
+        assert!(sanitize_path_component("foo/..").is_err());
+    }
+
+    #[test]
+    fn sanitize_rejects_multiple_components() {
+        assert!(sanitize_path_component("foo/bar").is_err());
+        assert!(sanitize_path_component("foo\\bar").is_err());
+    }
 }

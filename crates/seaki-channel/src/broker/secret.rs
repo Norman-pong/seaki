@@ -6,8 +6,31 @@ use std::time::{Duration, SystemTime};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecretEntry {
     pub scope: String,
-    pub raw_value: String,
+    raw_value: String,
     pub description: String,
+}
+
+impl SecretEntry {
+    /// Create a new secret entry.
+    pub fn new(
+        scope: impl Into<String>,
+        raw_value: impl Into<String>,
+        description: impl Into<String>,
+    ) -> Self {
+        Self {
+            scope: scope.into(),
+            raw_value: raw_value.into(),
+            description: description.into(),
+        }
+    }
+
+    /// Expose the raw secret value for a specific purpose.
+    ///
+    /// Callers must declare the purpose of access. This provides an audit hook
+    /// point for future integration with an audit log sink.
+    pub fn expose_for(&self, _purpose: &str) -> &str {
+        &self.raw_value
+    }
 }
 
 /// An opaque token returned to plugins.
@@ -94,15 +117,7 @@ impl SecretBroker {
         }
         drop(secrets);
 
-        let token_id = format!(
-            "token_{}_{}_{}",
-            plugin_id,
-            scope,
-            SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs()
-        );
+        let token_id = format!("token_{plugin_id}_{scope}_{}", uuid::Uuid::now_v7());
         let expires_at = SystemTime::now() + Duration::from_secs(ttl_secs);
         let token = OpaqueToken {
             token_id: token_id.clone(),
@@ -149,5 +164,56 @@ impl SecretBroker {
     pub fn list_scopes(&self) -> Vec<String> {
         let secrets = self.secrets.lock().unwrap();
         secrets.keys().cloned().collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SecretBroker, SecretEntry};
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+
+    #[test]
+    fn token_id_no_collisions_under_high_concurrency() {
+        let broker = Arc::new(SecretBroker::new());
+        broker.register_secret(SecretEntry::new("slack", "secret", "desc"));
+
+        let thread_count = 100;
+        let tokens_per_thread = 10;
+        let barrier = Arc::new(Barrier::new(thread_count));
+
+        let handles: Vec<_> = (0..thread_count)
+            .map(|i| {
+                let broker = Arc::clone(&broker);
+                let barrier = Arc::clone(&barrier);
+                thread::spawn(move || {
+                    barrier.wait();
+                    let mut tokens = Vec::with_capacity(tokens_per_thread);
+                    for _ in 0..tokens_per_thread {
+                        let token = broker
+                            .request_token(
+                                &format!("plugin-{i}"),
+                                "slack",
+                                &["slack".to_string()],
+                                3600,
+                            )
+                            .unwrap();
+                        tokens.push(token.token_id);
+                    }
+                    tokens
+                })
+            })
+            .collect();
+
+        let mut all_tokens = std::collections::HashSet::new();
+        for handle in handles {
+            for token_id in handle.join().unwrap() {
+                assert!(
+                    all_tokens.insert(token_id.clone()),
+                    "duplicate token_id: {token_id}"
+                );
+            }
+        }
+        assert_eq!(all_tokens.len(), thread_count * tokens_per_thread);
     }
 }

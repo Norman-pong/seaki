@@ -4,11 +4,7 @@ use std::time::{Duration, SystemTime};
 #[test]
 fn register_and_request_token() {
     let broker = SecretBroker::new();
-    broker.register_secret(SecretEntry {
-        scope: "slack".to_string(),
-        raw_value: "xoxb-secret".to_string(),
-        description: "Slack bot token".to_string(),
-    });
+    broker.register_secret(SecretEntry::new("slack", "xoxb-secret", "Slack bot token"));
 
     let token = broker
         .request_token("plugin-1", "slack", &["slack".to_string()], 3600)
@@ -20,11 +16,7 @@ fn register_and_request_token() {
 #[test]
 fn scope_not_allowed() {
     let broker = SecretBroker::new();
-    broker.register_secret(SecretEntry {
-        scope: "slack".to_string(),
-        raw_value: "xoxb-secret".to_string(),
-        description: "Slack bot token".to_string(),
-    });
+    broker.register_secret(SecretEntry::new("slack", "xoxb-secret", "Slack bot token"));
 
     let err = broker
         .request_token("plugin-1", "slack", &["discord".to_string()], 3600)
@@ -41,28 +33,20 @@ fn scope_not_allowed() {
 #[test]
 fn resolve_token_returns_secret() {
     let broker = SecretBroker::new();
-    broker.register_secret(SecretEntry {
-        scope: "slack".to_string(),
-        raw_value: "xoxb-secret".to_string(),
-        description: "Slack bot token".to_string(),
-    });
+    broker.register_secret(SecretEntry::new("slack", "xoxb-secret", "Slack bot token"));
 
     let token = broker
         .request_token("plugin-1", "slack", &["slack".to_string()], 3600)
         .unwrap();
     let entry = broker.resolve_token(&token.token_id).unwrap();
     assert_eq!(entry.scope, "slack");
-    assert_eq!(entry.raw_value, "xoxb-secret");
+    assert_eq!(entry.expose_for("test"), "xoxb-secret");
 }
 
 #[test]
 fn revoke_token() {
     let broker = SecretBroker::new();
-    broker.register_secret(SecretEntry {
-        scope: "slack".to_string(),
-        raw_value: "xoxb-secret".to_string(),
-        description: "Slack bot token".to_string(),
-    });
+    broker.register_secret(SecretEntry::new("slack", "xoxb-secret", "Slack bot token"));
 
     let token = broker
         .request_token("plugin-1", "slack", &["slack".to_string()], 3600)
@@ -75,11 +59,7 @@ fn revoke_token() {
 #[test]
 fn token_expired() {
     let broker = SecretBroker::new();
-    broker.register_secret(SecretEntry {
-        scope: "slack".to_string(),
-        raw_value: "xoxb-secret".to_string(),
-        description: "Slack bot token".to_string(),
-    });
+    broker.register_secret(SecretEntry::new("slack", "xoxb-secret", "Slack bot token"));
 
     let token = broker
         .request_token("plugin-1", "slack", &["slack".to_string()], 0)

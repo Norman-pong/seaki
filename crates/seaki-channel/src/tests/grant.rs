@@ -202,7 +202,7 @@ fn fake_broker_produces_mock_metadata() {
         download_capability_required: false,
     };
 
-    let q = broker.download(&attachment);
+    let q = broker.download(&attachment).unwrap();
     assert_eq!(q.file_key, "key-1");
     assert_eq!(q.version, "v2");
     assert_eq!(q.observed_mime, "image/png");

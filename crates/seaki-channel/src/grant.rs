@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::SystemTime;
 
+use crate::quarantine::sanitize_path_component;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChannelAttachmentRef {
     pub attachment_id: String,
@@ -53,24 +55,30 @@ impl FakeBroker {
     }
 
     /// Mock download: returns quarantine metadata without real I/O.
-    #[must_use]
-    pub fn download(&self, attachment: &ChannelAttachmentRef) -> QuarantinedDownload {
-        let quarantine_path = format!(
-            "{}/{}_{}",
-            self.quarantine_root, attachment.provider_file_key, attachment.provider_file_version
-        );
-        QuarantinedDownload {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `provider_file_key` or `provider_file_version`
+    /// contain path traversal sequences.
+    pub fn download(
+        &self,
+        attachment: &ChannelAttachmentRef,
+    ) -> Result<QuarantinedDownload, String> {
+        let file_key = sanitize_path_component(&attachment.provider_file_key)
+            .map_err(|e| format!("invalid provider_file_key: {e}"))?;
+        let version = sanitize_path_component(&attachment.provider_file_version)
+            .map_err(|e| format!("invalid provider_file_version: {e}"))?;
+
+        let quarantine_path = format!("{}/{file_key}_{version}", self.quarantine_root);
+        Ok(QuarantinedDownload {
             file_key: attachment.provider_file_key.clone(),
             version: attachment.provider_file_version.clone(),
             quarantine_path,
             observed_mime: attachment.declared_mime.clone(),
-            content_hash: format!(
-                "sha256:mock-{}-{}",
-                attachment.provider_file_key, attachment.provider_file_version
-            ),
+            content_hash: format!("sha256:mock-{file_key}-{version}"),
             malware_scan_status: MalwareScanStatus::Clean,
             observed_size: 0,
-        }
+        })
     }
 }
 
