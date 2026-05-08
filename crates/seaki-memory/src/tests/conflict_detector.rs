@@ -80,6 +80,27 @@ fn detector_recommends_reject_for_many_conflicts() {
 }
 
 #[test]
+fn detector_ignores_empty_keyword() {
+    let detector = ConflictDetector::new();
+    let item = dummy_item("The project uses React.");
+    let keywords = vec!["".to_string(), "react".to_string()];
+
+    let reports = detector.detect_conflicts(&item, &keywords);
+    assert_eq!(reports.len(), 1);
+    assert_eq!(reports[0].conflicting_keywords, vec!["react"]);
+}
+
+#[test]
+fn detector_no_false_positive_for_substring() {
+    let detector = ConflictDetector::new();
+    let item = dummy_item("We should trust the process.");
+    let keywords = vec!["rust".to_string()];
+
+    let reports = detector.detect_conflicts(&item, &keywords);
+    assert!(reports.is_empty());
+}
+
+#[test]
 fn detector_no_conflict_for_unrelated() {
     let detector = ConflictDetector::new();
     let item = dummy_item("We use Vue and Python.");

@@ -89,8 +89,8 @@ impl RunbookIndex {
             let entry_id = format!("runbook_{}", self.next_id);
             self.next_id += 1;
 
-            let title = if item.content.len() > 60 {
-                format!("{}...", &item.content[..60])
+            let title = if item.content.chars().count() > 60 {
+                format!("{}...", crate::safe_truncate(&item.content, 60))
             } else {
                 item.content.clone()
             };

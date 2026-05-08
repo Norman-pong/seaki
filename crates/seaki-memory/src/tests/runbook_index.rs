@@ -190,6 +190,34 @@ fn runbook_index_search_keyword() {
 }
 
 #[test]
+fn runbook_auto_generate_utf8_boundary_chinese() {
+    let mut index = RunbookIndex::new();
+    let content = "这是一个中文字符串测试内容用来验证utf8截断边界";
+    let items = [make_rule_item("mem-utf8", content)];
+    let refs: Vec<&MemoryItem> = items.iter().collect();
+    index.auto_generate(&refs, 5000);
+
+    assert_eq!(index.len(), 1);
+    let entry = index.by_topic("topic_safety_rule")[0];
+    assert!(entry.title.chars().count() <= 64); // 60 chars + "..."
+    assert!(!entry.title.is_empty());
+}
+
+#[test]
+fn runbook_auto_generate_utf8_boundary_emoji() {
+    let mut index = RunbookIndex::new();
+    let content = "👋🌍🎉🚀💻🔥✨🎯🌈⭐🍎🍊🍋🍌🍉🍇🍓🫐🍈🍒🍑🥭🍍🥥🥝";
+    let items = [make_rule_item("mem-emoji", content)];
+    let refs: Vec<&MemoryItem> = items.iter().collect();
+    index.auto_generate(&refs, 5000);
+
+    assert_eq!(index.len(), 1);
+    let entry = index.by_topic("topic_safety_rule")[0];
+    assert!(entry.title.chars().count() <= 64);
+    assert!(!entry.title.is_empty());
+}
+
+#[test]
 fn runbook_auto_generate_skips_non_rule_workflow() {
     let mut index = RunbookIndex::new();
     let items = [

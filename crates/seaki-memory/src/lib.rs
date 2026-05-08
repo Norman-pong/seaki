@@ -18,6 +18,12 @@ pub mod topic_clustering;
 
 pub const SCHEMA_VERSION: u32 = 1;
 
+/// 安全截断字符串，按字符数截取，避免 UTF-8 字节边界 panic。
+#[must_use]
+pub fn safe_truncate(s: &str, max_chars: usize) -> String {
+    s.chars().take(max_chars).collect()
+}
+
 pub use card_generator::*;
 pub use conflict_detector::*;
 pub use frozen_snapshot::*;

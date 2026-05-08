@@ -43,11 +43,19 @@ impl ConflictDetector {
         wiki_claim_keywords: &[String],
     ) -> Vec<ConflictReport> {
         let content_lower = memory.content.to_lowercase();
+        let content_words: Vec<&str> = content_lower
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .collect();
         let mut conflicts = Vec::new();
         let mut matched = Vec::new();
 
         for kw in wiki_claim_keywords {
-            if content_lower.contains(&kw.to_lowercase()) {
+            if kw.is_empty() {
+                continue;
+            }
+            let kw_lower = kw.to_lowercase();
+            if content_words.contains(&kw_lower.as_str()) {
                 matched.push(kw.clone());
             }
         }

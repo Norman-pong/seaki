@@ -38,6 +38,45 @@ fn summary_is_truncated_to_200_chars_with_annotation() {
 }
 
 #[test]
+fn redaction_preserves_multiple_secrets_on_one_line() {
+    let input = "api_key=secret1 token=secret2 and done";
+    let (redacted, status) = redact_transcript(input);
+    assert_eq!(status, RedactionStatus::HasSecrets);
+    assert!(!redacted.contains("secret1"));
+    assert!(!redacted.contains("secret2"));
+    assert!(redacted.contains("api_key=[REDACTED]"));
+    assert!(redacted.contains("token=[REDACTED]"));
+    assert!(redacted.contains("and done"));
+}
+
+#[test]
+fn redaction_detects_api_key_variant_dash() {
+    let input = "X-API-Key: abc123";
+    let (redacted, status) = redact_transcript(input);
+    assert_eq!(status, RedactionStatus::HasSecrets);
+    assert!(!redacted.contains("abc123"));
+    assert!(redacted.contains("X-API-Key: [REDACTED]"));
+}
+
+#[test]
+fn redaction_detects_api_key_variant_underscore_prefix() {
+    let input = "x_api_key=hidden";
+    let (redacted, status) = redact_transcript(input);
+    assert_eq!(status, RedactionStatus::HasSecrets);
+    assert!(!redacted.contains("hidden"));
+    assert!(redacted.contains("x_api_key=[REDACTED]"));
+}
+
+#[test]
+fn redaction_detects_json_style_secret() {
+    let input = r#"{"api_key":"shh","token":"hush"}"#;
+    let (redacted, status) = redact_transcript(input);
+    assert_eq!(status, RedactionStatus::HasSecrets);
+    assert!(!redacted.contains("shh"));
+    assert!(!redacted.contains("hush"));
+}
+
+#[test]
 fn manifest_defaults_ttl_to_30_days() {
     let manifest = RedactedSessionManifest::new(
         "s-1",

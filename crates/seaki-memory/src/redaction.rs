@@ -1,5 +1,7 @@
 //! Redaction pipeline: secret scan, summary extraction.
 
+use regex::Regex;
+use std::sync::LazyLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// 脱敏后的会话摘要，不保存原始 transcript 内容。
@@ -72,31 +74,28 @@ pub(crate) fn redact_transcript(text: &str) -> (String, RedactionStatus) {
     (result, status)
 }
 
+static BEARER_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)(bearer\s+)[^,\n;]+").unwrap());
+
+static SECRET_KV_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?i)((?:api[_-]?key|apikey|x[_-]?api[_-]?key|token|password|secret)"?\s*[:=]\s*)("[^"]*"|[^\s,;"]+)"#).unwrap()
+});
+
 fn contains_secret_pattern(lower: &str) -> bool {
-    lower.contains("api_key=")
-        || lower.contains("apikey=")
-        || lower.contains("token=")
-        || lower.contains("password=")
-        || lower.contains("secret=")
-        || lower.contains("bearer ")
-        || lower.contains("authorization:")
+    lower.contains("authorization:") || BEARER_RE.is_match(lower) || SECRET_KV_RE.is_match(lower)
 }
 
 fn redact_line(line: &str) -> String {
-    let lower = line.to_lowercase();
-
-    // bearer token 模式："bearer xxx"
-    if let Some(pos) = lower.find("bearer ") {
-        // 保留原始大小写中的 "Bearer" 前缀
-        let prefix = &line[..pos];
-        return format!("{prefix}Bearer [REDACTED]");
+    // bearer token
+    let result = BEARER_RE.replace_all(line, "${1}[REDACTED]");
+    if result != line {
+        return result.to_string();
     }
 
-    // key=value 或 key: value 模式
-    for sep in ['=', ':'] {
-        if let Some(pos) = line.find(sep) {
-            return format!("{}{}[REDACTED]", &line[..=pos], "");
-        }
+    // key=value / key:value / JSON key:value — 逐段处理，一行多个 secret 都脱敏
+    let result = SECRET_KV_RE.replace_all(line, "${1}[REDACTED]");
+    if result != line {
+        return result.to_string();
     }
 
     // 兜底整行脱敏

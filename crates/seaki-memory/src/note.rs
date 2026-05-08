@@ -250,9 +250,17 @@ impl NoteStore {
             .ok_or_else(|| NoteStoreError::NotFound(note_id.to_string()))?;
 
         let content_lower = note.content.to_lowercase();
+        let content_words: Vec<&str> = content_lower
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .collect();
         let has_conflict = wiki_claim_keywords
             .iter()
-            .any(|kw| content_lower.contains(&kw.to_lowercase()));
+            .filter(|kw| !kw.is_empty())
+            .any(|kw| {
+                let kw_lower = kw.to_lowercase();
+                content_words.contains(&kw_lower.as_str())
+            });
 
         if has_conflict {
             // 以 wiki/source 为准，memory 降级为 Conflict
@@ -287,6 +295,7 @@ pub fn memory_scope(base: &IndexScope) -> IndexScope {
 
 fn note_to_document(note: &ProjectNote) -> IndexedDocument {
     let memory_scope = memory_scope(&note.scope);
+    let (redacted_body, _) = crate::redaction::redact_transcript(&note.content);
     IndexedDocument {
         candidate_id: IndexCandidateId::new(&note.note_id),
         workspace_id: note.scope.workspace_id.clone(),
@@ -295,7 +304,7 @@ fn note_to_document(note: &ProjectNote) -> IndexedDocument {
         citation_ref: None, // note 不可被 citation 直接引用
         kind: CandidateKind::MemoryNote,
         title: note.title.clone(),
-        body: note.content.clone(),
+        body: redacted_body,
         visibility: Visibility::Visible,
         source_status: SourceStatus::Active,
         source_revision: 1,

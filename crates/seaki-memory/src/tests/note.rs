@@ -121,6 +121,28 @@ fn note_has_no_citation_ref() {
 }
 
 #[test]
+fn note_index_body_is_redacted() {
+    let mut store = NoteStore::new();
+    let note = store.create_note(
+        "credentials".to_string(),
+        "api_key=secret123 do not leak",
+        &scope(),
+    );
+    let mut bm25 = Bm25CandidateIndex::new();
+    store.rebuild_index(&mut bm25, &scope()).unwrap();
+
+    let doc = bm25
+        .document(
+            &memory_scope(&scope()),
+            &IndexCandidateId::new(&note.note_id),
+        )
+        .unwrap();
+    assert!(!doc.body.contains("secret123"));
+    assert!(doc.body.contains("api_key=[REDACTED]"));
+    assert!(doc.body.contains("do not leak"));
+}
+
+#[test]
 fn memory_scope_is_isolated() {
     let base = IndexScope::new("ws", "ac");
     let mem = memory_scope(&base);
