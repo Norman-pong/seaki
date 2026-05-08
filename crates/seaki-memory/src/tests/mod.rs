@@ -1,10 +1,14 @@
 mod conflict_detector;
 mod frozen_snapshot;
+mod grading;
 mod memory_collector;
 mod memory_item;
 mod memory_store;
 mod note;
 mod propose_pipeline;
 mod redaction;
+mod retention;
+mod review_card;
+mod review_queue;
 mod session_memory;
 mod session_search;
