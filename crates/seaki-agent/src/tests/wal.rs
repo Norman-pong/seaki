@@ -32,7 +32,7 @@ fn wal_write_compaction_success() {
         compacted_at_ms: 1_700_000_000_000,
     };
 
-    let result = write_compaction_to_wal(&mut ledger, "ws1", &summary);
+    let result = write_compaction_to_wal(&mut ledger, "ws1", "session-1", &summary);
     assert!(
         result.is_ok(),
         "expected WAL write to succeed, got {:?}",
@@ -53,7 +53,7 @@ fn wal_write_compaction_error() {
         compacted_at_ms: 1_700_000_000_000,
     };
 
-    let result = write_compaction_to_wal(&mut ledger, "ws-no-init", &summary);
+    let result = write_compaction_to_wal(&mut ledger, "ws-no-init", "session-2", &summary);
     assert!(
         matches!(result, Err(WalError::LedgerError(_))),
         "expected LedgerError because workspace is missing, got {:?}",

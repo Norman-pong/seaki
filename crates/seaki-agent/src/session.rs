@@ -29,6 +29,8 @@ pub struct Session {
     pub claims: Vec<SessionClaim>,
     pub created_at_ms: u64,
     pub updated_at_ms: u64,
+    /// Timeout in milliseconds for approval wait. Default: 30000.
+    pub approval_timeout_ms: u64,
 }
 
 // ---------------------------------------------------------------------------
@@ -90,6 +92,10 @@ impl SessionStateMachine {
         }
     }
 
+    pub fn is_in_state(&self, state: SessionState) -> bool {
+        self.state == state
+    }
+
     /// Attempt to transition to `to` with the given `reason`.
     pub fn transition(
         &mut self,
@@ -134,8 +140,8 @@ impl SessionStateMachine {
             (SessionState::AwaitingUser, SessionState::Planning) => true,
             (SessionState::AwaitingUser, SessionState::Executing) => true,
             (SessionState::Compacting, SessionState::Idle) => true,
-            // Any state -> Idle for reset / error recovery.
-            (_, SessionState::Idle) => true,
+            // Any non-Idle state -> Idle for reset / error recovery.
+            (from, SessionState::Idle) if from != SessionState::Idle => true,
             _ => false,
         }
     }
@@ -264,9 +270,10 @@ impl SessionCompactor {
             .unwrap_or_default()
             .as_millis() as u64;
 
-        // Step 5: prepend System summary message.
+        // Step 5: prepend System summary message with unique seq.
+        let max_seq = session.messages.iter().map(|m| m.seq).max().unwrap_or(0);
         let summary_msg = SessionMessage {
-            seq: 0,
+            seq: max_seq + 1,
             role: crate::llm::MessageRole::System,
             content: format!("[Session summary: {summary_text}]"),
             timestamp_ms: compacted_at_ms,

@@ -161,6 +161,23 @@ impl AgentRuntime {
         let initial_input = serde_json::json!({ "intent": intent });
         let dry_run_result = dry_run(&composed, initial_input.clone());
 
+        // 4.5 Surface dry-run findings: log permission gaps for observability.
+        // Note: expected_permissions are simulated domain-level permissions
+        // (e.g. "wiki:read"); they do not map 1:1 to capability_store grants.
+        // The authoritative permission check happens at skill admission and
+        // step-policy evaluation. We surface dry-run results as structured
+        // metadata so callers can audit them without being blocked by
+        // simulated permission strings.
+        if !dry_run_result.expected_permissions.is_empty() {
+            eprintln!(
+                "[dry-run] actor={} workspace={} pipeline={} expected_permissions={:?}",
+                session.actor_id,
+                session.workspace_id,
+                composed.pipeline_id,
+                dry_run_result.expected_permissions
+            );
+        }
+
         // 5. Planning → Executing
         state_machine
             .transition(
@@ -206,8 +223,9 @@ impl AgentRuntime {
                     })
                     .map_err(|e| AgentExecutionError::ExecutionFailed(e.to_string()))?;
 
+                let timeout_ms = session.approval_timeout_ms;
                 let status = gate
-                    .wait_for_approval(&approval_id, 5000)
+                    .wait_for_approval(&approval_id, timeout_ms)
                     .map_err(|e| AgentExecutionError::ExecutionFailed(e.to_string()))?;
 
                 match status {

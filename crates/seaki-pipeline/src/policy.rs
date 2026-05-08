@@ -55,10 +55,7 @@ impl PolicyEstimator {
             .cloned()
             .collect();
 
-        let has_side_effect = matches!(
-            result.max_side_effect,
-            SideEffectLevel::ProposalOnly | SideEffectLevel::SideEffect
-        );
+        let has_side_effect = (result.max_side_effect as u8) > (SideEffectLevel::None as u8);
 
         let requires_approval = has_side_effect || !missing_capabilities.is_empty();
 

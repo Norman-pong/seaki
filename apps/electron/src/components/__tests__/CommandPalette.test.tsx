@@ -1,13 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
-import { CommandPalette } from "../CommandPalette";
-import type { CommandPaletteAction } from "../CommandPalette";
+import { CommandPalette, type CommandPaletteAction } from "../CommandPalette";
 
 describe("CommandPalette", () => {
   it("does_not_render_when_closed", () => {
-    const { container } = render(
+    render(
       <CommandPalette
         open={false}
         onClose={vi.fn<() => void>()}
@@ -15,7 +14,7 @@ describe("CommandPalette", () => {
       />,
     );
 
-    expect(container.firstChild).toBeNull();
+    expect(screen.queryByTestId("command-palette-card")).not.toBeInTheDocument();
   });
 
   it("renders_when_open", () => {
@@ -27,11 +26,44 @@ describe("CommandPalette", () => {
       />,
     );
 
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByTestId("command-palette-card")).toBeInTheDocument();
     expect(screen.getByText("Command Palette")).toBeInTheDocument();
   });
 
-  it("calls_onSelectCommand_when_command_clicked", () => {
+  it("renders_all_commands_by_default", () => {
+    render(
+      <CommandPalette
+        open={true}
+        onClose={vi.fn<() => void>()}
+        onSelectCommand={vi.fn<() => void>()}
+      />,
+    );
+
+    expect(screen.getByTestId("command-row-index-rebuild")).toBeInTheDocument();
+    expect(screen.getByTestId("command-row-approval-review")).toBeInTheDocument();
+    expect(screen.getByTestId("command-row-attach-source")).toBeInTheDocument();
+    expect(screen.getByTestId("command-row-pipe-dry-run")).toBeInTheDocument();
+    expect(screen.getByTestId("command-row-wiki-search")).toBeInTheDocument();
+  });
+
+  it("filters_commands_by_query", () => {
+    render(
+      <CommandPalette
+        open={true}
+        onClose={vi.fn<() => void>()}
+        onSelectCommand={vi.fn<() => void>()}
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId("command-palette-input"), {
+      target: { value: "approval" },
+    });
+
+    expect(screen.queryByTestId("command-row-approval-review")).toBeInTheDocument();
+    expect(screen.queryByTestId("command-row-index-rebuild")).not.toBeInTheDocument();
+  });
+
+  it("selects_command_on_click", () => {
     const onSelectCommand = vi.fn<(action: CommandPaletteAction) => void>();
     render(
       <CommandPalette
@@ -41,13 +73,11 @@ describe("CommandPalette", () => {
       />,
     );
 
-    const firstCommand = screen.getByText("重建 stale workspace index");
-    fireEvent.click(firstCommand);
-
-    expect(onSelectCommand).toHaveBeenCalledWith("index-rebuild");
+    fireEvent.click(screen.getByTestId("command-row-approval-review"));
+    expect(onSelectCommand).toHaveBeenCalledWith("approval-review");
   });
 
-  it("calls_onClose_when_backdrop_clicked", () => {
+  it("closes_on_esc_key", () => {
     const onClose = vi.fn<() => void>();
     render(
       <CommandPalette
@@ -57,13 +87,13 @@ describe("CommandPalette", () => {
       />,
     );
 
-    const backdrop = screen.getByRole("dialog");
-    fireEvent.mouseDown(backdrop);
-
-    expect(onClose).toHaveBeenCalled();
+    fireEvent.keyDown(screen.getByTestId("command-palette-card"), {
+      key: "Escape",
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("has_aria_modal_and_labelledby", () => {
+  it("navigates_with_arrow_keys", () => {
     render(
       <CommandPalette
         open={true}
@@ -72,12 +102,36 @@ describe("CommandPalette", () => {
       />,
     );
 
-    const dialog = screen.getByRole("dialog");
-    expect(dialog).toHaveAttribute("aria-modal", "true");
-    expect(dialog).toHaveAttribute("aria-labelledby", "command-palette-title");
+    const card = screen.getByTestId("command-palette-card");
+
+    expect(screen.getByTestId("command-row-index-rebuild")).toHaveAttribute("data-selected", "true");
+
+    fireEvent.keyDown(card, { key: "ArrowDown" });
+    expect(screen.getByTestId("command-row-approval-review")).toHaveAttribute("data-selected", "true");
+
+    fireEvent.keyDown(card, { key: "ArrowUp" });
+    expect(screen.getByTestId("command-row-index-rebuild")).toHaveAttribute("data-selected", "true");
   });
 
-  it("command_items_have_aria_selected", () => {
+  it("executes_selected_command_on_enter", () => {
+    const onSelectCommand = vi.fn<(action: CommandPaletteAction) => void>();
+    const onClose = vi.fn<() => void>();
+    render(
+      <CommandPalette
+        open={true}
+        onClose={onClose}
+        onSelectCommand={onSelectCommand}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByTestId("command-palette-card"), {
+      key: "Enter",
+    });
+    expect(onSelectCommand).toHaveBeenCalledWith("index-rebuild");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("auto_focuses_input_when_opened", async () => {
     render(
       <CommandPalette
         open={true}
@@ -86,8 +140,24 @@ describe("CommandPalette", () => {
       />,
     );
 
-    const buttons = screen.getAllByRole("button");
-    // Command palette card + Esc button + 5 command buttons = 7 buttons
-    expect(buttons.length).toBeGreaterThanOrEqual(6);
+    await waitFor(() => {
+      expect(screen.getByTestId("command-palette-input")).toHaveFocus();
+    });
+  });
+
+  it("shows_no_results_when_query_matches_nothing", () => {
+    render(
+      <CommandPalette
+        open={true}
+        onClose={vi.fn<() => void>()}
+        onSelectCommand={vi.fn<() => void>()}
+      />,
+    );
+
+    fireEvent.change(screen.getByTestId("command-palette-input"), {
+      target: { value: "xyz-nonexistent" },
+    });
+
+    expect(screen.getByText("无匹配命令")).toBeInTheDocument();
   });
 });

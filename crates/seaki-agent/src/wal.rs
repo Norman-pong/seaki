@@ -20,27 +20,38 @@ impl std::error::Error for WalError {}
 
 /// Writes compaction summary to WAL.
 ///
-/// # Notes
-/// This uses `session_id` as a placeholder for `workspace_id` because the
-/// current function signature does not carry workspace context. When
-/// `seaki-core` extends `InertEvent` with a dedicated session-compaction
-/// variant this should be revisited.
+/// # Arguments
+/// * `ledger` — The core ledger to append the event to.
+/// * `workspace_id` — The workspace this compaction belongs to.
+/// * `session_id` — The session being compacted.
+/// * `summary` — The compaction summary.
 pub fn write_compaction_to_wal(
     ledger: &mut CoreLedger,
+    workspace_id: &str,
     session_id: &str,
     summary: &crate::session::CompactionSummary,
 ) -> Result<(), WalError> {
     let payload_json =
         serde_json::to_string(summary).map_err(|e| WalError::SerializeError(e.to_string()))?;
 
+    // Use a counter suffix to avoid idempotency_key collision within the same millisecond.
+    static COMPACT_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    let seq = COMPACT_SEQ.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
     let event = InertEvent {
-        event_id: format!("session-compact-{session_id}-{}", summary.compacted_at_ms),
+        event_id: format!(
+            "session-compact-{session_id}-{}-{seq}",
+            summary.compacted_at_ms
+        ),
         schema_version: CURRENT_EVENT_SCHEMA_VERSION,
         payload_schema_hash: "session.compacted.v1".to_string(),
         actor_id: "agent".to_string(),
-        scope: seaki_core::workspace_scope(session_id),
-        workspace_id: session_id.to_string(),
-        idempotency_key: format!("session-compact-{session_id}-{}", summary.compacted_at_ms),
+        scope: seaki_core::workspace_scope(workspace_id),
+        workspace_id: workspace_id.to_string(),
+        idempotency_key: format!(
+            "session-compact-{session_id}-{}-{seq}",
+            summary.compacted_at_ms
+        ),
         event_type: "session.compacted".to_string(),
         payload_summary: payload_json,
     };

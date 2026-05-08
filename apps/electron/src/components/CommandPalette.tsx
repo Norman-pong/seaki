@@ -82,10 +82,7 @@ export function CommandPalette({ open, onClose, onSelectCommand }: CommandPalett
     if (!open) return;
     setQuery("");
     setSelectedIndex(0);
-    const id = requestAnimationFrame(() => {
-      inputRef.current?.focus();
-    });
-    return () => cancelAnimationFrame(id);
+    inputRef.current?.focus();
   }, [open]);
 
   useEffect(() => {
@@ -194,7 +191,7 @@ export function CommandPalette({ open, onClose, onSelectCommand }: CommandPalett
             />
           </div>
         </CardHeader>
-        <CardContent className="flex flex-col gap-1.5 pt-0">
+        <CardContent className="flex flex-col gap-1.5 pt-0" role="listbox">
           {commands.length === 0 && (
             <p className="text-sm text-muted-foreground py-4 text-center">无匹配命令</p>
           )}
@@ -202,14 +199,22 @@ export function CommandPalette({ open, onClose, onSelectCommand }: CommandPalett
             const Icon = command.icon;
             const isSelected = index === selectedIndex;
             return (
-              <button
+              <div
                 key={command.id}
-                type="button"
+                role="option"
+                tabIndex={0}
                 className="command-row"
                 data-selected={isSelected ? "true" : undefined}
+                aria-selected={isSelected ? "true" : "false"}
                 data-testid={`command-row-${command.id}`}
                 onClick={() => handleSelect(command.id)}
                 onMouseEnter={() => setSelectedIndex(index)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleSelect(command.id);
+                  }
+                }}
               >
                 <span className="command-row__icon">
                   <Icon data-icon="icon" />
@@ -225,7 +230,7 @@ export function CommandPalette({ open, onClose, onSelectCommand }: CommandPalett
                 <Badge variant="outline" className="h-5 text-[11px]">
                   {command.shortcut}
                 </Badge>
-              </button>
+              </div>
             );
           })}
         </CardContent>

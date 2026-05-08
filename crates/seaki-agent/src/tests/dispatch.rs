@@ -52,6 +52,7 @@ fn empty_session() -> Session {
         claims: vec![],
         created_at_ms: 0,
         updated_at_ms: 0,
+        approval_timeout_ms: 30000,
     }
 }
 
@@ -64,6 +65,7 @@ fn session_with_claims(claims: Vec<SessionClaim>) -> Session {
         claims,
         created_at_ms: 0,
         updated_at_ms: 0,
+        approval_timeout_ms: 30000,
     }
 }
 
@@ -76,6 +78,7 @@ fn session_with_messages(messages: Vec<SessionMessage>) -> Session {
         claims: vec![],
         created_at_ms: 0,
         updated_at_ms: 0,
+        approval_timeout_ms: 30000,
     }
 }
 

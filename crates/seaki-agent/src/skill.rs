@@ -125,12 +125,20 @@ impl SkillRegistry {
             .collect()
     }
 
+    /// Maximum intent length for matching to prevent DoS from超长输入.
+    const MAX_INTENT_LENGTH: usize = 4096;
+
     /// Match an intent string against all registered skill trigger patterns.
     ///
     /// Returns matches sorted by score descending, then by priority ascending.
+    /// Intents longer than `MAX_INTENT_LENGTH` are truncated before matching.
     #[must_use]
     pub fn match_intent(&self, intent: &str) -> Vec<SkillMatch> {
-        let intent_lower = intent.to_lowercase();
+        let intent_lower = if intent.len() > Self::MAX_INTENT_LENGTH {
+            intent[..Self::MAX_INTENT_LENGTH].to_lowercase()
+        } else {
+            intent.to_lowercase()
+        };
         let mut best_by_skill: HashMap<String, SkillMatch> = HashMap::new();
 
         for skill in self.skills.values() {

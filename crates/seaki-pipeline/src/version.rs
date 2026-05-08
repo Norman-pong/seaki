@@ -64,10 +64,17 @@ pub fn check_compatibility(
     if runtime.major != required.major {
         return VersionCompatibility::Incompatible;
     }
-    if runtime.minor >= required.minor {
+    if runtime.minor > required.minor {
         VersionCompatibility::Compatible
-    } else {
+    } else if runtime.minor < required.minor {
         VersionCompatibility::BackwardCompatible
+    } else {
+        // Same minor: patch level determines compatibility.
+        if runtime.patch >= required.patch {
+            VersionCompatibility::Compatible
+        } else {
+            VersionCompatibility::BackwardCompatible
+        }
     }
 }
 

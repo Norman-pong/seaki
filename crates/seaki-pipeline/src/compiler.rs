@@ -122,6 +122,22 @@ pub fn compile_dag(
             .push(edge.to.0.clone());
     }
 
+    // Pre-fetch and validate manifests to avoid redundant hash computation (#9-8).
+    let mut manifest_cache: HashMap<String, &PipeCommandManifest> = HashMap::new();
+    for node_id in &topo {
+        if let Some(Node::Command { command_id, .. }) = graph.get_node(node_id) {
+            if !manifest_cache.contains_key(command_id) {
+                let manifest = registry.inspect(command_id).map_err(|_| {
+                    CompileError::Compose(seaki_pipe::ComposeError::CommandNotFound(
+                        command_id.clone(),
+                    ))
+                })?;
+                validate_manifest_hash(manifest)?;
+                manifest_cache.insert(command_id.clone(), manifest);
+            }
+        }
+    }
+
     for node_id in &topo {
         let node = graph
             .get_node(node_id)
@@ -138,12 +154,11 @@ pub fn compile_dag(
             Node::Command {
                 command_id, args, ..
             } => {
-                let manifest = registry.inspect(command_id).map_err(|_| {
+                let manifest = manifest_cache.get(command_id).ok_or_else(|| {
                     CompileError::Compose(seaki_pipe::ComposeError::CommandNotFound(
                         command_id.clone(),
                     ))
                 })?;
-                validate_manifest_hash(manifest)?;
 
                 seaki_pipe::DagStep {
                     composed: seaki_pipe::ComposedStep {
@@ -278,11 +293,49 @@ pub fn compile_dag(
         steps.push(dag_step);
     }
 
-    if let Some(first) = steps.first() {
-        input_type = first.composed.input_type;
+    // Determine pipeline boundaries from Entry/Exit nodes for DAG correctness (#9-9).
+    // Entry outputs the initial input; its successors' input_type is the pipeline input.
+    let entry_successor_types: Vec<seaki_pipe::TypedFrame> = graph
+        .edges
+        .iter()
+        .filter(|e| e.from == *graph.entry_id())
+        .filter_map(|e| graph.get_node(&e.to))
+        .filter_map(|node| match node {
+            Node::Command { command_id, .. } => {
+                manifest_cache.get(command_id).map(|m| m.input_frame)
+            }
+            _ => Some((
+                seaki_pipe::FrameType::JsonValue,
+                seaki_pipe::Cardinality::One,
+            )),
+        })
+        .collect();
+
+    if !entry_successor_types.is_empty() {
+        // Use the first successor's input type as pipeline input.
+        // For a true DAG this should ideally be the intersection of all successor types.
+        input_type = entry_successor_types[0];
     }
-    if let Some(last) = steps.last() {
-        output_type = last.composed.output_type;
+
+    // Exit receives output from its predecessors; pipeline output is the last predecessor's output.
+    let exit_predecessor_types: Vec<seaki_pipe::TypedFrame> = graph
+        .edges
+        .iter()
+        .filter(|e| graph.exit_ids().contains(&e.to))
+        .filter_map(|e| graph.get_node(&e.from))
+        .filter_map(|node| match node {
+            Node::Command { command_id, .. } => {
+                manifest_cache.get(command_id).map(|m| m.output_frame)
+            }
+            _ => Some((
+                seaki_pipe::FrameType::JsonValue,
+                seaki_pipe::Cardinality::One,
+            )),
+        })
+        .collect();
+
+    if !exit_predecessor_types.is_empty() {
+        output_type = exit_predecessor_types[0];
     }
 
     Ok(seaki_pipe::DagPipeline {

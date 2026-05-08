@@ -151,6 +151,7 @@ fn create_test_session() -> Session {
         claims: vec![],
         created_at_ms: 0,
         updated_at_ms: 0,
+        approval_timeout_ms: 30000,
     }
 }
 
