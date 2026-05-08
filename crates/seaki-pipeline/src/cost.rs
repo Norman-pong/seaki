@@ -47,7 +47,7 @@ impl CostEstimate {
                     Err(format!("{label}: actual is 0 but estimate is {est}"))
                 };
             }
-            let ratio = f64::from(est as u32) / f64::from(act as u32);
+            let ratio = est as f64 / act as f64;
             if !(0.5..=2.0).contains(&ratio) {
                 return Err(format!(
                     "{label}: estimate {est} vs actual {act} (ratio {ratio:.2} outside 0.5x~2x)"

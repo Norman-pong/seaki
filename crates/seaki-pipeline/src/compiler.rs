@@ -143,18 +143,7 @@ pub fn compile_dag(
                         command_id.clone(),
                     ))
                 })?;
-
-                let expected_hash = PipeCommandManifest::compute_schema_hash(
-                    &manifest.input_schema,
-                    &manifest.output_schema,
-                );
-                if manifest.schema_hash != expected_hash {
-                    return Err(CompileError::SchemaHashMismatch {
-                        command_id: command_id.clone(),
-                        expected: expected_hash,
-                        found: manifest.schema_hash.clone(),
-                    });
-                }
+                validate_manifest_hash(manifest)?;
 
                 seaki_pipe::DagStep {
                     composed: seaki_pipe::ComposedStep {
@@ -348,6 +337,20 @@ fn topological_sort(graph: &PipelineGraph) -> Result<Vec<NodeId>, CompileError> 
     Ok(result)
 }
 
+/// Validate that a manifest's stored `schema_hash` matches the computed hash.
+fn validate_manifest_hash(manifest: &PipeCommandManifest) -> Result<(), CompileError> {
+    let expected_hash =
+        PipeCommandManifest::compute_schema_hash(&manifest.input_schema, &manifest.output_schema);
+    if manifest.schema_hash != expected_hash {
+        return Err(CompileError::SchemaHashMismatch {
+            command_id: manifest.command_id.clone(),
+            expected: expected_hash,
+            found: manifest.schema_hash.clone(),
+        });
+    }
+    Ok(())
+}
+
 /// Compile a `PipelineGraph` into a `CompileResult`.
 ///
 /// # Errors
@@ -369,24 +372,23 @@ pub fn compile(
         return Err(CompileError::EmptyPipeline);
     }
 
-    // Validate schema hashes before delegating to compose.
+    // Validate schema hashes before delegating to compose, and cache manifests
+    // to avoid re-looking them up after compose.
+    let mut manifest_cache: HashMap<String, (Option<ResourceQuota>, String)> = HashMap::new();
     for step in &ast.steps {
         let manifest = registry.inspect(&step.command_id).map_err(|_| {
             CompileError::Compose(seaki_pipe::ComposeError::CommandNotFound(
                 step.command_id.clone(),
             ))
         })?;
-        let expected_hash = PipeCommandManifest::compute_schema_hash(
-            &manifest.input_schema,
-            &manifest.output_schema,
+        validate_manifest_hash(manifest)?;
+        manifest_cache.insert(
+            step.command_id.clone(),
+            (
+                manifest.resource_quota.clone(),
+                manifest.schema_hash.clone(),
+            ),
         );
-        if manifest.schema_hash != expected_hash {
-            return Err(CompileError::SchemaHashMismatch {
-                command_id: step.command_id.clone(),
-                expected: expected_hash,
-                found: manifest.schema_hash.clone(),
-            });
-        }
     }
 
     // Delegate type-checking to seaki_pipe::compose.
@@ -397,11 +399,12 @@ pub fn compile(
     let mut command_schema_hashes: HashMap<String, String> = HashMap::new();
 
     for step in &composed.steps {
-        let manifest = registry.inspect(&step.command_id).map_err(|_| {
-            CompileError::Compose(seaki_pipe::ComposeError::CommandNotFound(
-                step.command_id.clone(),
-            ))
-        })?;
+        let (resource_quota, schema_hash) =
+            manifest_cache.get(&step.command_id).ok_or_else(|| {
+                CompileError::Compose(seaki_pipe::ComposeError::CommandNotFound(
+                    step.command_id.clone(),
+                ))
+            })?;
 
         linear_steps.push(CompiledStep {
             step_id: step.step_id.clone(),
@@ -409,11 +412,11 @@ pub fn compile(
             input_type: step.input_type,
             output_type: step.output_type,
             side_effect_level: step.side_effect_level,
-            resource_quota: manifest.resource_quota.clone(),
-            schema_hash: manifest.schema_hash.clone(),
+            resource_quota: resource_quota.clone(),
+            schema_hash: schema_hash.clone(),
         });
 
-        command_schema_hashes.insert(step.command_id.clone(), manifest.schema_hash.clone());
+        command_schema_hashes.insert(step.command_id.clone(), schema_hash.clone());
 
         if step.side_effect_level as u8 > max_side_effect as u8 {
             max_side_effect = step.side_effect_level;

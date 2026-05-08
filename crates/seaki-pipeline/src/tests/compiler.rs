@@ -3,6 +3,33 @@ use crate::{compile, CompileError, IntentParser};
 use seaki_pipe::registry::{CommandRegistry, PipeCommandManifest, ResourceQuota, SideEffectLevel};
 use seaki_pipe::FrameType;
 
+#[test]
+fn schema_hash_is_deterministic() {
+    let input =
+        serde_json::json!({ "type": "object", "properties": { "name": { "type": "string" } } });
+    let output = serde_json::json!({ "type": "string" });
+
+    let hash1 = PipeCommandManifest::compute_schema_hash(&input, &output);
+    let hash2 = PipeCommandManifest::compute_schema_hash(&input, &output);
+    assert_eq!(hash1, hash2, "same schema should produce identical hash");
+}
+
+#[test]
+fn compiler_reuses_cached_manifest() {
+    let registry = setup_registry();
+    let parser = MockIntentParser::new();
+    let graph = parser.parse("search and summarize").unwrap();
+
+    let result = compile(&graph, &registry).unwrap();
+
+    // command_schema_hashes should be populated and match registry values.
+    assert!(!result.command_schema_hashes.is_empty());
+    for (command_id, hash) in &result.command_schema_hashes {
+        let manifest = registry.inspect(command_id).unwrap();
+        assert_eq!(*hash, manifest.schema_hash);
+    }
+}
+
 fn setup_registry() -> CommandRegistry {
     CommandRegistry::builtin()
 }

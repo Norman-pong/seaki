@@ -376,3 +376,35 @@ fn cost_estimate_check_error_tokens_outside_band() {
     };
     assert!(estimate.check_error(&actual).is_err());
 }
+
+#[test]
+fn cost_estimate_check_error_large_values_no_truncation() {
+    let estimate = crate::cost::CostEstimate {
+        graph_id: "test".to_string(),
+        estimated_cpu_ms: 10_000_000_000, // > u32::MAX
+        estimated_memory_mb: 64,
+        estimated_tokens: 2560,
+        confidence: CostConfidence::High,
+    };
+    // ratio = 10_000_000_000 / 20_000_000_000 = 0.5 -> ok
+    let actual_ok = ActualCost {
+        cpu_ms: 20_000_000_000,
+        memory_mb: 64,
+        tokens: 2560,
+    };
+    assert!(
+        estimate.check_error(&actual_ok).is_ok(),
+        "ratio 0.5 should be within band"
+    );
+
+    // ratio = 10_000_000_000 / 4_000_000_000 = 2.5 -> err
+    let actual_err = ActualCost {
+        cpu_ms: 4_000_000_000,
+        memory_mb: 64,
+        tokens: 2560,
+    };
+    assert!(
+        estimate.check_error(&actual_err).is_err(),
+        "ratio 2.5 should be outside band"
+    );
+}
