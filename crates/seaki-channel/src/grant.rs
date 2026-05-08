@@ -7,10 +7,18 @@ use std::time::SystemTime;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChannelAttachmentRef {
     pub attachment_id: String,
-    pub file_key: String,
-    pub version: String,
+    pub provider: String,
+    pub provider_tenant_id: String,
+    pub provider_chat_id: String,
+    pub provider_message_id: String,
+    pub provider_thread_id: String,
+    pub provider_file_key: String,
+    pub provider_file_version: String,
     pub original_name: String,
-    pub claimed_mime: String,
+    pub declared_mime: String,
+    pub declared_size: u64,
+    pub content_hash: Option<String>,
+    pub download_capability_required: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +36,7 @@ pub struct QuarantinedDownload {
     pub observed_mime: String,
     pub content_hash: String,
     pub malware_scan_status: MalwareScanStatus,
+    pub observed_size: u64,
 }
 
 /// Simulated file broker that "downloads" attachments into a quarantine path.
@@ -48,15 +57,19 @@ impl FakeBroker {
     pub fn download(&self, attachment: &ChannelAttachmentRef) -> QuarantinedDownload {
         let quarantine_path = format!(
             "{}/{}_{}",
-            self.quarantine_root, attachment.file_key, attachment.version
+            self.quarantine_root, attachment.provider_file_key, attachment.provider_file_version
         );
         QuarantinedDownload {
-            file_key: attachment.file_key.clone(),
-            version: attachment.version.clone(),
+            file_key: attachment.provider_file_key.clone(),
+            version: attachment.provider_file_version.clone(),
             quarantine_path,
-            observed_mime: attachment.claimed_mime.clone(),
-            content_hash: format!("sha256:mock-{}-{}", attachment.file_key, attachment.version),
+            observed_mime: attachment.declared_mime.clone(),
+            content_hash: format!(
+                "sha256:mock-{}-{}",
+                attachment.provider_file_key, attachment.provider_file_version
+            ),
             malware_scan_status: MalwareScanStatus::Clean,
+            observed_size: 0,
         }
     }
 }
@@ -65,8 +78,15 @@ impl FakeBroker {
 pub struct ChannelResourceGrant {
     pub grant_id: String,
     pub scope: String,
+    pub provider_tenant_id: String,
+    pub provider_chat_id: String,
+    pub provider_message_id: String,
     pub file_key: String,
     pub version: String,
+    pub seaki_actor_id: String,
+    pub operation: String,
+    pub audience: String,
+    pub idempotency_key: String,
     pub uses_remaining: u32,
     pub issued_at: SystemTime,
     pub expires_at: SystemTime,
@@ -81,6 +101,13 @@ pub enum GrantError {
     ScopeMismatch,
     VersionMismatch,
     FileKeyMismatch,
+    QuarantineFailed(String),
+    MalwareDetected,
+    MimeMismatch,
+    HashMismatch,
+    ActorMismatch,
+    OperationMismatch,
+    AudienceMismatch,
 }
 
 impl std::fmt::Display for GrantError {
@@ -93,6 +120,13 @@ impl std::fmt::Display for GrantError {
             Self::ScopeMismatch => write!(f, "SCOPE_MISMATCH"),
             Self::VersionMismatch => write!(f, "VERSION_MISMATCH"),
             Self::FileKeyMismatch => write!(f, "FILE_KEY_MISMATCH"),
+            Self::QuarantineFailed(msg) => write!(f, "QUARANTINE_FAILED: {msg}"),
+            Self::MalwareDetected => write!(f, "MALWARE_DETECTED"),
+            Self::MimeMismatch => write!(f, "MIME_MISMATCH"),
+            Self::HashMismatch => write!(f, "HASH_MISMATCH"),
+            Self::ActorMismatch => write!(f, "ACTOR_MISMATCH"),
+            Self::OperationMismatch => write!(f, "OPERATION_MISMATCH"),
+            Self::AudienceMismatch => write!(f, "AUDIENCE_MISMATCH"),
         }
     }
 }
@@ -135,7 +169,8 @@ impl ChannelResourceGrantStore {
         Ok(grant)
     }
 
-    /// Consume one use of a grant after validating scope, `file_key` and version.
+    /// Consume one use of a grant after validating scope, `file_key`, version,
+    /// `seaki_actor_id`, `operation` and `audience`.
     ///
     /// # Panics
     ///
@@ -144,12 +179,16 @@ impl ChannelResourceGrantStore {
     /// # Errors
     ///
     /// Returns `GrantError` if the grant is missing, expired, exhausted, or mismatched.
+    #[allow(clippy::too_many_arguments)]
     pub fn consume(
         &self,
         grant_id: &str,
         scope: &str,
         file_key: &str,
         version: &str,
+        seaki_actor_id: &str,
+        operation: &str,
+        audience: &str,
         now: SystemTime,
     ) -> Result<(), GrantError> {
         let mut grants = self.grants.lock().unwrap();
@@ -169,6 +208,15 @@ impl ChannelResourceGrantStore {
         }
         if grant.version != version {
             return Err(GrantError::VersionMismatch);
+        }
+        if grant.seaki_actor_id != seaki_actor_id {
+            return Err(GrantError::ActorMismatch);
+        }
+        if grant.operation != operation {
+            return Err(GrantError::OperationMismatch);
+        }
+        if grant.audience != audience {
+            return Err(GrantError::AudienceMismatch);
         }
 
         grant.uses_remaining -= 1;

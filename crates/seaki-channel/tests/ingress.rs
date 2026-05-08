@@ -2,8 +2,8 @@ use seaki_channel::ingress::{
     IdentityResolver, InMemoryIdentityResolver, IngressError, IngressNormalizer, IngressResult,
     ResolvedIdentity, UnmappedUserPolicy,
 };
-use seaki_channel::webhook::{hex_encode, hmac_sha256, FakeWebhookVerifier, WebhookError};
 use seaki_channel::webhook::WebhookVerifier;
+use seaki_channel::webhook::{hex_encode, hmac_sha256, FakeWebhookVerifier, WebhookError};
 use seaki_channel::ChannelMessagePayload;
 use std::time::{Duration, SystemTime};
 
