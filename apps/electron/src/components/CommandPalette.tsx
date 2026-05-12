@@ -3,6 +3,7 @@ import { FilePlus2, GitCompare, RefreshCw, Search, Terminal } from "lucide-react
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 export type CommandPaletteAction =
   | "index-rebuild"
@@ -149,7 +150,7 @@ export function CommandPalette({ open, onClose, onSelectCommand }: CommandPalett
   return (
     <div
       id="command-palette"
-      className="command-palette-backdrop"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-[oklch(0.08_0.004_247/34%)] pt-24"
       role="dialog"
       aria-modal="true"
       aria-labelledby="command-palette-title"
@@ -158,7 +159,7 @@ export function CommandPalette({ open, onClose, onSelectCommand }: CommandPalett
       <Card
         ref={containerRef}
         size="sm"
-        className="command-palette-card"
+        className="w-[min(600px,calc(100vw-2rem))] rounded-[0.875rem] bg-card shadow-[0_28px_80px_oklch(0_0_0/22%),0_8px_24px_oklch(0_0_0/10%)]"
         onMouseDown={(event) => event.stopPropagation()}
         onKeyDown={handleKeyDown}
         data-testid="command-palette-card"
@@ -177,7 +178,7 @@ export function CommandPalette({ open, onClose, onSelectCommand }: CommandPalett
               Esc
             </Button>
           </div>
-          <div className="command-palette-input" role="search">
+          <div className="flex h-10 items-center gap-2.5 border border-border rounded-[0.625rem] bg-background px-3 text-foreground text-sm font-medium" role="search">
             <Search data-icon="inline-start" />
             <input
               ref={inputRef}
@@ -203,7 +204,11 @@ export function CommandPalette({ open, onClose, onSelectCommand }: CommandPalett
                 key={command.id}
                 role="option"
                 tabIndex={0}
-                className="command-row"
+                className={cn(
+                  "flex w-full items-center gap-3 border border-transparent rounded-[0.625rem] bg-transparent px-3 py-2.5 text-foreground transition-colors duration-150",
+                  "hover:border-border hover:bg-muted",
+                  isSelected && "border-border bg-muted",
+                )}
                 data-selected={isSelected ? "true" : undefined}
                 aria-selected={isSelected ? "true" : "false"}
                 data-testid={`command-row-${command.id}`}
@@ -216,7 +221,7 @@ export function CommandPalette({ open, onClose, onSelectCommand }: CommandPalett
                   }
                 }}
               >
-                <span className="command-row__icon">
+                <span className="inline-flex w-[1.875rem] h-[1.875rem] shrink-0 items-center justify-center border border-border rounded-lg bg-card text-muted-foreground">
                   <Icon data-icon="icon" />
                 </span>
                 <span className="min-w-0 flex-1 text-left">

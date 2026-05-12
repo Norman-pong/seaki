@@ -42,7 +42,7 @@ export function SessionSidebar({
   return (
     <aside
       className={cn(
-        "flex flex-col h-full sidebar-surface border-r transition-transform duration-300 ease-out",
+        "flex flex-col h-full bg-sidebar border-r transition-transform duration-300 ease-out",
         isCollapsed && "-translate-x-full"
       )}
       aria-label="session history"

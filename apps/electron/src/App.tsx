@@ -160,7 +160,7 @@ export function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="w-screen h-screen flex flex-col bg-[var(--background)]">
       <TitleBar
         session={activeSession}
         leftCollapsed={leftCollapsed}
@@ -169,14 +169,14 @@ export function App() {
         onToggleRight={toggleRightPanel}
         onOpenCommandPalette={() => setCommandPaletteOpen(true)}
       />
-      <div className="app-body">
-        <Group orientation="horizontal" className="app-panels">
+      <div className="flex-1 overflow-hidden">
+        <Group orientation="horizontal" className="w-full h-full">
           {/* Left: Session Sidebar */}
           <Panel
             defaultSize="18%"
             minSize="14%"
             maxSize="28%"
-            className="app-left-panel"
+            className="flex flex-col overflow-hidden"
             panelRef={leftPanelRef}
             style={{ transition: "flex-basis 0.3s ease, flex-grow 0.3s ease" }}
           >
@@ -190,10 +190,10 @@ export function App() {
             />
           </Panel>
 
-          <Separator className="app-resize-handle" />
+          <Separator className="w-px bg-transparent transition-[background] duration-150 cursor-col-resize hover:bg-[var(--border)]" />
 
           {/* Center: Chat Panel */}
-          <Panel defaultSize="50%" minSize="30%" className="app-center-panel">
+          <Panel defaultSize="50%" minSize="30%" className="flex flex-col overflow-hidden">
             {activeSession ? (
               <ChatPanel
                 session={activeSession}
@@ -203,14 +203,14 @@ export function App() {
             ) : null}
           </Panel>
 
-          <Separator className="app-resize-handle" />
+          <Separator className="w-px bg-transparent transition-[background] duration-150 cursor-col-resize hover:bg-[var(--border)]" />
 
           {/* Right: Wiki Sidebar + Approval */}
           <Panel
             defaultSize="32%"
             minSize="22%"
             maxSize="45%"
-            className="app-right-panel"
+            className="flex flex-col overflow-hidden"
             panelRef={rightPanelRef}
             style={{ transition: "flex-basis 0.3s ease, flex-grow 0.3s ease" }}
           >

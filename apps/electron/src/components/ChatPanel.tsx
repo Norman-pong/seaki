@@ -263,7 +263,7 @@ export function ChatPanel({ session, onSendMessage, onOpenReviewTab, onApprovalA
 
   return (
     <section className="flex flex-col h-full bg-background" aria-label="chat flow">
-      <div className="chat-panel-header">
+      <div className="flex items-center justify-between gap-4 border-b border-border/72 bg-background px-5 py-3.5">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h2 className="truncate text-[15px] font-semibold">{session.title}</h2>
@@ -275,10 +275,10 @@ export function ChatPanel({ session, onSendMessage, onOpenReviewTab, onApprovalA
             本轮输出默认进入 proposal，写入 workspace 前需要 citation 与审批校验。
           </p>
         </div>
-        <div className="chat-panel-header__metrics">
-          <span>context 29%</span>
-          <span>citations 2</span>
-          <span>risk low</span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className="border border-border rounded-lg bg-card px-2 py-1 text-muted-foreground text-[11px] font-semibold whitespace-nowrap">context 29%</span>
+          <span className="border border-border rounded-lg bg-card px-2 py-1 text-muted-foreground text-[11px] font-semibold whitespace-nowrap max-[900px]:hidden">citations 2</span>
+          <span className="border border-border rounded-lg bg-card px-2 py-1 text-muted-foreground text-[11px] font-semibold whitespace-nowrap max-[900px]:hidden">risk low</span>
           <button
             type="button"
             className="inline-flex items-center gap-1 border border-border rounded-md bg-card px-2 py-0.5 text-[11px] font-semibold text-muted-foreground hover:bg-muted transition-colors"
@@ -337,8 +337,8 @@ export function ChatPanel({ session, onSendMessage, onOpenReviewTab, onApprovalA
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="chat-composer">
-        <div className="composer-shell">
+      <div className="border-t border-border/72 bg-background px-5 pt-3.5 pb-4">
+        <div className="overflow-hidden border border-border/82 rounded-[0.875rem] bg-card shadow-none">
           {/* Skill selector */}
           <div className="flex items-center gap-1.5 px-3 py-2 border-b overflow-x-auto">
             {SKILLS.map((skill) => {

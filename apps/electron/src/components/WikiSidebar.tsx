@@ -207,7 +207,7 @@ export function WikiSidebar({
   return (
     <aside
       className={cn(
-        "flex flex-col h-full sidebar-surface border-l overflow-hidden transition-transform duration-300 ease-out",
+        "flex flex-col h-full bg-sidebar border-l overflow-hidden transition-transform duration-300 ease-out",
         isCollapsed && "translate-x-full"
       )}
       aria-label="wiki sidebar"

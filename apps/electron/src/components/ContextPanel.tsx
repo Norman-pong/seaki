@@ -63,7 +63,7 @@ export function ContextPanel() {
           </div>
           <div className="h-1.5 bg-muted rounded-full overflow-hidden">
             <div
-              className="h-full context-meter rounded-full transition-all duration-300"
+              className="h-full rounded-full bg-gradient-to-r from-[oklch(0.58_0.12_250)] to-[oklch(0.65_0.12_165)] transition-all duration-300"
               style={{ width: "29%" }}
             />
           </div>
