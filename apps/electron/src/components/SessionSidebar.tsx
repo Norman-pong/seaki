@@ -114,7 +114,7 @@ export function SessionSidebar({
                       </span>
                     </div>
                   </button>
-                  {onDeleteSession && isActive && (
+                  {onDeleteSession && (
                     <button
                       type="button"
                       className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center justify-center w-5 h-5 rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity hover:bg-destructive/10 hover:text-destructive"

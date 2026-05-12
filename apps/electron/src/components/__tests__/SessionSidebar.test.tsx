@@ -93,9 +93,76 @@ describe("SessionSidebar", () => {
       />,
     );
 
-    const deleteBtn = screen.getByLabelText("delete session");
+    // 找到活跃会话（session_1）对应的删除按钮
+    const session1Row = screen.getByText("Wiki 导入讨论").closest(".group")!;
+    const deleteBtn = session1Row.querySelector('[aria-label="delete session"]') as HTMLElement;
     fireEvent.click(deleteBtn);
     expect(onDeleteSession).toHaveBeenCalledWith("session_1");
+  });
+
+  it("shows delete button for inactive session on hover", () => {
+    const onDeleteSession = vi.fn<() => void>();
+    render(
+      <SessionSidebar
+        sessions={mockSessions}
+        activeSessionId="session_1"
+        onSelectSession={vi.fn<() => void>()}
+        onNewSession={vi.fn<() => void>()}
+        onDeleteSession={onDeleteSession}
+      />,
+    );
+
+    // 非活跃会话（session_2）也应有删除按钮
+    const session2Row = screen.getByText("架构决策审查").closest(".group")!;
+    const deleteBtn = session2Row.querySelector('[aria-label="delete session"]');
+    expect(deleteBtn).toBeInTheDocument();
+  });
+
+  it("calls onDeleteSession when inactive session delete button clicked", () => {
+    const onDeleteSession = vi.fn<() => void>();
+    render(
+      <SessionSidebar
+        sessions={mockSessions}
+        activeSessionId="session_1"
+        onSelectSession={vi.fn<() => void>()}
+        onNewSession={vi.fn<() => void>()}
+        onDeleteSession={onDeleteSession}
+      />,
+    );
+
+    // 找到非活跃会话的删除按钮
+    const deleteButtons = screen.getAllByLabelText("delete session");
+    // session_2 是非活跃会话，它的删除按钮是第二个
+    const inactiveDeleteBtn = deleteButtons.find((btn) =>
+      btn.closest(".group")?.querySelector("button[aria-current]") === null,
+    )!;
+    fireEvent.click(inactiveDeleteBtn);
+    expect(onDeleteSession).toHaveBeenCalledWith("session_2");
+  });
+
+  it("shows delete button for every session", () => {
+    const onDeleteSession = vi.fn<() => void>();
+    const threeSessions: readonly ChatSession[] = [
+      ...mockSessions,
+      {
+        id: "session_3",
+        title: "第三个会话",
+        timestamp: "2026-05-06T08:00:00+08:00",
+        messages: [],
+      },
+    ];
+    render(
+      <SessionSidebar
+        sessions={threeSessions}
+        activeSessionId="session_1"
+        onSelectSession={vi.fn<() => void>()}
+        onNewSession={vi.fn<() => void>()}
+        onDeleteSession={onDeleteSession}
+      />,
+    );
+
+    const deleteButtons = screen.getAllByLabelText("delete session");
+    expect(deleteButtons).toHaveLength(3);
   });
 
   it("renders_empty_sessions", () => {
