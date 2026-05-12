@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { FilePlus2, GitCompare, RefreshCw, Search, Terminal } from "lucide-react";
+import { FilePlus2, GitCompare, RefreshCw, Search, Sparkles, Terminal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -10,7 +10,8 @@ export type CommandPaletteAction =
   | "approval-review"
   | "attach-source"
   | "pipe-dry-run"
-  | "wiki-search";
+  | "wiki-search"
+  | "compose-answer";
 
 interface CommandPaletteProps {
   readonly open: boolean;
@@ -61,6 +62,13 @@ const ALL_COMMANDS: readonly CommandItem[] = [
     detail: "search.query · daemon visibility checked",
     icon: Search,
     shortcut: "/",
+  },
+  {
+    id: "compose-answer",
+    title: "AI 问答（Citation-backed）",
+    detail: "compose.answer · LLM 生成带引用标注的回答",
+    icon: Sparkles,
+    shortcut: "⌘⇧A",
   },
 ];
 

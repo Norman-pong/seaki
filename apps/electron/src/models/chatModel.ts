@@ -54,13 +54,21 @@ export const SKILLS: readonly SkillOption[] = [
   },
 ];
 
+export interface CitationRef {
+  readonly id: string;
+  readonly label: string;
+  readonly sourceId?: string;
+  readonly citationId?: string;
+  readonly previewTarget?: "source_range" | "wiki_anchor" | "none";
+}
+
 export interface ChatCard {
   readonly type: ChatCardType;
   readonly title: string;
   readonly content?: string;
   readonly snippet?: string;
   readonly status?: string;
-  readonly citationRefs?: readonly { id: string; label: string }[];
+  readonly citationRefs?: readonly CitationRef[];
 }
 
 export interface ChatMessage {
@@ -241,4 +249,12 @@ export function createInitialSession(): ChatSession {
     throw new Error("createInitialSession: mockSessions is empty");
   }
   return first;
+}
+
+/** Whether LLM mode (non-mock) is enabled */
+export function isLlmEnabled(): boolean {
+  return (
+    typeof import.meta.env.SEAKI_LLM_ENABLED === "string" &&
+    import.meta.env.SEAKI_LLM_ENABLED !== "false"
+  );
 }

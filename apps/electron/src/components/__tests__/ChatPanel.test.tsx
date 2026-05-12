@@ -71,6 +71,32 @@ const mockSessionWithMultiline: ChatSession = {
   ],
 };
 
+const mockSessionWithCitations: ChatSession = {
+  id: "session_citations",
+  title: "Citation 测试",
+  timestamp: "2026-05-08T10:00:00+08:00",
+  messages: [
+    {
+      id: "msg_cit1",
+      role: "assistant",
+      content: "以下是带引用的回答",
+      timestamp: "2026-05-08T10:01:00+08:00",
+      cards: [
+        {
+          type: "wiki",
+          title: "引用测试卡片",
+          content: "带引用标注的内容",
+          status: "committed",
+          citationRefs: [
+            { id: "cit_1", label: "source scope", citationId: "cit_decision_context" },
+            { id: "cit_2", label: "approval boundary", sourceId: "src_42" },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 function ChatPanelWithApprovalState({ initialSession }: { readonly initialSession: ChatSession }) {
   const [session, setSession] = useState(initialSession);
 
@@ -239,5 +265,39 @@ describe("ChatPanel", () => {
     expect(message).toBeInTheDocument();
     // The parent should preserve whitespace
     expect(message.closest("p")).toHaveClass("whitespace-pre-wrap");
+  });
+
+  it("renders_citation_badges_as_clickable_buttons", () => {
+    render(<ChatPanel session={mockSessionWithCitations} />);
+
+    const badge1 = screen.getByTestId("citation-ref-cit_1");
+    const badge2 = screen.getByTestId("citation-ref-cit_2");
+
+    expect(badge1).toBeInTheDocument();
+    expect(badge2).toBeInTheDocument();
+    expect(badge1.tagName).toBe("BUTTON");
+    expect(badge2.tagName).toBe("BUTTON");
+    expect(badge1).toHaveTextContent("source scope");
+    expect(badge2).toHaveTextContent("approval boundary");
+  });
+
+  it("calls_onCitationClick_when_citation_badge_clicked", () => {
+    const onCitationClick = vi.fn<(citationId: string) => void>();
+    render(
+      <ChatPanel
+        session={mockSessionWithCitations}
+        onCitationClick={onCitationClick}
+      />,
+    );
+
+    const badge1 = screen.getByTestId("citation-ref-cit_1");
+    fireEvent.click(badge1);
+    // Should use citationId when available (falls back to id)
+    expect(onCitationClick).toHaveBeenCalledWith("cit_decision_context");
+
+    const badge2 = screen.getByTestId("citation-ref-cit_2");
+    fireEvent.click(badge2);
+    // No citationId on this one, so falls back to id
+    expect(onCitationClick).toHaveBeenCalledWith("cit_2");
   });
 });

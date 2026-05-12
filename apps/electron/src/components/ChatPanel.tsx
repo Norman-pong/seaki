@@ -53,6 +53,7 @@ interface ChatPanelProps {
   readonly onSendMessage?: (sessionId: string, content: string, skill?: string) => void;
   readonly onOpenReviewTab?: () => void;
   readonly onApprovalAction?: (sessionId: string, messageId: string, action: "approve" | "reject") => void;
+  readonly onCitationClick?: (citationId: string) => void;
 }
 
 const ChatCardItem = React.memo(function ChatCardItem({
@@ -60,11 +61,13 @@ const ChatCardItem = React.memo(function ChatCardItem({
   onOpenReviewTab,
   onApprove,
   onReject,
+  onCitationClick,
 }: {
   readonly card: ChatCard;
   readonly onOpenReviewTab?: (() => void) | undefined;
   readonly onApprove?: (() => void) | undefined;
   readonly onReject?: (() => void) | undefined;
+  readonly onCitationClick?: ((citationId: string) => void) | undefined;
 }) {
   const isDone = card.status === "committed" || card.status === "ready";
   const isApproval = card.type === "approval";
@@ -91,9 +94,15 @@ const ChatCardItem = React.memo(function ChatCardItem({
           {card.citationRefs && card.citationRefs.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2.5">
               {card.citationRefs.map((ref) => (
-                <Badge key={ref.id} variant="secondary" className="text-xs h-5">
+                <button
+                  key={ref.id}
+                  type="button"
+                  data-testid={`citation-ref-${ref.id}`}
+                  className="text-xs h-5 px-1.5 rounded bg-secondary text-secondary-foreground hover:bg-primary hover:text-primary-foreground transition-colors cursor-pointer"
+                  onClick={() => onCitationClick?.(ref.citationId ?? ref.id)}
+                >
                   {ref.label}
-                </Badge>
+                </button>
               ))}
             </div>
           )}
@@ -141,10 +150,12 @@ const ChatMessageItem = React.memo(function ChatMessageItem({
   message,
   onOpenReviewTab,
   onApprovalAction,
+  onCitationClick,
 }: {
   readonly message: ChatMessage;
   readonly onOpenReviewTab?: (() => void) | undefined;
   readonly onApprovalAction?: ((messageId: string, action: "approve" | "reject") => void) | undefined;
+  readonly onCitationClick?: ((citationId: string) => void) | undefined;
 }) {
   const isUser = message.role === "user";
 
@@ -185,6 +196,7 @@ const ChatMessageItem = React.memo(function ChatMessageItem({
                   onOpenReviewTab={onOpenReviewTab}
                   onApprove={card.type === "approval" ? () => onApprovalAction?.(message.id, "approve") : undefined}
                   onReject={card.type === "approval" ? () => onApprovalAction?.(message.id, "reject") : undefined}
+                  onCitationClick={onCitationClick}
                 />
               ))}
             </div>
@@ -206,7 +218,7 @@ const ChatMessageItem = React.memo(function ChatMessageItem({
   );
 });
 
-export function ChatPanel({ session, onSendMessage, onOpenReviewTab, onApprovalAction }: ChatPanelProps) {
+export function ChatPanel({ session, onSendMessage, onOpenReviewTab, onApprovalAction, onCitationClick }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [selectedSkill, setSelectedSkill] = useState<SkillType | null>(null);
   const [showPipeline, setShowPipeline] = useState(false);
@@ -218,6 +230,19 @@ export function ChatPanel({ session, onSendMessage, onOpenReviewTab, onApprovalA
       onApprovalAction?.(session.id, messageId, action);
     },
     [onApprovalAction, session.id],
+  );
+
+  const handleCitationClick = useCallback(
+    (citationId: string) => {
+      if (onCitationClick) {
+        onCitationClick(citationId);
+      } else {
+        // When IPC bridge is complete, this will call citation.resolve API
+        // Currently just logs the click event; will be wired after P5a
+        console.log("citation clicked:", citationId);
+      }
+    },
+    [onCitationClick],
   );
 
   useEffect(() => {
@@ -234,6 +259,10 @@ export function ChatPanel({ session, onSendMessage, onOpenReviewTab, onApprovalA
 
   function handleSend() {
     if (!input.trim()) return;
+    // Current: delegates to onSendMessage prop with mock data flow.
+    // TODO(P5a): When isLlmEnabled() and IPC bridge is complete,
+    // call electronAPI.sendMessage(session.id, input, selectedSkill)
+    // and await the async LLM-generated response.
     if (onSendMessage) {
       onSendMessage(session.id, input, selectedSkill ?? undefined);
     }
@@ -330,6 +359,7 @@ export function ChatPanel({ session, onSendMessage, onOpenReviewTab, onApprovalA
                 message={message}
                 onOpenReviewTab={onOpenReviewTab}
                 onApprovalAction={handleApprovalAction}
+                onCitationClick={handleCitationClick}
               />
             ))}
           </div>
