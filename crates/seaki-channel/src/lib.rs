@@ -1,6 +1,7 @@
 pub mod broker;
 pub mod fake_provider;
 pub mod feishu;
+pub mod feishu_http;
 pub mod grant;
 pub mod ingress;
 pub mod outbox;
@@ -12,6 +13,7 @@ pub const SCHEMA_VERSION: u32 = 1;
 
 pub use broker::*;
 pub use fake_provider::{BindingEntry, ChannelEvent, ChannelMessagePayload, FakeChannelProvider};
+pub use feishu_http::{FeishuProviderConfig, FeishuProviderDriver};
 pub use grant::{ChannelResourceGrant, GrantError};
 pub use ingress::*;
 pub use outbox::{
