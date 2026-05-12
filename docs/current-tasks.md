@@ -87,10 +87,10 @@ d0ab784  实现 Channel Bridge WASM 插件运行时与 Secret Broker，完成 M2
 
 ## 待办（无阻塞项，均可后续安排）
 
-- [ ] `SessionSidebar` 允许删除非活跃会话（当前仅限活跃会话显示删除按钮）
-- [ ] E2E 选择器统一为 `data-testid`（当前混用类名和 data 属性）
-- [ ] `styles.css` 中 `.app-shell` / `.app-body` / `.app-panels` 等自定义类迁移为纯 Tailwind（非阻塞建议）
-- [ ] Playwright 真实浏览器 E2E（M3 评估是否需要）
+- [x] `SessionSidebar` 允许删除非活跃会话（当前仅限活跃会话显示删除按钮）✅ 2026-05-12
+- [x] E2E 选择器统一为 `data-testid`（当前混用类名和 data 属性）✅ 2026-05-12
+- [x] `styles.css` 中 18 个自定义类迁移为纯 Tailwind ✅ 2026-05-12
+- [x] Playwright 真实浏览器 E2E — 评估结论：M3 多端开发启动前暂不引入 ✅ 2026-05-12
 
 ## 关键文件路径
 
