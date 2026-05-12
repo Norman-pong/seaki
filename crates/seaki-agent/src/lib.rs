@@ -1,3 +1,4 @@
+pub mod compose;
 pub mod dispatch;
 pub mod llm;
 pub mod mcp;
@@ -7,6 +8,7 @@ pub mod session;
 pub mod skill;
 pub mod wal;
 
+pub use compose::*;
 pub use dispatch::*;
 pub use llm::*;
 pub use runtime::*;
