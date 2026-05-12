@@ -335,10 +335,22 @@ fn map_openai_error(err: &async_openai::error::OpenAIError) -> LlmError {
                     retry_after_ms: 60_000,
                 }
             } else {
-                LlmError::RequestFailed(err.to_string())
+                let msg = err.to_string();
+                LlmError::RequestFailed(if msg.is_empty() {
+                    format!("LLM API error: {:?}", api_err)
+                } else {
+                    msg
+                })
             }
         }
-        _ => LlmError::RequestFailed(err.to_string()),
+        _ => {
+            let msg = err.to_string();
+            LlmError::RequestFailed(if msg.is_empty() {
+                format!("LLM request failed: {:?}", err)
+            } else {
+                msg
+            })
+        }
     }
 }
 
