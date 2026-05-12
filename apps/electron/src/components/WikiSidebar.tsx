@@ -61,6 +61,7 @@ function TreeNodeItem({
   return (
     <div>
       <div
+        data-testid="tree-node-row"
         className={cn(
           "tree-node-row w-full flex items-center gap-1 py-1.5 rounded-md text-sm",
         )}

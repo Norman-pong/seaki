@@ -120,7 +120,7 @@ export function ApprovalWidget({ model, onChange }: ApprovalWidgetProps) {
               const isInvalid = canReject && draft.trim().length === 0;
 
               return (
-                <Card key={claim.claimId} size="sm" className="approval-claim-item">
+                <Card key={claim.claimId} size="sm" data-testid="approval-claim-item" className="approval-claim-item">
                   <CardContent className="py-3 space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-semibold text-sm truncate">

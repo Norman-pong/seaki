@@ -9,7 +9,7 @@ test.describe("Approval Diff 工作流", () => {
 
   test("Approval 控件应包含 claim 列表", async ({ page }) => {
     await page.locator("[data-tab='review']").click();
-    const claims = page.locator(".approval-claim-item");
+    const claims = page.getByTestId("approval-claim-item");
     await expect.poll(() => claims.count()).toBeGreaterThanOrEqual(1);
   });
 

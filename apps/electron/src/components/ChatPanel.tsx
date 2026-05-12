@@ -70,7 +70,7 @@ const ChatCardItem = React.memo(function ChatCardItem({
   const isApproval = card.type === "approval";
 
   return (
-    <Card size="sm" className="mt-2 chat-card shadow-none">
+    <Card size="sm" data-testid="chat-card" className="mt-2 shadow-none">
       <CardHeader className="flex flex-row items-center gap-2 py-2">
         <span className="text-muted-foreground">{ICON_MAP[card.type]}</span>
         <span className="font-medium text-sm flex-1">{card.title}</span>
@@ -150,8 +150,9 @@ const ChatMessageItem = React.memo(function ChatMessageItem({
 
   return (
     <div
+      data-testid="chat-message"
       className={cn(
-        "chat-message flex gap-3 max-w-[92%]",
+        "flex gap-3 max-w-[92%]",
         isUser ? "self-end flex-row-reverse" : "self-start"
       )}
       style={{ contain: "content", willChange: "transform" }}
@@ -383,7 +384,7 @@ export function ChatPanel({ session, onSendMessage, onOpenReviewTab, onApprovalA
           </div>
           <div className="flex items-end gap-2.5 px-3 py-2.5">
             <Textarea
-              className="chat-textarea min-h-12 max-h-[120px] flex-1 resize-none border-0 bg-transparent px-0 py-0 text-sm leading-relaxed shadow-none outline-none focus-visible:ring-0"
+              className="min-h-12 max-h-[120px] flex-1 resize-none border-0 bg-transparent px-0 py-0 text-sm leading-relaxed shadow-none outline-none focus-visible:ring-0"
               placeholder={placeholder}
               rows={2}
               value={input}

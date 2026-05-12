@@ -90,6 +90,7 @@ export function SessionSidebar({
                 >
                   <button
                     type="button"
+                    data-testid="session-item"
                     className={cn(
                       "session-item w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left transition-colors pr-9",
                       isActive

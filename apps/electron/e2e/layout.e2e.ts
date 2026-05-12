@@ -2,17 +2,17 @@ import { test, expect } from "./electron-test-utils";
 
 test.describe("新布局组件渲染", () => {
   test("会话侧边栏应包含多个会话项", async ({ page }) => {
-    const sessionItems = page.locator(".session-item");
+    const sessionItems = page.getByTestId("session-item");
     await expect(sessionItems).toHaveCount(3);
   });
 
   test("对话流应包含消息气泡", async ({ page }) => {
-    const messages = page.locator(".chat-message");
+    const messages = page.getByTestId("chat-message");
     await expect.poll(() => messages.count()).toBeGreaterThanOrEqual(2);
   });
 
   test("对话流应包含输入框", async ({ page }) => {
-    const input = page.locator(".chat-textarea");
+    const input = page.getByTestId("chat-input");
     await expect(input).toBeVisible();
   });
 
@@ -24,7 +24,7 @@ test.describe("新布局组件渲染", () => {
 
   test("Wiki 页面树应包含层级节点", async ({ page }) => {
     await page.locator("[data-tab='pages']").click();
-    const treeNodes = page.locator(".tree-node-row");
+    const treeNodes = page.getByTestId("tree-node-row");
     await expect.poll(() => treeNodes.count()).toBeGreaterThanOrEqual(4);
   });
 
@@ -35,12 +35,12 @@ test.describe("新布局组件渲染", () => {
   });
 
   test("对话流中应包含卡片", async ({ page }) => {
-    const cards = page.locator(".chat-card");
+    const cards = page.getByTestId("chat-card");
     await expect.poll(() => cards.count()).toBeGreaterThanOrEqual(1);
   });
 
   test("命令面板应支持点击与快捷键打开", async ({ page }) => {
-    await page.locator(".title-command").click();
+    await page.getByTestId("title-command").click();
     await expect(page.getByRole("dialog", { name: "Command Palette" })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog", { name: "Command Palette" })).toBeHidden();

@@ -52,6 +52,7 @@ export function TitleBar({
 
       <button
         type="button"
+        data-testid="title-command"
         className="title-command"
         onClick={onOpenCommandPalette}
         aria-label="打开命令面板"
