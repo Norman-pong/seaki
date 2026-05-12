@@ -8,6 +8,8 @@
 - **M1（Pipeline / Memory / Channel 骨架）**：✅ 已全部交付（4/29）
 - **M1 完成后前端优化迭代**：✅ 已完成（4/30 ~ 5/2）
 - **M2（Pipeline / Agent / Channel / Memory 纵切）**：✅ 已全部交付（5/3 ~ 5/6）
+- **M2 后续优化（P1-P4 待办）**：✅ 已全部完成（5/12）
+- **M3（LLM 接入 → Citation-backed Answer → 飞书闭环）**：✅ 已全部交付（5/12）
 
 ## M2 交付摘要
 
