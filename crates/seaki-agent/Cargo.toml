@@ -21,7 +21,7 @@ serde_json.workspace = true
 sha2.workspace = true
 
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-async-openai = "0.38"
+async-openai = { version = "0.38", features = ["chat-completion"] }
 
 [dev-dependencies]
 tempfile.workspace = true

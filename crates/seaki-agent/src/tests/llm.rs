@@ -63,12 +63,14 @@ fn mock_llm_tracks_call_count() {
 }
 
 #[test]
-fn open_ai_client_stub_returns_error() {
-    let client = OpenAiClient::new(
-        "https://api.openai.com/v1".to_string(),
-        "sk-test".to_string(),
-        "gpt-4".to_string(),
-    );
+fn open_ai_client_returns_error_without_server() {
+    let config = crate::llm::OpenAiClientConfig {
+        api_base: "http://127.0.0.1:1/v1".to_string(),
+        api_key: "sk-test".to_string(),
+        default_model: "gpt-4".to_string(),
+        timeout_secs: 5,
+    };
+    let client = OpenAiClient::with_default_runtime(config);
     let request = LlmRequest {
         model: "gpt-4".to_string(),
         messages: vec![LlmMessage {
@@ -80,8 +82,8 @@ fn open_ai_client_stub_returns_error() {
         max_tokens: None,
     };
     let err = client.complete(request).unwrap_err();
-    assert!(matches!(err, LlmError::ModelUnavailable(_)));
-    assert!(err.to_string().contains("HTTP not yet implemented"));
+    // When no server is listening, we get a RequestFailed error (connection refused).
+    assert!(matches!(err, LlmError::RequestFailed(_)));
 }
 
 #[test]
