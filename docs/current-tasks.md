@@ -10,6 +10,57 @@
 - **M2（Pipeline / Agent / Channel / Memory 纵切）**：✅ 已全部交付（5/3 ~ 5/6）
 - **M2 后续优化（P1-P4 待办）**：✅ 已全部完成（5/12）
 - **M3（LLM 接入 → Citation-backed Answer → 飞书闭环）**：✅ 已全部交付（5/12）
+- **M4（IPC 桥接 → 流式输出 → 生产可用）**：📋 已规划，待执行
+
+## M3 交付摘要
+
+### Backend（6/6 完成）
+
+| 模块 | 任务 | 状态 |
+|------|------|------|
+| P1 tokio Runtime | `AgentRuntimeHandle` 封装 | ✅ |
+| P2 OpenAiClient | 真实 HTTP 调用、配置、错误映射 | ✅ |
+| P3 AnswerComposer | LLM citation-backed answer 生成 | ✅ |
+| P4 FeishuProviderDriver | 真实飞书 HTTP 调用、token 管理 | ✅ |
+| P5 前端接入 | Citation badge、LLM 模式控制、CommandPalette | ✅ |
+| P6 端到端验证 | 660+ Rust tests、111 前端 tests | ✅ |
+
+### Frontend（4/4 完成）
+
+| 任务 | 状态 |
+|------|------|
+| CitationRef 类型扩展与 badge 可点击 | ✅ |
+| `SEAKI_LLM_ENABLED` 环境变量控制 | ✅ |
+| `compose-answer` CommandPalette 命令 | ✅ |
+| M3 操作手册与回归测试清单 | ✅ |
+
+## M4 规划摘要
+
+### 范围确认
+
+M4 包含 M3 遗留 5 项 + 安全修复 + 测试覆盖 + E2E：
+
+| 阶段 | 内容 | 任务数 |
+|------|------|--------|
+| P1 安全修复 | 路径遍历、template injection、TOCTOU、WASM 限制、audit 补齐 | 5 |
+| P2 IPC 基础设施 | Daemon 生命周期、IPC 协议、transport 实现、API Gateway、连接管理、前端迁移 | 6 |
+| P3 运行时配置 | 配置持久化、热重载 API、mock/real 切换 UI | 3 |
+| P4 多 Provider | Provider 注册表、动态切换、前端选择器 | 3 |
+| P5 流式输出 | stream trait、SSE 解析、事件推送、前端渲染、增量 citation | 5 |
+| P6 飞书附件 | 消息解析、下载 Quarantine、Secret Broker 扩展、Outbox 发送、前端展示 | 5 |
+| P7 测试覆盖 | 前端零测试补齐、Rust 回归测试、IPC 集成测试 | 3 |
+| P8 Playwright E2E | 基础设施、Happy Path、Reject Path | 3 |
+
+**总计：33 个任务，8 个阶段**
+
+### 关键路径
+
+`P1 → P2 → P3 → (P4 + P5 + P6 并行) → P7 → P8`
+
+### 计划文档
+
+- `docs/plans/m4-task-plan.md` — 完整任务计划
+- `docs/plans/m4-operation-manual.md` — 待编写（验收手册）
 
 ## M2 交付摘要
 
@@ -76,16 +127,25 @@ e7e70d9  实现远程附件导入的 Quarantine 管道与资源授权扩展，�
 d0ab784  实现 Channel Bridge WASM 插件运行时与 Secret Broker，完成 M2-C01 交付
 ```
 
-## 质量门禁状态
+## 质量门禁状态（M3 基线）
 
 | 检查项 | 状态 |
 |--------|------|
 | `pnpm build`（Vite 客户端 + Electron） | ✅ |
-| `cargo test --workspace` | ✅ 551+ passed |
+| `cargo test --workspace` | ✅ 660+ passed |
 | `pnpm dto:check` | ✅ |
 | `oxlint src/` | ✅ 0 warnings |
 | `pnpm typecheck` | ✅ |
-| `pnpm test` | ✅ 62 passed |
+| `pnpm test` | ✅ 111 passed |
+
+## M4 目标门禁
+
+| 检查项 | 目标 |
+|--------|------|
+| `cargo test --workspace` | 740+ tests |
+| `pnpm test` | 160+ tests |
+| `pnpm e2e` | Happy Path + Reject Path 通过 |
+| 安全审计 | maintenance log 中 Critical + High 项清零 |
 
 ## 待办（无阻塞项，均可后续安排）
 
@@ -101,12 +161,16 @@ apps/electron/src/App.tsx                    # 根组件（三列布局 + Comman
 apps/electron/src/components/ChatPanel.tsx   # 聊天面板（Skill 选择 + Pipeline）
 apps/electron/src/components/WikiSidebar.tsx # 右侧 Wiki 栏（5 Tabs）
 apps/electron/src/components/PipelinePanel.tsx       # Pipeline Designer
+apps/electron/src/electron/main.ts           # Electron 主进程（M4: daemon 生命周期）
+apps/electron/src/electron/preload.ts        # IPC preload（M4: 协议封装）
 crates/seaki-pipeline/                       # Pipeline Designer 编译器
-crates/seaki-agent/                          # Agent Runtime
-crates/seaki-channel/                        # Channel Bridge + 飞书
+crates/seaki-agent/                          # Agent Runtime（M4: stream + 多 provider）
+crates/seaki-channel/                        # Channel Bridge + 飞书（M4: 附件）
+crates/seaki-daemon/                         # Daemon（M4: API Gateway）
 crates/seaki-memory/                         # Memory + Review Learning
-docs/plans/m2-task-plan.md                   # M2 任务计划
-docs/plans/m2-operation-manual.md            # M2 操作手册
+crates/seaki-core/                           # Core（M4: 配置持久化）
+docs/plans/m4-task-plan.md                   # M4 任务计划
+docs/plans/m4-operation-manual.md            # M4 操作手册（待编写）
 docs/architecture/                           # 架构文档
 ```
 
